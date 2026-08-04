@@ -1,0 +1,12 @@
+# Runtime dependency manifest for the Bus Tracker backend.
+# TODO: Pin versions after the deployment environment is established.
+fastapi
+uvicorn[standard]
+SQLAlchemy
+psycopg[binary]
+passlib[bcrypt]
+python-jose[cryptography]
+python-multipart
+pydantic
+pydantic-settings
+email-validator

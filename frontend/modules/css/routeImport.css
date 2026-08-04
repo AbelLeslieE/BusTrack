@@ -1,0 +1,562 @@
+/* ==========================================================================
+   BUSTRACK
+   ROUTE IMPORT
+   PREMIUM IMPORT WIZARD
+========================================================================== */
+
+/* ==========================================================
+   IMPORT CONTAINER
+========================================================== */
+
+.route-import{
+
+    width:100%;
+
+}
+
+.import-container{
+
+    display:flex;
+
+    flex-direction:column;
+
+    align-items:center;
+
+    gap:22px;
+
+    padding:12px;
+
+}
+
+/* ==========================================================
+   IMPORT ICON
+========================================================== */
+
+.import-icon{
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    width:90px;
+
+    height:90px;
+
+    border-radius:24px;
+
+    font-size:42px;
+
+    background:
+
+        linear-gradient(
+            145deg,
+            rgba(79,209,255,.15),
+            rgba(124,92,255,.12)
+        );
+
+    border:1px solid rgba(255,255,255,.08);
+
+    box-shadow:
+
+        0 15px 35px rgba(0,0,0,.30);
+
+}
+
+/* ==========================================================
+   TITLE
+========================================================== */
+
+.import-title{
+
+    margin:0;
+
+    color:#ffffff;
+
+    font-size:1.55rem;
+
+    font-weight:700;
+
+    text-align:center;
+
+}
+
+/* ==========================================================
+   DESCRIPTION
+========================================================== */
+
+.import-description{
+
+    margin:0;
+
+    max-width:500px;
+
+    text-align:center;
+
+    color:#A9BEDF;
+
+    line-height:1.7;
+
+    font-size:.95rem;
+
+}
+
+/* ==========================================================
+   FILE BUTTON
+========================================================== */
+
+#import-container button{
+
+    min-width:220px;
+
+}
+
+/* ==========================================================
+   FILE NAME
+========================================================== */
+
+.selected-file{
+
+    width:100%;
+
+    padding:14px 18px;
+
+    border-radius:16px;
+
+    background:
+
+        rgba(255,255,255,.05);
+
+    border:1px solid rgba(255,255,255,.08);
+
+    color:#DCE8FF;
+
+    text-align:center;
+
+    font-size:.92rem;
+
+    font-weight:600;
+
+    word-break:break-word;
+
+}
+
+/* ==========================================================
+   PREVIEW AREA
+========================================================== */
+
+.preview-area{
+
+    width:100%;
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:16px;
+
+    margin-top:10px;
+
+}
+/* ==========================================================================
+   PREVIEW LIST
+========================================================================== */
+
+.preview-list{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:16px;
+
+    width:100%;
+
+}
+
+/* ==========================================================================
+   PREVIEW CARD
+========================================================================== */
+
+.preview-card{
+
+    position:relative;
+
+    overflow:hidden;
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:center;
+
+    gap:24px;
+
+    padding:22px 26px;
+
+    border-radius:20px;
+
+    background:
+        linear-gradient(
+            145deg,
+            rgba(14,24,44,.75),
+            rgba(10,20,38,.60)
+        );
+
+    backdrop-filter:blur(22px);
+
+    border:1px solid rgba(255,255,255,.08);
+
+    transition:.35s ease;
+
+    box-shadow:
+        0 12px 35px rgba(0,0,0,.28);
+
+}
+
+/* ==========================================================
+   HOVER
+========================================================== */
+
+.preview-card:hover{
+
+    transform:translateY(-3px);
+
+    border-color:rgba(79,209,255,.20);
+
+    box-shadow:
+        0 18px 45px rgba(0,0,0,.35),
+        0 0 25px rgba(79,209,255,.08);
+
+}
+
+/* ==========================================================
+   DECORATION
+========================================================== */
+
+.preview-card::before{
+
+    content:"";
+
+    position:absolute;
+
+    right:-80px;
+
+    top:-80px;
+
+    width:180px;
+
+    height:180px;
+
+    border-radius:50%;
+
+    background:
+        radial-gradient(
+            rgba(79,209,255,.12),
+            transparent 70%
+        );
+
+    pointer-events:none;
+
+}
+
+/* ==========================================================================
+   LEFT
+========================================================================== */
+
+.preview-left{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:10px;
+
+}
+
+.preview-route{
+
+    margin:0;
+
+    color:#ffffff;
+
+    font-size:1.15rem;
+
+    font-weight:700;
+
+}
+
+.preview-bus{
+
+    color:#AFC4E8;
+
+    font-size:.92rem;
+
+}
+
+.preview-bus strong{
+
+    color:#4FD1FF;
+
+}
+
+/* ==========================================================================
+   RIGHT
+========================================================================== */
+
+.preview-right{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:18px;
+
+}
+
+.stop-badge{
+
+    display:flex;
+
+    flex-direction:column;
+
+    justify-content:center;
+
+    align-items:center;
+
+    width:90px;
+
+    height:90px;
+
+    border-radius:20px;
+
+    background:
+        linear-gradient(
+            145deg,
+            rgba(79,209,255,.14),
+            rgba(124,92,255,.10)
+        );
+
+    border:1px solid rgba(255,255,255,.08);
+
+}
+
+.stop-value{
+
+    color:#ffffff;
+
+    font-size:2rem;
+
+    font-weight:800;
+
+    line-height:1;
+
+}
+
+.stop-label{
+
+    color:#AFC4E8;
+
+    font-size:.8rem;
+
+    text-transform:uppercase;
+
+    letter-spacing:1px;
+
+}
+
+/* ==========================================================================
+   READY BADGE
+========================================================================== */
+
+.import-ready{
+
+    display:inline-flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    gap:8px;
+
+    padding:8px 16px;
+
+    border-radius:999px;
+
+    color:#22C55E;
+
+    background:rgba(34,197,94,.12);
+
+    font-size:.85rem;
+
+    font-weight:700;
+
+}
+
+/* ==========================================================================
+   RESPONSIVE
+========================================================================== */
+
+@media(max-width:760px){
+
+    .preview-card{
+
+        flex-direction:column;
+
+        align-items:flex-start;
+
+    }
+
+    .preview-right{
+
+        width:100%;
+
+        justify-content:space-between;
+
+    }
+
+    .stop-badge{
+
+        width:72px;
+
+        height:72px;
+
+    }
+
+    .stop-value{
+
+        font-size:1.6rem;
+
+    }
+
+}
+/* ==========================================================
+   IMPORT PROGRESS
+========================================================== */
+
+.import-progress,
+.import-success,
+.import-error{
+
+    display:flex;
+
+    flex-direction:column;
+
+    align-items:center;
+
+    justify-content:center;
+
+    gap:18px;
+
+    padding:35px;
+
+    text-align:center;
+
+}
+
+.loading-spinner{
+
+    width:58px;
+
+    height:58px;
+
+    border-radius:50%;
+
+    border:5px solid rgba(255,255,255,.08);
+
+    border-top-color:#4FD1FF;
+
+    animation:spin 1s linear infinite;
+
+}
+
+.success-icon{
+
+    width:72px;
+
+    height:72px;
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    border-radius:50%;
+
+    background:rgba(34,197,94,.15);
+
+    color:#22C55E;
+
+    font-size:2rem;
+
+    font-weight:700;
+
+}
+
+.summary-grid{
+
+    width:100%;
+
+    display:grid;
+
+    grid-template-columns:repeat(2,1fr);
+
+    gap:18px;
+
+}
+
+.summary-card{
+
+    padding:20px;
+
+    border-radius:18px;
+
+    background:rgba(255,255,255,.05);
+
+    border:1px solid rgba(255,255,255,.08);
+
+    text-align:center;
+
+}
+
+.summary-card span{
+
+    display:block;
+
+    color:#AFC4E8;
+
+    margin-bottom:8px;
+
+}
+
+.summary-card strong{
+
+    font-size:2rem;
+
+    color:#ffffff;
+
+}
+
+.import-error{
+
+    color:#EF4444;
+
+}
+
+@keyframes spin{
+
+    from{
+
+        transform:rotate(0deg);
+
+    }
+
+    to{
+
+        transform:rotate(360deg);
+
+    }
+
+}

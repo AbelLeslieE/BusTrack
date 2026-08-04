@@ -1,0 +1,354 @@
+/* ==========================================================
+   BUSTRACK
+   RESPONSIVE DESIGN SYSTEM
+   Premium Fleet Command Center
+========================================================== */
+
+
+/* ==========================================================
+   LARGE DESKTOP
+========================================================== */
+
+@media (max-width:1600px){
+
+    .app-shell{
+
+        grid-template-columns:280px minmax(0,1fr);
+
+    }
+
+}
+
+
+/* ==========================================================
+   DESKTOP
+========================================================== */
+
+@media (max-width:1400px){
+
+    .grid-4{
+
+        grid-template-columns:repeat(2,1fr);
+
+    }
+
+}
+
+
+/* ==========================================================
+   LAPTOP
+========================================================== */
+
+@media (max-width:1200px){
+
+    .app-shell{
+
+        grid-template-columns:260px minmax(0,1fr);
+
+        gap:20px;
+
+    }
+
+    .search-box{
+
+        width:260px;
+
+    }
+
+    .statistics-grid{
+
+        grid-template-columns:repeat(2,1fr);
+
+    }
+
+}
+
+
+/* ==========================================================
+   TABLET
+========================================================== */
+
+@media (max-width:992px){
+
+    .app-root{
+
+        padding:18px;
+
+    }
+
+    .app-shell{
+
+        grid-template-columns:1fr;
+
+    }
+
+    .sidebar{
+
+        position:fixed;
+
+        top:18px;
+
+        bottom:18px;
+
+        left:18px;
+
+        width:300px;
+
+        transform:translateX(-115%);
+
+        transition:.35s;
+
+        z-index:999;
+
+    }
+
+    .sidebar-open .sidebar{
+
+        transform:translateX(0);
+
+    }
+
+    .mobile-menu{
+
+        display:flex;
+
+    }
+
+    .topbar{
+
+        position:sticky;
+
+        top:18px;
+
+    }
+
+}
+
+
+/* ==========================================================
+   TABLET SMALL
+========================================================== */
+
+@media (max-width:850px){
+
+    .hero-section{
+
+        flex-direction:column;
+
+        align-items:flex-start;
+
+        gap:24px;
+
+    }
+
+    .hero-right{
+
+        width:100%;
+
+        justify-content:flex-start;
+
+    }
+
+    .statistics-grid{
+
+        grid-template-columns:1fr;
+
+    }
+
+    .toolbar{
+
+        flex-direction:column;
+
+        align-items:stretch;
+
+    }
+
+    .toolbar-actions{
+
+        width:100%;
+
+        justify-content:flex-end;
+
+    }
+
+}
+
+
+/* ==========================================================
+   MOBILE
+========================================================== */
+
+@media (max-width:680px){
+
+    .app-root{
+
+        padding:12px;
+
+    }
+
+    .sidebar{
+
+        width:calc(100vw - 24px);
+
+        left:12px;
+
+        top:12px;
+
+        bottom:12px;
+
+        border-radius:22px;
+
+    }
+
+    .topbar{
+
+        padding:14px 18px;
+
+        border-radius:22px;
+
+    }
+
+    .topbar-title h1{
+
+        font-size:1.5rem;
+
+    }
+
+    .profile-copy{
+
+        display:none;
+
+    }
+
+    .search-box{
+
+        display:none;
+
+    }
+
+    .hero-title{
+
+        font-size:2rem;
+
+    }
+
+    .hero-description{
+
+        font-size:.9rem;
+
+    }
+
+    .primary-btn{
+
+        width:100%;
+
+    }
+
+}
+
+
+/* ==========================================================
+   SMALL MOBILE
+========================================================== */
+
+@media (max-width:520px){
+
+    .app-root{
+
+        padding:10px;
+
+    }
+
+    .topbar{
+
+        gap:12px;
+
+    }
+
+    .hero-section{
+
+        padding:24px;
+
+    }
+
+    .glass-panel{
+
+        border-radius:18px;
+
+    }
+
+    .statistics-grid{
+
+        gap:16px;
+
+    }
+
+    .toolbar-actions{
+
+        flex-direction:column;
+
+        width:100%;
+
+    }
+
+    .toolbar-actions button{
+
+        width:100%;
+
+    }
+
+}
+
+
+/* ==========================================================
+   VERY SMALL DEVICES
+========================================================== */
+
+@media (max-width:400px){
+
+    h1{
+
+        font-size:1.6rem;
+
+    }
+
+    h2{
+
+        font-size:1.3rem;
+
+    }
+
+    .hero-section{
+
+        padding:20px;
+
+    }
+
+    .stat-card{
+
+        padding:18px;
+
+    }
+
+    .table-container{
+
+        overflow-x:auto;
+
+    }
+
+}
+
+
+/* ==========================================================
+   LANDSCAPE PHONES
+========================================================== */
+
+@media (max-height:700px){
+
+    .sidebar{
+
+        overflow-y:auto;
+
+    }
+
+}

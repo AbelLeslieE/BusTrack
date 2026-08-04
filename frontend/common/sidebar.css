@@ -1,0 +1,509 @@
+/* ==========================================================
+   BUSTRACK
+   PREMIUM SIDEBAR
+   ========================================================== */
+
+/* ==========================================================
+   SIDEBAR CONTAINER
+========================================================== */
+
+.sidebar{
+
+    position:sticky;
+
+    top:34px;
+
+    display:flex;
+
+    flex-direction:column;
+
+    width:100%;
+
+    height:calc(100dvh - 68px);
+
+    padding:28px;
+
+    overflow-y:auto;
+    overflow-x:hidden;
+
+    border-radius:30px;
+
+    background:rgba(10,18,35,.24);
+
+    backdrop-filter:blur(28px);
+    -webkit-backdrop-filter:blur(28px);
+
+    border:1px solid rgba(255,255,255,.14);
+
+    box-shadow:
+        0 30px 80px rgba(0,0,0,.45),
+        inset 0 1px rgba(255,255,255,.10);
+
+    transition:.35s;
+
+    scrollbar-width:none;
+
+}
+
+.sidebar::-webkit-scrollbar{
+
+    width:0;
+
+}
+
+/* ==========================================================
+   Ambient Glow
+========================================================== */
+
+.sidebar::before{
+
+    content:"";
+
+    position:absolute;
+
+    top:-180px;
+
+    right:-150px;
+
+    width:320px;
+
+    height:320px;
+
+    border-radius:50%;
+
+    background:
+
+        radial-gradient(
+
+            rgba(79,209,255,.16),
+
+            transparent 70%
+
+        );
+
+    pointer-events:none;
+
+}
+
+.sidebar::after{
+
+    content:"";
+
+    position:absolute;
+
+    left:-120px;
+
+    bottom:-150px;
+
+    width:260px;
+
+    height:260px;
+
+    border-radius:50%;
+
+    background:
+
+        radial-gradient(
+
+            rgba(124,92,255,.14),
+
+            transparent 70%
+
+        );
+
+}
+
+/* ==========================================================
+   BRAND
+========================================================== */
+
+.brand{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:16px;
+
+    margin-bottom:34px;
+
+    text-decoration:none;
+
+    color:white;
+
+}
+
+.brand-mark{
+
+    width:62px;
+
+    height:62px;
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    box-shadow:
+        0 0 30px rgba(79,209,255,.25);
+
+    background:
+
+        linear-gradient(
+
+            135deg,
+
+            var(--primary),
+
+            var(--purple)
+
+        );
+
+    font-size:22px;
+
+    font-weight:800;
+
+    color:white;
+
+    box-shadow:
+
+        0 0 25px rgba(79,209,255,.25);
+
+}
+
+.brand-text{
+
+    display:flex;
+
+    flex-direction:column;
+
+}
+
+.brand-title{
+
+    font-size:1.35rem;
+
+    font-weight:800;
+
+    color:white;
+
+}
+
+.brand-subtitle{
+
+    font-size:.72rem;
+
+    letter-spacing:.18em;
+
+    color:var(--muted);
+
+    text-transform:uppercase;
+
+}
+
+/* ==========================================================
+   NAVIGATION
+========================================================== */
+
+.sidebar-nav{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:8px;
+
+    flex:1;
+
+}
+
+/* ==========================================================
+   LABELS
+========================================================== */
+
+.nav-label{
+
+    margin:
+
+        24px 12px 10px;
+
+    color:
+
+        rgba(255,255,255,.45);
+
+    font-size:.72rem;
+
+    font-weight:700;
+
+    letter-spacing:.18em;
+
+    text-transform:uppercase;
+
+}
+
+/* ==========================================================
+   NAV ITEM
+========================================================== */
+
+.nav-item{
+
+    position:relative;
+
+    display:flex;
+
+    align-items:center;
+
+    gap:16px;
+
+    min-height:64px;
+
+    padding:0 22px;
+
+    border-radius:18px;
+
+    color:
+
+        rgba(255,255,255,.72);
+
+    text-decoration:none;
+
+    transition:
+
+        .35s;
+
+    overflow:hidden;
+
+}
+
+/* Hover */
+
+.nav-item:hover{
+
+    color:white;
+
+    transform:
+        translateX(6px)
+        scale(1.01);
+
+    background:
+
+        rgba(255,255,255,.05);
+    box-shadow:
+        0 8px 20px rgba(79,209,255,.08);
+}
+
+/* ==========================================================
+   ACTIVE ITEM
+========================================================== */
+
+.nav-item.is-active{
+
+    color:white;
+
+    background:
+        linear-gradient(
+        135deg,
+        rgba(79,209,255,.45),
+        rgba(124,92,255,.38)
+        );
+
+    border:
+
+        1px solid rgba(255,255,255,.08);
+
+    box-shadow:
+        0 18px 45px rgba(79,209,255,.20),
+        0 0 30px rgba(79,209,255,.08);
+
+}
+
+.nav-item.is-active::before{
+
+    content:"";
+
+    position:absolute;
+
+    left:0;
+
+    top:10px;
+
+    bottom:10px;
+
+    width:6px;
+
+    border-radius:50px;
+
+    background:
+
+        linear-gradient(
+
+            var(--primary),
+
+            var(--purple)
+
+        );
+    box-shadow:
+        0 0 18px var(--primary);
+}
+
+/* ==========================================================
+   ICON
+========================================================== */
+
+.nav-icon{
+
+    width:44px;
+
+    height:44px;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    border-radius:14px;
+
+    backdrop-filter:blur(10px);
+
+    border:1px solid rgba(255,255,255,.05);
+
+    background:
+
+        rgba(255,255,255,.05);
+
+    color:
+
+        var(--primary);
+
+    font-size:18px;
+
+    transition:.35s;
+
+}
+
+.nav-item:hover .nav-icon{
+
+    transform:
+
+        scale(1.08);
+
+    box-shadow:
+
+        0 0 18px rgba(79,209,255,.15);
+
+}
+
+.nav-item.is-active .nav-icon{
+
+    background:
+
+        rgba(255,255,255,.10);
+
+    color:white;
+
+}
+
+/* ==========================================================
+   FOOTER
+========================================================== */
+
+.sidebar-footer{
+
+    padding-top:24px;
+
+    margin-top:32px;
+
+}
+
+/* ==========================================================
+   SETTINGS
+========================================================== */
+
+.sidebar-footer .nav-item{
+
+    margin-bottom:16px;
+
+}
+
+/* ==========================================================
+   HELP CARD
+========================================================== */
+
+.help-card{
+
+    padding:18px;
+
+    border-radius:18px;
+
+    background:
+        rgba(255,255,255,.04);
+    backdrop-filter:blur(20px);
+
+    border:
+        1px solid rgba(255,255,255,.08);
+
+    box-shadow:
+        0 12px 30px rgba(0,0,0,.25);
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:8px;
+
+}
+
+.help-card span{
+
+    color:white;
+
+    font-weight:700;
+
+}
+
+.help-card small{
+
+    color:var(--muted);
+
+    line-height:1.5;
+
+}
+
+/* ==========================================================
+   LOGOUT BUTTON
+========================================================== */
+
+.logout-btn{
+
+    margin-top:12px;
+
+    color:#ff8c8c;
+
+}
+
+.logout-btn .nav-icon{
+
+    color:#ff7070;
+
+}
+
+.logout-btn:hover{
+
+    background:rgba(255,75,75,.12);
+
+    color:#fff;
+
+    box-shadow:
+        0 12px 28px rgba(255,75,75,.18);
+
+}
+
+.logout-btn:hover .nav-icon{
+
+    background:rgba(255,75,75,.18);
+
+    color:#fff;
+
+}

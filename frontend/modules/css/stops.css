@@ -1,0 +1,761 @@
+/* ==========================================================================
+   BUSTRACK
+   STOPS MODULE
+========================================================================== */
+
+/* ==========================================================
+   PAGE
+========================================================== */
+
+.stops-page{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:24px;
+
+}
+
+/* ==========================================================
+   HERO
+========================================================== */
+
+.hero-panel{
+
+    padding:32px;
+
+}
+
+.hero-content{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:18px;
+
+}
+
+.hero-eyebrow{
+
+    margin:0;
+
+    color:#4FD1FF;
+
+    font-size:.82rem;
+
+    letter-spacing:2px;
+
+    font-weight:700;
+
+    text-transform:uppercase;
+
+}
+
+.hero-title{
+
+    margin:0;
+
+    color:#FFFFFF;
+
+    font-size:2rem;
+
+    font-weight:700;
+
+}
+
+.hero-description{
+
+    margin:0;
+
+    color:#AFC4E8;
+
+    max-width:760px;
+
+    line-height:1.7;
+
+}
+
+.hero-badges{
+
+    display:flex;
+
+    flex-wrap:wrap;
+
+    gap:12px;
+
+}
+
+.hero-badges span{
+
+    padding:8px 18px;
+
+    border-radius:999px;
+
+    background:rgba(79,209,255,.10);
+
+    border:1px solid rgba(79,209,255,.18);
+
+    color:#DCEFFF;
+
+    font-size:.85rem;
+
+}
+
+/* ==========================================================
+   STATISTICS
+========================================================== */
+
+.statistics-grid{
+
+    display:grid;
+
+    grid-template-columns:repeat(4,1fr);
+
+    gap:20px;
+
+}
+
+.stat-card{
+
+    padding:24px;
+
+    border-radius:22px;
+
+    background:rgba(16,27,48,.82);
+
+    backdrop-filter:blur(20px);
+
+    border:1px solid rgba(255,255,255,.06);
+
+    transition:.3s;
+
+}
+
+.stat-card:hover{
+
+    transform:translateY(-4px);
+
+    border-color:rgba(79,209,255,.25);
+
+    box-shadow:
+
+        0 18px 35px rgba(0,0,0,.28);
+
+}
+
+.stat-title{
+
+    display:block;
+
+    color:#AFC4E8;
+
+    margin-bottom:14px;
+
+    font-size:.9rem;
+
+}
+
+.stat-card h2{
+
+    margin:0;
+
+    color:#FFFFFF;
+
+    font-size:2rem;
+
+}
+
+/* ==========================================================
+   TOOLBAR
+========================================================== */
+
+.toolbar{
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:space-between;
+
+    gap:28px;
+
+    padding:28px;
+
+}
+/* ==========================================================
+   TOOLBAR ACTIONS
+========================================================== */
+
+.toolbar-actions{
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:flex-end;
+
+    gap:12px;
+
+    flex-shrink:0;
+
+}
+/* ==========================================================
+   TOOLBAR BUTTONS
+========================================================== */
+
+.toolbar-actions button{
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    gap:8px;
+
+    min-width:145px;
+
+    height:52px;
+
+    padding:0 24px;
+
+    border-radius:16px;
+
+    cursor:pointer;
+
+    font-size:.92rem;
+
+    font-weight:600;
+
+    transition:all .25s ease;
+
+    backdrop-filter:blur(20px);
+
+}
+.toolbar-search{
+
+    flex:1;
+
+    max-width:520px;
+
+    height:52px;
+
+    padding:0 18px;
+
+    border:none;
+
+    outline:none;
+
+    border-radius:14px;
+
+    background:rgba(255,255,255,.05);
+
+    border:1px solid rgba(255,255,255,.08);
+
+    color:#FFFFFF;
+
+    font-size:.95rem;
+
+    transition:.3s;
+
+}
+
+.toolbar-search::placeholder{
+
+    color:#8FA5C8;
+
+}
+
+.toolbar-search:focus{
+
+    border-color:rgba(79,209,255,.35);
+
+    box-shadow:0 0 0 4px rgba(79,209,255,.08);
+
+}
+/* ==========================================================
+   ACTION CELL
+========================================================== */
+
+.action-cell{
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    gap:14px;
+
+}
+
+/* ==========================================================
+   ACTION BUTTON
+========================================================== */
+
+.action-btn{
+
+    width:42px;
+
+    height:42px;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    border-radius:12px;
+
+    cursor:pointer;
+
+    border:1px solid;
+
+    transition:.25s;
+
+    background:transparent;
+
+}
+
+/* ==========================================================
+   ICON
+========================================================== */
+
+.action-btn i{
+
+    font-size:16px;
+
+    line-height:1;
+
+    pointer-events:none;
+
+}
+
+/* ==========================================================
+   EDIT
+========================================================== */
+
+.edit-btn{
+
+    border-color:rgba(79,209,255,.30);
+
+    background:rgba(79,209,255,.08);
+
+}
+
+.edit-btn i{
+
+    color:#4FD1FF;
+
+}
+
+.edit-btn:hover{
+
+    background:#4FD1FF;
+
+    border-color:#4FD1FF;
+
+    transform:translateY(-3px);
+
+    box-shadow:0 10px 24px rgba(79,209,255,.35);
+
+}
+
+.edit-btn:hover i{
+
+    color:#071321;
+
+}
+
+/* ==========================================================
+   DELETE
+========================================================== */
+
+.delete-btn{
+
+    border-color:rgba(255,91,91,.30);
+
+    background:rgba(255,91,91,.08);
+
+}
+
+.delete-btn i{
+
+    color:#FF6A6A;
+
+}
+
+.delete-btn:hover{
+
+    background:#FF5B5B;
+
+    border-color:#FF5B5B;
+
+    transform:translateY(-3px);
+
+    box-shadow:0 10px 24px rgba(255,91,91,.35);
+
+}
+
+.delete-btn:hover i{
+
+    color:white;
+
+}
+
+/* ==========================================================
+   ACTIVE
+========================================================== */
+
+.action-btn:active{
+
+    transform:scale(.94);
+
+}
+
+
+/* ==========================================================
+   REFRESH BUTTON
+========================================================== */
+
+/* ==========================================================
+   PRIMARY BUTTON
+========================================================== */
+
+#add-stop-btn{
+
+    background:linear-gradient(
+        135deg,
+        #53C7FF,
+        #7367FF
+    );
+
+    color:#FFFFFF;
+
+    border:none;
+
+    box-shadow:
+        0 12px 28px rgba(80,190,255,.28);
+
+}
+
+/* ==========================================================
+   SECONDARY BUTTONS
+========================================================== */
+
+#import-stop-btn,
+#export-stop-btn,
+#refresh-btn{
+
+    background:rgba(255,255,255,.06);
+
+    border:1px solid rgba(255,255,255,.08);
+
+    color:#EAF2FF;
+
+}
+
+/* ==========================================================
+   HOVER
+========================================================== */
+
+.toolbar-actions button:hover{
+
+    transform:translateY(-3px);
+
+    border-color:rgba(79,209,255,.25);
+
+    background:rgba(79,209,255,.10);
+
+    box-shadow:
+        0 14px 30px rgba(0,0,0,.18);
+
+}
+
+#add-stop-btn:hover{
+
+    background:linear-gradient(
+        135deg,
+        #63D4FF,
+        #8070FF
+    );
+
+    box-shadow:
+        0 18px 38px rgba(80,190,255,.35);
+
+}
+
+/* ==========================================================
+   TABLE PANEL
+========================================================== */
+
+.table-panel{
+
+    padding:24px;
+
+}
+
+/* ==========================================================
+   TABLE
+========================================================== */
+
+.data-table{
+
+    width:100%;
+
+    border-collapse:collapse;
+
+}
+
+.data-table thead{
+
+    background:linear-gradient(
+
+        90deg,
+
+        rgba(79,209,255,.12),
+
+        rgba(255,255,255,.03)
+
+    );
+
+}
+
+.data-table th{
+
+    padding:16px;
+
+    color:#DCEFFF;
+
+    text-align:left;
+
+    font-size:.9rem;
+
+    font-weight:600;
+
+    border-bottom:1px solid rgba(255,255,255,.08);
+
+}
+
+.data-table td{
+
+    padding:16px;
+
+    color:#D7E5FF;
+
+    border-bottom:1px solid rgba(255,255,255,.05);
+
+}
+
+.data-table tbody tr{
+
+    transition:.25s;
+
+}
+
+.data-table tbody tr{
+
+    transition:.25s;
+
+}
+
+.data-table tbody tr:hover{
+
+    transform:translateX(6px);
+
+    background:rgba(79,209,255,.05);
+
+}
+.data-table tbody tr:nth-child(even){
+
+    background:rgba(255,255,255,.015);
+
+}
+.muted-text{
+
+    color:#7E90B4;
+
+    font-style:italic;
+
+}
+.stop-code{
+
+    display:inline-flex;
+
+    padding:6px 12px;
+
+    border-radius:10px;
+
+    background:rgba(79,209,255,.08);
+
+    border:1px solid rgba(79,209,255,.15);
+
+    color:#4FD1FF;
+
+    font-weight:600;
+
+    font-size:.82rem;
+
+}
+/* ==========================================================
+   ROUTE BADGE
+========================================================== */
+
+.route-badge{
+
+    display:inline-flex;
+
+    align-items:center;
+
+    padding:7px 14px;
+
+    border-radius:999px;
+
+    background:rgba(79,209,255,.12);
+
+    color:#4FD1FF;
+
+    font-size:.82rem;
+
+    font-weight:600;
+
+}
+
+/* ==========================================================
+   STOP NUMBER
+========================================================== */
+
+.stop-number{
+
+    display:inline-flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    width:34px;
+
+    height:34px;
+
+    border-radius:50%;
+
+    background:rgba(255,255,255,.06);
+
+    color:#FFFFFF;
+
+    font-weight:700;
+
+}
+
+/* ==========================================================
+   RESPONSIVE
+========================================================== */
+
+@media(max-width:1200px){
+
+    .statistics-grid{
+
+        grid-template-columns:repeat(2,1fr);
+
+    }
+
+}
+
+@media(max-width:768px){
+
+    .statistics-grid{
+
+        grid-template-columns:1fr;
+
+    }
+
+    .toolbar{
+
+        flex-direction:column;
+
+        align-items:stretch;
+
+    }
+
+    .toolbar-search{
+
+        max-width:100%;
+
+    }
+
+}
+/* ==========================================================
+   PAGINATION
+========================================================== */
+
+.pagination-wrapper{
+
+    display:flex;
+
+    justify-content:center;
+
+    margin-top:24px;
+
+}
+
+#pagination{
+
+    display:flex;
+
+    gap:10px;
+
+    flex-wrap:wrap;
+
+}
+
+#pagination button{
+
+    width:42px;
+
+    height:42px;
+
+    border:none;
+
+    border-radius:12px;
+
+    background:rgba(255,255,255,.06);
+
+    color:#FFFFFF;
+
+    cursor:pointer;
+
+    transition:.25s;
+
+}
+
+#pagination button:hover{
+
+    background:rgba(79,209,255,.15);
+
+}
+
+#pagination button.active{
+
+    background:linear-gradient(
+
+        135deg,
+
+        #53C7FF,
+
+        #7367FF
+
+    );
+
+    color:#FFFFFF;
+
+}
+
+#pagination button:disabled{
+
+    opacity:.35;
+
+    cursor:not-allowed;
+
+}

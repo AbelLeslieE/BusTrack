@@ -1,0 +1,1646 @@
+/* ===================================================================
+   BUSTRACK
+   GLOBAL MODAL SYSTEM
+   PART 1
+   Overlay + Window
+=================================================================== */
+
+
+/* ==========================================================
+   OVERLAY
+========================================================== */
+
+.modal-overlay{
+
+    position:fixed;
+
+    inset:0;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    padding:40px;
+
+    background:rgba(4,10,22,.62);
+
+    backdrop-filter:blur(18px);
+
+    -webkit-backdrop-filter:blur(18px);
+
+    opacity:0;
+
+    visibility:hidden;
+
+    pointer-events:none;
+
+    transition:
+        opacity .25s ease,
+        visibility .25s ease;
+
+    z-index:5000;
+
+}
+
+
+/* ==========================================================
+   OPEN STATE
+========================================================== */
+
+.modal-overlay.is-open{
+
+    opacity:1;
+
+    visibility:visible;
+
+    pointer-events:auto;
+
+}
+
+
+/* ==========================================================
+   MODAL WINDOW
+========================================================== */
+
+.modal{
+
+    position:relative;
+
+    display:flex;
+
+    flex-direction:column;
+
+    width:min(680px,100%);
+
+    max-height:90vh;
+
+    overflow:hidden;
+
+    border-radius:28px;
+
+    background:
+
+        linear-gradient(
+            180deg,
+            rgba(14,25,48,.96),
+            rgba(8,17,35,.96)
+        );
+
+    border:1px solid rgba(255,255,255,.08);
+
+    backdrop-filter:blur(26px);
+
+    box-shadow:
+
+        0 30px 80px rgba(0,0,0,.55),
+
+        0 0 45px rgba(79,209,255,.08);
+
+    transform:
+
+        scale(.95)
+
+        translateY(25px);
+
+    opacity:0;
+
+    transition:
+
+        .28s ease;
+
+}
+
+
+/* ==========================================================
+   OPEN ANIMATION
+========================================================== */
+
+.modal-overlay.is-open .modal{
+
+    opacity:1;
+
+    transform:
+
+        scale(1)
+
+        translateY(0);
+
+}
+
+
+/* ==========================================================
+   MODAL SIZES
+========================================================== */
+
+.modal-sm{
+
+    width:480px;
+
+}
+
+.modal-md{
+
+    width:680px;
+
+}
+
+.modal-lg{
+
+    width:900px;
+
+}
+
+.modal-xl{
+
+    width:1180px;
+
+}
+
+.modal-full{
+
+    width:96vw;
+
+    height:94vh;
+
+}
+
+
+/* ==========================================================
+   DECORATIVE GLOW
+========================================================== */
+
+.modal::before{
+
+    content:"";
+
+    position:absolute;
+
+    right:-160px;
+
+    top:-160px;
+
+    width:340px;
+
+    height:340px;
+
+    border-radius:50%;
+
+    background:
+
+        radial-gradient(
+
+            rgba(79,209,255,.18),
+
+            transparent 70%
+
+        );
+
+    pointer-events:none;
+
+}
+
+.modal::after{
+
+    content:"";
+
+    position:absolute;
+
+    left:-140px;
+
+    bottom:-160px;
+
+    width:300px;
+
+    height:300px;
+
+    border-radius:50%;
+
+    background:
+
+        radial-gradient(
+
+            rgba(124,92,255,.14),
+
+            transparent 70%
+
+        );
+
+    pointer-events:none;
+
+}
+/* ===================================================================
+   BUSTRACK
+   GLOBAL MODAL SYSTEM
+   PART 2
+   Header
+===================================================================*/
+
+/* ==========================================================
+   HEADER
+========================================================== */
+
+.modal-header{
+
+    position:relative;
+
+    z-index:2;
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:flex-start;
+
+    gap:24px;
+
+    padding:28px 32px 22px;
+
+}
+
+/* ==========================================================
+   HEADER LEFT
+========================================================== */
+
+.modal-header-left{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:8px;
+
+    min-width:0;
+
+}
+
+/* ==========================================================
+   MODAL EYEBROW
+========================================================== */
+
+.modal-eyebrow{
+
+    margin:0;
+
+    font-size:.72rem;
+
+    font-weight:700;
+
+    letter-spacing:.18em;
+
+    text-transform:uppercase;
+
+    color:#4FD1FF;
+
+}
+
+/* ==========================================================
+   MODAL TITLE
+========================================================== */
+
+.modal-title{
+
+    margin:0;
+
+    font-size:2rem;
+
+    font-weight:800;
+
+    line-height:1.15;
+
+    color:#ffffff;
+
+}
+
+/* ==========================================================
+   MODAL SUBTITLE
+========================================================== */
+
+.modal-subtitle{
+
+    margin:0;
+
+    max-width:520px;
+
+    font-size:.95rem;
+
+    line-height:1.7;
+
+    color:#9EB2D4;
+
+}
+
+/* ==========================================================
+   CLOSE BUTTON
+========================================================== */
+
+.modal-close{
+
+    width:46px;
+
+    height:46px;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    flex-shrink:0;
+
+    border:none;
+
+    border-radius:14px;
+
+    cursor:pointer;
+
+    color:#BFD5F5;
+
+    background:rgba(255,255,255,.05);
+
+    border:1px solid rgba(255,255,255,.08);
+
+    transition:.3s;
+
+}
+
+/* ==========================================================
+   CLOSE HOVER
+========================================================== */
+
+.modal-close:hover{
+
+    color:#ffffff;
+
+    background:rgba(239,68,68,.14);
+
+    border-color:rgba(239,68,68,.30);
+
+    transform:rotate(90deg);
+
+    box-shadow:
+
+        0 0 22px rgba(239,68,68,.18);
+
+}
+
+/* ==========================================================
+   DIVIDER
+========================================================== */
+
+.modal-divider{
+
+    width:100%;
+
+    height:1px;
+
+    background:rgba(255,255,255,.06);
+
+}
+/* ===================================================================
+   BUSTRACK
+   GLOBAL MODAL SYSTEM
+   PART 3
+   Body + Form System
+===================================================================*/
+
+/* ==========================================================
+   MODAL BODY
+========================================================== */
+
+.modal-body{
+
+    position:relative;
+
+    z-index:2;
+
+    flex:1;
+
+    overflow-y:auto;
+
+    padding:30px 32px;
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:28px;
+
+}
+
+/* ==========================================================
+   CUSTOM SCROLLBAR
+========================================================== */
+
+.modal-body{
+
+    scrollbar-width:thin;
+
+    scrollbar-color:
+        rgba(79,209,255,.25)
+        transparent;
+
+}
+
+.modal-body::-webkit-scrollbar{
+
+    width:8px;
+
+}
+
+.modal-body::-webkit-scrollbar-track{
+
+    background:transparent;
+
+}
+
+.modal-body::-webkit-scrollbar-thumb{
+
+    border-radius:999px;
+
+    background:rgba(79,209,255,.22);
+
+}
+
+/* ==========================================================
+   SECTION
+========================================================== */
+
+.modal-section{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:24px;
+
+    margin-bottom:40px;
+
+}
+
+
+/* ==========================================================
+   SECTION TITLE
+========================================================== */
+
+.modal-section-title{
+
+    font-size:.82rem;
+
+    font-weight:700;
+
+    letter-spacing:.15em;
+
+    text-transform:uppercase;
+
+    margin-bottom:6px;
+
+    
+    color:#4FD1FF;
+
+}
+
+/* ==========================================================
+   GRID
+========================================================== */
+
+.modal-grid{
+
+    display:grid;
+
+    grid-template-columns:repeat(2,minmax(0,1fr));
+
+    gap:28px 26px;
+
+}
+
+/* ==========================================================
+   FULL WIDTH
+========================================================== */
+
+.modal-grid-full{
+
+    grid-column:1/-1;
+
+}
+
+/* ==========================================================
+   GROUP
+========================================================== */
+
+.modal-group{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:10px;
+
+}
+
+/* ==========================================================
+   LABEL
+========================================================== */
+
+.modal-label{
+
+    font-size:.88rem;
+
+    font-weight:600;
+
+    color:#D7E5FF;
+
+}
+
+/* ==========================================================
+   REQUIRED
+========================================================== */
+
+.modal-required{
+
+    color:#FF6B6B;
+
+    margin-left:4px;
+
+}
+
+/* ==========================================================
+   HELPER TEXT
+========================================================== */
+
+.modal-helper{
+
+    font-size:.8rem;
+
+    color:#89A0C3;
+
+}
+
+/* ==========================================================
+   FIELD ROW
+========================================================== */
+
+.modal-row{
+
+    display:flex;
+
+    gap:18px;
+
+}
+/* ===================================================================
+   BUSTRACK
+   GLOBAL MODAL SYSTEM
+   PART 4
+   Form Controls
+===================================================================*/
+
+
+/* ==========================================================
+   INPUT
+========================================================== */
+
+.modal-input,
+.modal-select,
+.modal-textarea{
+
+    width:100%;
+
+    border:none;
+
+    outline:none;
+
+    border-radius:16px;
+
+    background:
+        rgba(255,255,255,.05);
+
+    border:1px solid rgba(255,255,255,.08);
+
+    color:#ffffff;
+
+    font-size:.94rem;
+
+    font-weight:500;
+
+    transition:
+        .28s ease;
+
+}
+
+
+/* ==========================================================
+   INPUT
+========================================================== */
+
+.modal-input,
+.modal-select{
+
+    height:54px;
+
+    padding:0 18px;
+
+}
+
+
+/* ==========================================================
+   TEXTAREA
+========================================================== */
+
+.modal-textarea{
+
+    resize:vertical;
+
+    min-height:140px;
+
+    padding:16px 18px;
+
+    line-height:1.7;
+
+}
+
+
+/* ==========================================================
+   PLACEHOLDER
+========================================================== */
+
+.modal-input::placeholder,
+.modal-textarea::placeholder{
+
+    color:#8EA7CA;
+
+}
+
+
+/* ==========================================================
+   SELECT
+========================================================== */
+
+.modal-select{
+
+    appearance:none;
+
+    cursor:pointer;
+
+}
+
+
+/* ==========================================================
+   HOVER
+========================================================== */
+
+.modal-input:hover,
+.modal-select:hover,
+.modal-textarea:hover{
+
+    border-color:
+
+        rgba(79,209,255,.18);
+
+}
+
+
+/* ==========================================================
+   FOCUS
+========================================================== */
+
+.modal-input:focus,
+.modal-select:focus,
+.modal-textarea:focus{
+
+    border-color:#4FD1FF;
+
+    background:
+
+        rgba(255,255,255,.06);
+
+    box-shadow:
+
+        0 0 0 4px rgba(79,209,255,.08),
+
+        0 0 24px rgba(79,209,255,.10);
+
+}
+
+
+/* ==========================================================
+   INPUT WITH ICON
+========================================================== */
+
+.modal-input-wrapper{
+
+    position:relative;
+
+}
+
+
+.modal-input-wrapper i{
+
+    position:absolute;
+
+    left:18px;
+
+    top:50%;
+
+    transform:translateY(-50%);
+
+    color:#87A4CC;
+
+    pointer-events:none;
+
+}
+
+
+.modal-input-wrapper .modal-input{
+
+    padding-left:52px;
+
+}
+
+
+/* ==========================================================
+   INPUT SUFFIX
+========================================================== */
+
+.modal-suffix{
+
+    position:absolute;
+
+    right:18px;
+
+    top:50%;
+
+    transform:translateY(-50%);
+
+    color:#8FA4C6;
+
+    font-size:.84rem;
+
+}
+
+
+/* ==========================================================
+   READ ONLY
+========================================================== */
+
+.modal-input:read-only{
+
+    opacity:.75;
+
+    cursor:not-allowed;
+
+}
+
+
+/* ==========================================================
+   DISABLED
+========================================================== */
+
+.modal-input:disabled,
+.modal-select:disabled,
+.modal-textarea:disabled{
+
+    opacity:.55;
+
+    cursor:not-allowed;
+
+}
+
+
+/* ==========================================================
+   ERROR
+========================================================== */
+
+.modal-error{
+
+    border-color:#EF4444 !important;
+
+    box-shadow:
+
+        0 0 0 4px rgba(239,68,68,.08);
+
+}
+
+
+.modal-error-text{
+
+    color:#EF4444;
+
+    font-size:.78rem;
+
+}
+
+
+/* ==========================================================
+   SUCCESS
+========================================================== */
+
+.modal-success{
+
+    border-color:#22C55E !important;
+
+    box-shadow:
+
+        0 0 0 4px rgba(34,197,94,.08);
+
+}
+
+
+/* ==========================================================
+   WARNING
+========================================================== */
+
+.modal-warning{
+
+    border-color:#F59E0B !important;
+
+    box-shadow:
+
+        0 0 0 4px rgba(245,158,11,.08);
+
+}
+/* ===================================================================
+   BUSTRACK
+   GLOBAL MODAL SYSTEM
+   PART 5
+   Footer + Action Buttons
+===================================================================*/
+
+/* ==========================================================
+   FOOTER
+========================================================== */
+
+.modal-footer{
+
+    position:relative;
+
+    z-index:2;
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:center;
+
+    gap:18px;
+
+    padding:22px 32px;
+
+    border-top:1px solid rgba(255,255,255,.06);
+
+    background:
+
+        linear-gradient(
+            180deg,
+            rgba(10,18,34,.92),
+            rgba(8,15,30,.96)
+        );
+
+}
+
+/* ==========================================================
+   ACTION GROUP
+========================================================== */
+
+.modal-actions{
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:flex-end;
+
+    gap:14px;
+
+    width:100%;
+
+}
+
+/* ==========================================================
+   BASE BUTTON
+========================================================== */
+
+.modal-btn{
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    gap:10px;
+
+    min-width:130px;
+
+    height:50px;
+
+    padding:0 24px;
+
+    border:none;
+
+    border-radius:15px;
+
+    cursor:pointer;
+
+    user-select:none;
+
+    font-size:.92rem;
+
+    font-weight:700;
+
+    transition:.28s ease;
+
+}
+
+/* ==========================================================
+   PRIMARY
+========================================================== */
+
+.modal-btn-primary{
+
+    color:#ffffff;
+
+    background:
+
+        linear-gradient(
+            135deg,
+            #4FD1FF,
+            #7C5CFF
+        );
+
+    box-shadow:
+
+        0 12px 28px rgba(79,209,255,.22);
+
+}
+
+.modal-btn-primary:hover{
+
+    transform:
+        translateY(-2px);
+
+    box-shadow:
+
+        0 18px 35px rgba(79,209,255,.28);
+
+}
+
+/* ==========================================================
+   SECONDARY
+========================================================== */
+
+.modal-btn-secondary{
+
+    color:#D8E7FF;
+
+    background:
+
+        rgba(255,255,255,.05);
+
+    border:1px solid rgba(255,255,255,.08);
+
+}
+
+.modal-btn-secondary:hover{
+
+    background:
+
+        rgba(255,255,255,.08);
+
+    border-color:
+
+        rgba(79,209,255,.18);
+
+}
+
+/* ==========================================================
+   DANGER
+========================================================== */
+
+.modal-btn-danger{
+
+    color:#ffffff;
+
+    background:
+
+        linear-gradient(
+            135deg,
+            #EF4444,
+            #DC2626
+        );
+
+    box-shadow:
+
+        0 10px 25px rgba(239,68,68,.22);
+
+}
+
+.modal-btn-danger:hover{
+
+    transform:translateY(-2px);
+
+    box-shadow:
+
+        0 18px 34px rgba(239,68,68,.28);
+
+}
+
+/* ==========================================================
+   GHOST
+========================================================== */
+
+.modal-btn-ghost{
+
+    color:#8FA4C6;
+
+    background:transparent;
+
+}
+
+.modal-btn-ghost:hover{
+
+    color:#ffffff;
+
+    background:
+
+        rgba(255,255,255,.05);
+
+}
+
+/* ==========================================================
+   DISABLED
+========================================================== */
+
+.modal-btn:disabled{
+
+    opacity:.45;
+
+    cursor:not-allowed;
+
+    transform:none;
+
+    box-shadow:none;
+
+}
+
+/* ==========================================================
+   LOADING
+========================================================== */
+
+.modal-btn-loading{
+
+    pointer-events:none;
+
+    opacity:.75;
+
+}
+
+.modal-btn-spinner{
+
+    width:18px;
+
+    height:18px;
+
+    border-radius:50%;
+
+    border:2px solid rgba(255,255,255,.30);
+
+    border-top-color:#ffffff;
+
+    animation:modalSpinner .8s linear infinite;
+
+}
+
+@keyframes modalSpinner{
+
+    to{
+
+        transform:rotate(360deg);
+
+    }
+
+}
+/* ===================================================================
+   BUSTRACK
+   GLOBAL MODAL SYSTEM
+   PART 6
+   Utility Components
+===================================================================*/
+
+
+/* ==========================================================
+   ALERTS
+========================================================== */
+
+.modal-alert{
+
+    display:flex;
+
+    align-items:flex-start;
+
+    gap:14px;
+
+    padding:16px 18px;
+
+    border-radius:16px;
+
+    border:1px solid transparent;
+
+}
+
+.modal-alert i{
+
+    margin-top:2px;
+
+    font-size:18px;
+
+}
+
+.modal-alert-info{
+
+    background:rgba(79,209,255,.08);
+
+    border-color:rgba(79,209,255,.15);
+
+    color:#DCEEFF;
+
+}
+
+.modal-alert-success{
+
+    background:rgba(34,197,94,.08);
+
+    border-color:rgba(34,197,94,.15);
+
+    color:#DDF8E7;
+
+}
+
+.modal-alert-warning{
+
+    background:rgba(245,158,11,.08);
+
+    border-color:rgba(245,158,11,.15);
+
+    color:#FFF1D5;
+
+}
+
+.modal-alert-danger{
+
+    background:rgba(239,68,68,.08);
+
+    border-color:rgba(239,68,68,.15);
+
+    color:#FFE0E0;
+
+}
+
+
+/* ==========================================================
+   DIVIDER
+========================================================== */
+
+.modal-divider-space{
+
+    width:100%;
+
+    height:1px;
+
+    background:rgba(255,255,255,.06);
+
+    margin:10px 0;
+
+}
+
+
+/* ==========================================================
+   BADGES
+========================================================== */
+
+.modal-badge{
+
+    display:inline-flex;
+
+    align-items:center;
+
+    gap:8px;
+
+    padding:6px 12px;
+
+    border-radius:999px;
+
+    font-size:.78rem;
+
+    font-weight:700;
+
+}
+
+.modal-badge-primary{
+
+    color:#4FD1FF;
+
+    background:rgba(79,209,255,.10);
+
+}
+
+.modal-badge-success{
+
+    color:#22C55E;
+
+    background:rgba(34,197,94,.10);
+
+}
+
+.modal-badge-warning{
+
+    color:#F59E0B;
+
+    background:rgba(245,158,11,.10);
+
+}
+
+.modal-badge-danger{
+
+    color:#EF4444;
+
+    background:rgba(239,68,68,.10);
+
+}
+
+
+/* ==========================================================
+   CHECKBOX
+========================================================== */
+
+.modal-checkbox{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:12px;
+
+    cursor:pointer;
+
+    color:#DCE7FF;
+
+}
+
+.modal-checkbox input{
+
+    accent-color:#4FD1FF;
+
+}
+
+
+/* ==========================================================
+   RADIO
+========================================================== */
+
+.modal-radio{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:12px;
+
+    cursor:pointer;
+
+    color:#DCE7FF;
+
+}
+
+.modal-radio input{
+
+    accent-color:#4FD1FF;
+
+}
+
+
+/* ==========================================================
+   SWITCH
+========================================================== */
+
+.modal-switch{
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:space-between;
+
+    gap:20px;
+
+}
+
+.modal-switch input{
+
+    accent-color:#4FD1FF;
+
+}
+
+
+/* ==========================================================
+   FILE UPLOAD
+========================================================== */
+
+.modal-upload{
+
+    display:flex;
+
+    flex-direction:column;
+
+    justify-content:center;
+
+    align-items:center;
+
+    gap:14px;
+
+    padding:36px;
+
+    border-radius:18px;
+
+    border:2px dashed rgba(79,209,255,.20);
+
+    background:rgba(255,255,255,.03);
+
+    text-align:center;
+
+    transition:.3s;
+
+}
+
+.modal-upload:hover{
+
+    border-color:#4FD1FF;
+
+    background:rgba(79,209,255,.05);
+
+}
+
+
+/* ==========================================================
+   AVATAR PREVIEW
+========================================================== */
+
+.modal-avatar{
+
+    width:82px;
+
+    height:82px;
+
+    border-radius:50%;
+
+    overflow:hidden;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    background:rgba(255,255,255,.05);
+
+    border:1px solid rgba(255,255,255,.08);
+
+}
+
+.modal-avatar img{
+
+    width:100%;
+
+    height:100%;
+
+    object-fit:cover;
+
+}
+
+
+/* ==========================================================
+   EMPTY STATE
+========================================================== */
+
+.modal-empty{
+
+    display:flex;
+
+    flex-direction:column;
+
+    align-items:center;
+
+    justify-content:center;
+
+    gap:16px;
+
+    padding:40px;
+
+    text-align:center;
+
+}
+
+.modal-empty i{
+
+    font-size:44px;
+
+    color:#4FD1FF;
+
+}
+
+.modal-empty h3{
+
+    margin:0;
+
+    color:#ffffff;
+
+}
+
+.modal-empty p{
+
+    margin:0;
+
+    color:#8FA4C6;
+
+    line-height:1.6;
+
+}
+/* ==========================================================================
+   ROUTE VIEW MODAL
+========================================================================== */
+
+.route-view{
+
+    display:flex;
+    flex-direction:column;
+    gap:30px;
+
+}
+
+.route-view-section{
+
+    display:flex;
+    flex-direction:column;
+    gap:20px;
+
+}
+
+.route-view-section h3{
+
+    margin:0;
+
+    color:#FFFFFF;
+
+    font-size:20px;
+
+    font-weight:700;
+
+    letter-spacing:.5px;
+
+}
+
+/* ==========================================================================
+   INFO GRID
+========================================================================== */
+
+.route-view-grid{
+
+    display:grid;
+
+    grid-template-columns:repeat(2,minmax(0,1fr));
+
+    gap:18px;
+
+}
+
+.route-view-grid > div{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:8px;
+
+    padding:18px;
+
+    border-radius:16px;
+
+    background:rgba(255,255,255,.04);
+
+    border:1px solid rgba(255,255,255,.06);
+
+}
+
+.route-view-grid label{
+
+    color:#8FA4C6;
+
+    font-size:13px;
+
+    text-transform:uppercase;
+
+    letter-spacing:1px;
+
+}
+
+.route-view-grid span{
+
+    color:#FFFFFF;
+
+    font-size:17px;
+
+    font-weight:600;
+
+}
+
+/* ==========================================================================
+   STOP LIST
+========================================================================== */
+
+.route-view-stop-list{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:14px;
+
+}
+
+.route-view-stop{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:18px;
+
+    padding:16px 18px;
+
+    border-radius:16px;
+
+    background:rgba(255,255,255,.04);
+
+    border:1px solid rgba(255,255,255,.06);
+
+    transition:.25s;
+
+}
+
+.route-view-stop:hover{
+
+    border-color:rgba(79,209,255,.30);
+
+    background:rgba(255,255,255,.06);
+
+    transform:translateY(-2px);
+
+}
+
+.route-view-stop-number{
+
+    width:42px;
+
+    height:42px;
+
+    border-radius:50%;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    color:#FFFFFF;
+
+    font-weight:700;
+
+    background:linear-gradient(135deg,#4FD1FF,#7C5CFF);
+
+    box-shadow:0 8px 20px rgba(79,209,255,.25);
+
+}
+
+.route-view-stop-name{
+
+    color:#FFFFFF;
+
+    font-size:16px;
+
+    font-weight:600;
+
+}
+
+.route-view-empty{
+
+    padding:35px;
+
+    text-align:center;
+
+    border-radius:18px;
+
+    color:#8FA4C6;
+
+    border:1px dashed rgba(255,255,255,.08);
+
+}

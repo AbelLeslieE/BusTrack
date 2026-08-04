@@ -1,0 +1,586 @@
+/* ==========================================================
+   BUSTRACK DESIGN SYSTEM
+   Premium Fleet Command Center
+   ========================================================== */
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap");
+
+/* ==========================================================
+   ROOT VARIABLES
+========================================================== */
+
+:root{
+
+    /* ===========================
+       COLORS
+    ============================ */
+
+    --bg:#06111F;
+    --bg-dark:#081628;
+    --bg-darker:#0B1830;
+
+    --primary:#4FD1FF;
+    --primary-light:#6EE7FF;
+    --primary-dark:#36BFF8;
+
+    --purple:#7C5CFF;
+    --purple-light:#9E84FF;
+
+    --success:#22C55E;
+    --warning:#F59E0B;
+    --danger:#EF4444;
+
+    --white:#F7FAFC;
+    --text:#EAF2FF;
+    --muted:#A8B3CF;
+
+    /* ===========================
+       GLASS
+    ============================ */
+
+    --glass:
+    rgba(8,18,35,.22);
+
+    --glass-light:
+    rgba(10,22,40,.28);
+
+    --glass-heavy:
+    rgba(8,18,35,.35);
+    --glass-border:
+        rgba(255,255,255,.08);
+
+    --glass-hover:
+        rgba(255,255,255,.12);
+
+    /* ===========================
+       SHADOWS
+    ============================ */
+
+    --shadow-soft:
+
+    0 12px 30px rgba(0,0,0,.25),
+
+    0 25px 80px rgba(0,0,0,.30);
+
+    --shadow-large:
+
+    0 30px 90px rgba(0,0,0,.45);
+
+    --shadow-glow:
+        0 0 40px rgba(79,209,255,.15);
+
+    /* ===========================
+       BORDER
+    ============================ */
+
+    --radius-xs:10px;
+    --radius-sm:14px;
+    --radius-md:20px;
+    --radius-lg:28px;
+
+    /* ===========================
+       TRANSITIONS
+    ============================ */
+
+    --transition:
+        .35s cubic-bezier(.4,0,.2,1);
+
+}
+
+/* ==========================================================
+   RESET
+========================================================== */
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+html{
+
+    scroll-behavior:smooth;
+
+}
+
+body{
+
+    min-height:100vh;
+
+    color:var(--text);
+
+    font-family:"Inter",sans-serif;
+
+    background:
+
+    linear-gradient(
+        rgba(5,15,30,.42),
+        rgba(5,15,30,.55)
+    ),
+
+    url("/static/assets/images/fleet-bg.png");
+
+    background-size:cover;
+
+    background-position:center;
+
+    background-repeat:no-repeat;
+
+    background-attachment:fixed;
+
+    overflow-x:hidden;
+
+}
+body::after{
+
+    content:"";
+
+    position:fixed;
+
+    inset:0;
+
+    pointer-events:none;
+
+    background:
+
+    linear-gradient(
+        180deg,
+        rgba(0,0,0,.15),
+        rgba(0,0,0,.45)
+    );
+
+    z-index:-1;
+
+}
+/* ==========================================================
+   AMBIENT LIGHTING
+========================================================== */
+
+body::before{
+
+    content:"";
+
+    position:fixed;
+
+    inset:0;
+
+    pointer-events:none;
+
+    background:
+
+    radial-gradient(
+        circle at 10% 15%,
+        rgba(79,209,255,.10),
+        transparent 35%
+    ),
+
+    radial-gradient(
+        circle at 92% 85%,
+        rgba(124,92,255,.12),
+        transparent 40%
+    ),
+
+    radial-gradient(
+        circle at 50% 0%,
+        rgba(110,231,255,.06),
+        transparent 30%
+    );
+
+    z-index:-1;
+
+}
+.app-root{
+
+    position:relative;
+
+}
+
+.app-root::before{
+
+    content:"";
+
+    position:absolute;
+
+    inset:0;
+
+    pointer-events:none;
+
+    opacity:.02;
+
+    background-image:
+    radial-gradient(circle,#ffffff 1px,transparent 1px);
+
+    background-size:22px 22px;
+
+}
+/* ==========================================================
+   TYPOGRAPHY
+========================================================== */
+
+h1{
+
+    font-size:3rem;
+
+    font-weight:800;
+
+    line-height:1.1;
+
+}
+
+h2{
+
+    font-size:2.2rem;
+
+    font-weight:700;
+
+}
+
+h3{
+
+    font-size:1.35rem;
+
+    font-weight:700;
+
+}
+
+h4{
+
+    font-size:1rem;
+
+    font-weight:600;
+
+}
+
+p{
+
+    line-height:1.7;
+
+    color:var(--muted);
+
+}
+
+/* ==========================================================
+   GLASS PANEL
+========================================================== */
+
+.glass-panel{
+
+    background:
+
+    linear-gradient(
+        135deg,
+        rgba(20,34,58,.45),
+        rgba(8,18,35,.30)
+    );
+
+    backdrop-filter: blur(14px);
+
+    -webkit-backdrop-filter: blur(14px);
+
+    border:
+
+    1px solid rgba(255,255,255,.12);
+
+    border-radius:22px;
+
+    box-shadow:
+
+    0 10px 40px rgba(0,0,0,.18),
+
+    0 0 20px rgba(79,209,255,.05);
+
+    transition:all var(--transition);
+
+}
+
+.glass-panel:hover{
+
+    transform:
+
+    translateY(-4px)
+
+    scale(1.01);
+    transition:
+
+    all .45s cubic-bezier(.22,1,.36,1);
+
+    border-color:
+
+    rgba(79,209,255,.18);
+
+    box-shadow:
+
+    var(--shadow-large),
+
+    var(--shadow-glow);
+
+}
+.glass-panel{
+
+    overflow:hidden;
+
+}
+
+.glass-panel::before{
+
+    content:"";
+
+    position:absolute;
+
+    left:0;
+
+    top:0;
+
+    width:100%;
+
+    height:1px;
+
+    background:
+
+    linear-gradient(
+
+        90deg,
+
+        transparent,
+
+        rgba(255,255,255,.30),
+
+        transparent
+
+    );
+
+}
+/* ==========================================================
+   BUTTONS
+========================================================== */
+
+button{
+
+    font-family:inherit;
+
+}
+
+.primary-button{
+
+    border:none;
+
+    border-radius:16px;
+
+    cursor:pointer;
+
+    color:white;
+
+    font-weight:700;
+
+    background:
+
+    linear-gradient(
+        135deg,
+        var(--primary),
+        var(--purple)
+    );
+
+    transition:all var(--transition);
+
+}
+
+.primary-button:hover{
+
+    transform:
+
+    translateY(-2px);
+
+    box-shadow:
+
+    0 0 30px rgba(79,209,255,.35);
+
+}
+
+.secondary-button{
+
+    border:
+
+    1px solid var(--glass-border);
+
+    background:
+
+    rgba(255,255,255,.05);
+
+    color:var(--text);
+
+    border-radius:16px;
+
+    cursor:pointer;
+
+    transition:all var(--transition);
+
+}
+
+.secondary-button:hover{
+
+    background:
+
+    rgba(255,255,255,.08);
+
+}
+
+/* ==========================================================
+   INPUTS
+========================================================== */
+
+input,
+select,
+textarea{
+
+    width:100%;
+
+    color:var(--text);
+
+    border:
+
+    1px solid var(--glass-border);
+
+    background:
+
+    rgba(255,255,255,.05);
+
+    border-radius:16px;
+
+    outline:none;
+
+    transition:all var(--transition);
+
+}
+
+input:focus,
+select:focus,
+textarea:focus{
+
+    border-color:
+
+    var(--primary);
+
+    background:
+
+    rgba(255,255,255,.08);
+
+    box-shadow:
+
+    0 0 0 4px rgba(79,209,255,.12);
+
+}
+
+/* ==========================================================
+   SCROLLBAR
+========================================================== */
+
+::-webkit-scrollbar{
+
+    width:10px;
+
+}
+
+::-webkit-scrollbar-track{
+
+    background:
+
+    rgba(255,255,255,.04);
+
+}
+
+::-webkit-scrollbar-thumb{
+
+    border-radius:50px;
+
+    background:
+
+    linear-gradient(
+        var(--primary),
+        var(--purple)
+    );
+
+}
+
+::-webkit-scrollbar-thumb:hover{
+
+    background:
+
+    linear-gradient(
+        var(--primary-light),
+        var(--purple-light)
+    );
+
+}
+
+/* ==========================================================
+   TEXT SELECTION
+========================================================== */
+
+::selection{
+
+    background:
+
+    linear-gradient(
+    135deg,
+    rgba(15,25,45,.20),
+    rgba(15,25,45,.10)
+    );
+
+    color:#02111C;
+
+}
+
+/* ==========================================================
+   LABELS
+========================================================== */
+
+.eyebrow,
+.section-kicker{
+
+    font-size:.75rem;
+
+    font-weight:800;
+
+    letter-spacing:.22em;
+
+    color:var(--primary);
+
+    text-transform:uppercase;
+
+}
+
+/* ==========================================================
+   ANIMATIONS
+========================================================== */
+
+@keyframes fadeUp{
+
+    from{
+
+        opacity:0;
+
+        transform:
+
+        translateY(20px);
+
+    }
+
+    to{
+
+        opacity:1;
+
+        transform:
+
+        translateY(0);
+
+    }
+
+}
+
+.fade-up{
+
+    animation:
+
+    fadeUp .55s ease;
+
+}
