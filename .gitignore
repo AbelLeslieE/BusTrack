@@ -1,47 +1,94 @@
-# Python ignore rules for Bus Tracker.
-# TODO: Add tool-specific local artifacts as the development workflow evolves.
+# ==========================================================
+# BusTrack
+# Git Ignore
+# ==========================================================
 
-# Python bytecode and interpreter artifacts
+# ==========================================================
+# Python
+# ==========================================================
 __pycache__/
 *.py[cod]
 *$py.class
 
-# Virtual environments
+# ==========================================================
+# Virtual Environments
+# ==========================================================
 .venv/
 venv/
 env/
 ENV/
 
-# Packaging and build outputs
+# ==========================================================
+# Environment Variables
+# ==========================================================
+.env
+.env.*
+
+# Keep the example file
+!.env.example
+
+# ==========================================================
+# SQLite Databases
+# ==========================================================
+*.db
+*.sqlite
+*.sqlite3
+
+# ==========================================================
+# Logs
+# ==========================================================
+*.log
+logs/
+
+# ==========================================================
+# Build / Distribution
+# ==========================================================
 build/
 dist/
 *.egg-info/
 .eggs/
-pip-wheel-metadata/
 
-# Test, coverage, and type-checker output
+# ==========================================================
+# Python Cache
+# ==========================================================
 .pytest_cache/
-.coverage
-.coverage.*
-htmlcov/
 .mypy_cache/
-.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
 
-# Environment and local configuration
-.env
-.env.*
-!.env.example
-
-# Local database files and uploaded content
-database/*.db
-database/.dev_jwt_secret
-backend/uploads/*
-!backend/uploads/.gitkeep
-
-# Editor and operating system files
+# ==========================================================
+# IDE
+# ==========================================================
 .vscode/
 .idea/
-*.swp
-*~
-.DS_Store
+
+# ==========================================================
+# Operating System
+# ==========================================================
 Thumbs.db
+.DS_Store
+
+# ==========================================================
+# Jupyter
+# ==========================================================
+.ipynb_checkpoints/
+
+# ==========================================================
+# Temporary Files
+# ==========================================================
+*.tmp
+*.temp
+*.bak
+
+# ==========================================================
+# Render
+# ==========================================================
+.render/
+
+# ==========================================================
+# Node (Future frontend tooling)
+# ==========================================================
+node_modules/
+npm-debug.log*
+yarn-error.log*
