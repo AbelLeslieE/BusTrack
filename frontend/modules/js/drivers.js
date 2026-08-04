@@ -917,10 +917,16 @@ function renderEmptyState() {
 
                     <button
                         id="empty-add-driver-btn"
-                        class="primary-btn"
+                        class="primary-btn empty-driver-btn"
                     >
 
-                        Add Driver
+                        <span class="btn-icon">
+                            +
+                        </span>
+
+                        <span>
+                            Add Driver
+                        </span>
 
                     </button>
 
