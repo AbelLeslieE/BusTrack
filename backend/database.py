@@ -12,8 +12,19 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
-DEFAULT_SQLITE_URL = f"sqlite:///{(PROJECT_DIR / 'database' / 'bus_tracker.db').as_posix()}"
+DEFAULT_SQLITE_URL = (
+    f"sqlite:///{(PROJECT_DIR / 'database' / 'bus_tracker.db').as_posix()}"
+)
+
 DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_SQLITE_URL)
+
+# Render/PostgreSQL compatibility
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace(
+        "postgres://",
+        "postgresql://",
+        1
+    )
 
 engine_options: dict[str, object] = {"pool_pre_ping": True}
 if DATABASE_URL.startswith("sqlite"):
