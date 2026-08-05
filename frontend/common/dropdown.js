@@ -253,6 +253,15 @@ export function createDropdown({
         valueText.textContent = placeholder;
 
     };
+    root.onChange = (callback) => {
+
+    root.addEventListener("change", event => {
+
+            callback(event.detail);
+
+        });
+
+    };
 
 
     /************************************************************

@@ -62,14 +62,20 @@
 
     display:flex;
 
-    flex-direction:column;
+    flex-direction:row;
 
-    justify-content:center;
+    align-items:center;
 
-    gap:4px;
+    gap:18px;
 
 }
+.topbar-title > div{
 
+    display:flex;
+
+    flex-direction:column;
+
+}
 .topbar-title h1{
 
     margin:0;
@@ -363,10 +369,40 @@
 
 .mobile-menu{
 
-    display:none;
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    width:52px;
+
+    height:52px;
+
+    margin-right:16px;
+
+}
+/* ==========================================================
+   SIDEBAR TOGGLE ICON
+========================================================== */
+
+.mobile-menu i{
+
+    font-size:20px;
+
+    color:#ffffff;
+
+    transition:.3s ease;
 
 }
 
+.mobile-menu:hover i{
+
+    transform:rotate(90deg);
+
+    color:var(--primary);
+
+}
 /* ==========================================================
    RESPONSIVE
 ========================================================== */

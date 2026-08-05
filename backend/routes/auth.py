@@ -28,7 +28,10 @@ def login(form_data: LoginForm, database_session: DatabaseSession) -> TokenRespo
             detail="Incorrect username or password.",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return TokenResponse(access_token=create_access_token(user.username))
+    return TokenResponse(
+        access_token=create_access_token(user.username),
+        user=user,
+    )
 
 
 @router.get("/me", response_model=UserResponse)

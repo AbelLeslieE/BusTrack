@@ -34,20 +34,51 @@ export async function request(path, options = {}) {
 
     if (!response.ok) {
 
-        throw new Error(
+        let message = "Request failed.";
 
-            data?.detail ||
+        if (typeof data?.detail === "string") {
 
-            "Request failed."
+            message = data.detail;
 
-        );
+        }
+
+        else if (Array.isArray(data?.detail) && data.detail.length > 0) {
+
+            const error = data.detail[0];
+
+            if (error.loc?.includes("password")) {
+
+                message = "Password must contain at least 8 characters.";
+
+            }
+
+            else if (error.loc?.includes("username")) {
+
+                message = "Please enter a valid username.";
+
+            }
+
+            else if (error.loc?.includes("email")) {
+
+                message = "Please enter a valid email address.";
+
+            }
+
+            else {
+
+                message = error.msg;
+
+            }
+
+        }
+
+        throw new Error(message);
 
     }
 
     return data;
 
 }
-
 /* ==========================================================
    BUS API
 ========================================================== */
@@ -93,6 +124,59 @@ export const BusAPI = {
     remove(id) {
 
         return request(`/buses/${id}`, {
+
+            method: "DELETE"
+
+        });
+
+    }
+
+};
+/* ==========================================================
+   USER API
+========================================================== */
+
+export const UserAPI = {
+
+    getAll() {
+
+        return request("/users");
+
+    },
+
+    get(id) {
+
+        return request(`/users/${id}`);
+
+    },
+
+    create(data) {
+
+        return request("/users", {
+
+            method: "POST",
+
+            body: JSON.stringify(data)
+
+        });
+
+    },
+
+    update(id, data) {
+
+        return request(`/users/${id}`, {
+
+            method: "PUT",
+
+            body: JSON.stringify(data)
+
+        });
+
+    },
+
+    remove(id) {
+
+        return request(`/users/${id}`, {
 
             method: "DELETE"
 

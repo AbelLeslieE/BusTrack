@@ -26,19 +26,109 @@ from backend.database import Base
 
 
 class User(Base):
-    """An authenticated application user; passwords are never stored directly."""
+    """
+    Master user account for BusTrack.
+
+    Every person who logs into BusTrack must first exist here.
+
+    Role-specific information (Driver, Student, etc.) is stored
+    in separate profile tables.
+    """
 
     __tablename__ = "users"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    username: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    role: Mapped[str] = mapped_column(String(32), default="admin", nullable=False)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
+    # ======================================================
+    # PRIMARY KEY
+    # ======================================================
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
     )
 
+    # ======================================================
+    # ACCOUNT INFORMATION
+    # ======================================================
+
+    username: Mapped[str] = mapped_column(
+        String(64),
+        unique=True,
+        index=True,
+        nullable=False,
+    )
+
+    password_hash: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    # ======================================================
+    # PERSONAL INFORMATION
+    # ======================================================
+
+    full_name: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+    )
+
+    email: Mapped[str | None] = mapped_column(
+        String(100),
+        unique=True,
+        nullable=True,
+    )
+
+    phone: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+
+    # ======================================================
+    # ROLE
+    # ======================================================
+
+    role: Mapped[str] = mapped_column(
+        String(32),
+        default="Administrator",
+        nullable=False,
+    )
+
+    # ======================================================
+    # ACCOUNT STATUS
+    # ======================================================
+
+    status: Mapped[str] = mapped_column(
+        String(20),
+        default="Active",
+        nullable=False,
+    )
+
+    # ======================================================
+    # AUDIT
+    # ======================================================
+
+    last_login: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    driver = relationship(
+        "Driver",
+        back_populates="user",
+        uselist=False,
+    )
 
 class Bus(Base):
     """
@@ -128,16 +218,24 @@ class Bus(Base):
         onupdate=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
+    driver = relationship(
+        "Driver",
+        back_populates="bus",
+        uselist=False,
+    )
 class Driver(Base):
     """
-    Stores information about every driver.
+    Driver profile.
 
-    NOTE:
-    bus_id links the driver to a bus.
-    Future versions will also relate drivers to routes and trips.
+    Login credentials and personal information are stored in the
+    Users table. This table stores only driver-specific information.
     """
 
     __tablename__ = "drivers"
+
+    # ======================================================
+    # PRIMARY KEY
+    # ======================================================
 
     id: Mapped[int] = mapped_column(
         Integer,
@@ -145,26 +243,26 @@ class Driver(Base):
         index=True,
     )
 
-    driver_code: Mapped[str] = mapped_column(
-        String(20),
+    # ======================================================
+    # LINKED USER ACCOUNT
+    # ======================================================
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"),
         unique=True,
         nullable=False,
         index=True,
     )
 
-    full_name: Mapped[str] = mapped_column(
-        String(100),
-        nullable=False,
-    )
+    # ======================================================
+    # DRIVER INFORMATION
+    # ======================================================
 
-    phone: Mapped[str] = mapped_column(
+    driver_code: Mapped[str] = mapped_column(
         String(20),
+        unique=True,
         nullable=False,
-    )
-
-    email: Mapped[str | None] = mapped_column(
-        String(100),
-        nullable=True,
+        index=True,
     )
 
     license_number: Mapped[str] = mapped_column(
@@ -189,10 +287,32 @@ class Driver(Base):
         nullable=False,
     )
 
+    # ======================================================
+    # ASSIGNMENTS
+    # ======================================================
+
     bus_id: Mapped[int | None] = mapped_column(
         ForeignKey("buses.id"),
         nullable=True,
     )
+
+    # ======================================================
+    # RELATIONSHIPS
+    # ======================================================
+
+    user = relationship(
+        "User",
+        back_populates="driver",
+        lazy="joined",
+    )
+    bus = relationship(
+        "Bus",
+        back_populates="driver",
+        lazy="joined",
+    )
+    # ======================================================
+    # AUDIT
+    # ======================================================
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -206,7 +326,6 @@ class Driver(Base):
         onupdate=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
-
 
 # ==========================================================
 # ROUTE MODEL

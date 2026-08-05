@@ -28,7 +28,7 @@ def normalize_username(username: str) -> str:
     return username.strip().casefold()
 
 
-def hash_password(password: str) -> str:
+def get_password_hash(password: str) -> str:
     """Generate a bcrypt password hash with a unique cryptographic salt."""
 
     return password_context.hash(password)
@@ -49,8 +49,19 @@ def authenticate_user(database_session: Session, username: str, password: str) -
     user = database_session.scalar(
         select(User).where(User.username == normalize_username(username))
     )
-    if user is None or not user.is_active or not verify_password(password, user.password_hash):
+    # User not found
+    if user is None:
         return None
+
+    # Account must be active
+    if user.status != "Active":
+        return None
+
+    # Invalid password
+    if not verify_password(password, user.password_hash):
+        return None
+
+    return user
     return user
 
 
@@ -59,9 +70,11 @@ def create_user(database_session: Session, username: str, password: str, role: s
 
     normalized_username = normalize_username(username)
     user = User(
+        full_name="System Administrator",
         username=normalized_username,
-        password_hash=hash_password(password),
+        password_hash=get_password_hash(password),
         role=role,
+        status="Active",
     )
     database_session.add(user)
     database_session.commit()
@@ -73,18 +86,34 @@ def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
     database_session: DatabaseSession,
 ) -> User:
-    """Resolve the active user represented by a valid bearer token."""
+
+    print("========== TOKEN ==========")
+    print(token)
 
     credentials_error = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials.",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
     try:
         username = get_token_subject(token)
+        print("USERNAME:", username)
+
     except JWTError as error:
+        print("JWT ERROR:", error)
         raise credentials_error from error
-    user = database_session.scalar(select(User).where(User.username == username))
-    if user is None or not user.is_active:
+
+    user = database_session.scalar(
+        select(User).where(User.username == username)
+    )
+
+    print("DATABASE USER:", user)
+
+    if user is None:
         raise credentials_error
+
+    if user.status != "Active":
+        raise credentials_error
+
     return user

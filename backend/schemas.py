@@ -11,22 +11,126 @@ from datetime import date, datetime, time
 
 
 class TokenResponse(BaseModel):
-    """Bearer token returned after a successful sign-in."""
+    """
+    Returned after successful authentication.
+    """
 
     access_token: str
+
     token_type: str = "bearer"
 
+    user: UserResponse
 
 class UserResponse(BaseModel):
-    """Safe user details that may be sent to the browser."""
+    """
+    Safe user information returned to the frontend.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+
     username: str
+    full_name: str
+
+    email: str | None
+    phone: str | None
+
     role: str
-    is_active: bool
+
+    status: str
+
+    last_login: datetime | None
+
     created_at: datetime
+    updated_at: datetime
+
+# ==========================================================
+# USER SCHEMAS
+# ==========================================================
+
+class UserCreate(BaseModel):
+    """
+    Create a new BusTrack user.
+    """
+
+    full_name: str = Field(min_length=2, max_length=100)
+
+    username: str = Field(
+        min_length=3,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9_.-]+$",
+    )
+
+    password: str = Field(
+        min_length=8,
+        max_length=72,
+    )
+
+    email: str | None = None
+
+    phone: str | None = None
+
+    role: str
+
+    status: str = "Active"
+
+    # --------------------------------------------------
+    # Driver-only fields
+    # --------------------------------------------------
+
+    driver_code: str | None = None
+
+    license_number: str | None = None
+
+    license_expiry: date | None = None
+
+    address: str | None = None
+
+    bus_id: int | None = None
+
+class UserUpdate(BaseModel):
+    """
+    Update an existing user.
+    """
+
+    full_name: str
+
+    email: str | None = None
+
+    phone: str | None = None
+
+    role: str
+
+    status: str
+
+
+class UserListResponse(BaseModel):
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+
+    full_name: str
+
+    username: str
+
+    email: str | None
+
+    phone: str | None
+
+    role: str
+
+    status: str
+
+    last_login: datetime | None
+
+    created_at: datetime
+
+
+
+
+
 
 
 class AdminBootstrapInput(BaseModel):
@@ -106,58 +210,66 @@ class BusResponse(BaseModel):
 # DRIVER SCHEMAS
 # ==========================================================
 
-class DriverCreate(BaseModel):
-    """
-    Request body used when creating a driver.
-    """
-
-    driver_code: str
-    full_name: str
-    phone: str
-    email: str | None = None
-    license_number: str
-    license_expiry: date
-    address: str | None = None
-    status: str = "Available"
-    bus_id: int | None = None
-
 
 class DriverUpdate(BaseModel):
     """
-    Request body used when updating a driver.
+    Request body used when updating a driver profile.
     """
 
     driver_code: str
-    full_name: str
-    phone: str
-    email: str | None = None
+
     license_number: str
+
     license_expiry: date
+
     address: str | None = None
+
     status: str
+
     bus_id: int | None = None
+class DriverUserResponse(BaseModel):
+    """
+    User information associated with a driver.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+
+    full_name: str
+
+    phone: str | None
+
+    email: str | None
+
 
 
 class DriverResponse(BaseModel):
     """
-    Driver object returned to the frontend.
+    Driver profile returned to the frontend.
     """
-
-    id: int
-    driver_code: str
-    full_name: str
-    phone: str
-    email: str | None
-    license_number: str
-    license_expiry: date
-    address: str | None
-    status: str
-    bus_id: int | None
-    created_at: datetime
-    updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
+    id: int
+
+    user: DriverUserResponse
+
+    driver_code: str
+
+    license_number: str
+
+    license_expiry: date
+
+    address: str | None
+
+    status: str
+
+    bus_id: int | None
+
+    created_at: datetime
+
+    updated_at: datetime
 
 # ==========================================================
 # ROUTE SCHEMAS

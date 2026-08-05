@@ -1,6 +1,6 @@
 /* Dashboard-specific glassmorphism layout. TODO: Add real-time chart and map integrations. */
 
-.dashboard-view { display: grid; gap: 1rem; }
+
 .welcome-banner { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 8.2rem; padding: 1.5rem 1.7rem; border-radius: 1.25rem; background: linear-gradient(112deg, rgba(34,80,153,.7), rgba(13,41,80,.58)); }
 .welcome-banner h2, .card-heading h3, .quick-card h3 { margin: .3rem 0 .45rem; }
 .welcome-banner p:not(.eyebrow) { margin: 0; color: var(--muted); }
@@ -14,3 +14,30 @@
 .alert-list { display: grid; gap: .75rem; margin: 1rem 0 0; padding: 0; list-style: none; }.alert-list li { display: grid; grid-template-columns: auto 1fr auto; gap: .6rem; align-items: start; padding-bottom: .75rem; border-bottom: 1px solid rgba(197,226,255,.1); }.alert-list li:last-child { border: 0; padding-bottom: 0; }.alert-list strong, .alert-list small { display: block; font-size: .78rem; }.alert-list small, .alert-list time { margin-top: .15rem; color: var(--muted); font-size: .68rem; }.alert-dot { width: .5rem; height: .5rem; margin-top: .28rem; border-radius: 50%; }.alert-dot.amber { background: var(--warning); }.alert-dot.pink { background: var(--danger); }.alert-dot.blue { background: var(--accent); }
 .bottom-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(19rem, 1fr); gap: 1rem; }.schedule-row { display: grid; grid-template-columns: 3.5rem 3rem minmax(5rem, 1fr) 1.2fr; align-items: center; gap: .5rem; padding: .85rem 0; border-top: 1px solid rgba(197,226,255,.1); font-size: .78rem; }.schedule-row b { color: var(--accent); }.schedule-row small { color: var(--muted); }.route-badge { padding: .25rem .4rem; border-radius: .35rem; background: rgba(110,231,255,.1); color: var(--accent); font-size: .65rem; font-weight: 800; }.quick-card { display: grid; align-content: start; gap: .55rem; }.quick-card a { display: flex; justify-content: space-between; padding: .7rem; border-radius: .65rem; background: rgba(255,255,255,.06); color: var(--ink); font-size: .82rem; text-decoration: none; }.quick-card a span { color: var(--accent); font-size: 1rem; }
 @media (max-width: 1180px) { .metric-grid { grid-template-columns: repeat(2, 1fr); } .dashboard-grid, .bottom-grid { grid-template-columns: 1fr; } } @media (max-width: 620px) { .welcome-banner { align-items: flex-start; flex-direction: column; } .metric-grid { grid-template-columns: 1fr; } .schedule-row { grid-template-columns: 3rem 2.8rem 1fr; }.schedule-row small { display: none; } }
+/* ==========================================================
+   ADMIN DASHBOARD BACKGROUND
+========================================================== */
+
+.dashboard-view{
+
+    position:relative;
+
+    display:grid;
+
+    gap:1rem;
+
+    min-height:calc(100vh - 130px);
+
+    padding:30px;
+
+    border-radius:30px;
+
+    overflow: visible;
+
+}
+
+.dashboard-view::before{
+
+    display: none;
+
+}

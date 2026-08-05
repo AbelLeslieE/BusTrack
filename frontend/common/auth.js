@@ -64,7 +64,28 @@ form?.addEventListener("submit", async (event) => {
       throw new Error(data.detail || "Unable to sign in.");
     }
     localStorage.setItem(TOKEN_KEY, data.access_token);
-    window.location.assign("/dashboard");
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(data.user));
+
+    // ------------------------------------------------
+    // Redirect based on role
+    // ------------------------------------------------
+
+    switch (data.user.role) {
+
+        case "Administrator":
+
+            window.location.assign("/dashboard");
+            break;
+
+        case "Driver":
+            window.location.assign("/dashboard#driverDashboard");
+            break;
+
+        default:
+
+            window.location.assign("/dashboard");
+            break;
+    }
   } catch (error) {
     clearSession();
     message.textContent = error.message || "Unable to reach the server.";

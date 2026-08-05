@@ -1,1 +1,1674 @@
-/* Users module styles placeholder. TODO: Add module-scoped styles. */
+/* =============================================================================
+   BUSTRACK
+   USER MANAGEMENT MODULE
+   PART 1
+   PAGE • HERO • BUTTONS
+============================================================================= */
+
+/* =============================================================================
+   PAGE
+============================================================================= */
+
+.users-page{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:22px;
+
+    width:100%;
+
+    animation:userFadeUp .45s ease;
+
+}
+
+
+/* =============================================================================
+   SHARED GLASS CARD
+============================================================================= */
+
+.glass-card{
+
+    background:rgba(10,20,40,.60);
+
+    backdrop-filter:blur(22px);
+
+    -webkit-backdrop-filter:blur(22px);
+
+    border:1px solid rgba(255,255,255,.08);
+
+    border-radius:22px;
+
+    box-shadow:
+
+        0 14px 38px rgba(0,0,0,.35),
+
+        inset 0 1px 0 rgba(255,255,255,.05);
+
+}
+
+
+/* =============================================================================
+   HERO
+============================================================================= */
+
+.module-hero{
+
+    position:relative;
+
+    overflow:hidden;
+
+    display:grid;
+
+    grid-template-columns:1fr auto;
+
+    align-items:center;
+
+    gap:70px;
+
+    min-height:300px;
+
+    padding:46px;
+
+    isolation:isolate;
+
+}
+
+.hero-left{
+
+    position:relative;
+
+    z-index:2;
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:22px;
+
+}
+
+.hero-right{
+
+    position:relative;
+
+    z-index:2;
+
+    display:flex;
+
+    justify-content:flex-end;
+
+    align-items:flex-start;
+
+}
+.users-page{
+
+    width:100%;
+
+    max-width:1400px;
+
+    margin:0 auto;
+
+}
+
+/* =============================================================================
+   HERO GLOW
+============================================================================= */
+
+.module-hero::before{
+
+    content:"";
+
+    position:absolute;
+
+    top:-180px;
+
+    right:-160px;
+
+    width:420px;
+
+    pointer-events: none;
+
+    height:420px;
+
+    border-radius:50%;
+
+    background:
+
+        radial-gradient(
+
+            rgba(79,209,255,.18),
+
+            transparent 72%
+
+        );
+
+}
+
+.module-hero::after{
+
+    content:"";
+
+    position:absolute;
+
+    bottom:-220px;
+
+    left:-160px;
+
+    pointer-events: none;
+
+
+    width:360px;
+
+    height:360px;
+
+    border-radius:50%;
+
+    background:
+
+        radial-gradient(
+
+            rgba(124,92,255,.16),
+
+            transparent 72%
+
+        );
+
+}
+
+
+.module-hero{
+
+    display:grid;
+
+    grid-template-columns:1fr auto;
+
+    align-items:center;
+
+    gap:70px;
+
+    padding:46px;
+
+}
+
+.hero-left{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:22px;
+
+}
+
+.hero-right{
+
+    display:flex;
+
+    justify-content:flex-end;
+
+    align-items:flex-start;
+
+}
+
+
+.hero-badge{
+
+    color:#4FD1FF;
+
+    font-size:.74rem;
+
+    letter-spacing:4px;
+
+    font-weight:700;
+
+    text-transform:uppercase;
+
+}
+
+
+.hero-title{
+
+    margin:0;
+
+    font-size:2.8rem;
+
+    font-weight:800;
+
+    color:#FFFFFF;
+
+    line-height:1.15;
+
+}
+
+
+.hero-description{
+
+    margin:0;
+
+    color:#AFC3E5;
+
+    font-size:.96rem;
+
+    line-height:1.9;
+
+    max-width:720px;
+
+}
+
+
+/* =============================================================================
+   HERO TAGS
+============================================================================= */
+
+.hero-tags{
+
+    display:flex;
+
+    flex-wrap:wrap;
+
+    gap:12px;
+
+}
+
+
+.hero-tag{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:8px;
+
+    padding:10px 18px;
+
+    border-radius:999px;
+
+    color:#DCE8FF;
+
+    font-size:.86rem;
+
+    background:rgba(255,255,255,.05);
+
+    border:1px solid rgba(255,255,255,.08);
+
+}
+
+
+
+
+/* =============================================================================
+   PRIMARY BUTTON
+============================================================================= */
+
+.primary-btn{
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    gap:10px;
+
+    height:52px;
+
+    padding:0 24px;
+
+    border:none;
+
+    border-radius:16px;
+
+    cursor:pointer;
+
+    color:#FFFFFF;
+
+    font-size:.92rem;
+
+    font-weight:700;
+
+    background:
+
+        linear-gradient(
+
+            135deg,
+
+            #4FD1FF,
+
+            #7C5CFF
+
+        );
+
+    box-shadow:
+
+        0 12px 28px rgba(79,209,255,.25);
+
+    transition:.3s;
+
+}
+
+
+.primary-btn:hover{
+
+    transform:
+
+        translateY(-3px)
+
+        scale(1.02);
+
+}
+
+
+/* =============================================================================
+   ANIMATION
+============================================================================= */
+
+@keyframes userFadeUp{
+
+    from{
+
+        opacity:0;
+
+        transform:translateY(20px);
+
+    }
+
+    to{
+
+        opacity:1;
+
+        transform:translateY(0);
+
+    }
+
+}
+
+
+/* =============================================================================
+   RESPONSIVE
+============================================================================= */
+
+@media(max-width:1000px){
+
+    .hero-content{
+
+        flex-direction:column;
+
+    }
+
+    .hero-actions{
+
+        width:100%;
+
+    }
+
+    .primary-btn{
+
+        width:100%;
+
+    }
+
+}
+
+@media(max-width:700px){
+
+    .module-hero{
+
+        padding:24px;
+
+    }
+
+    .hero-title{
+
+        font-size:2.1rem;
+
+    }
+
+}
+/* =============================================================================
+   BUSTRACK
+   USER MANAGEMENT MODULE
+   PART 2
+   STATISTICS
+============================================================================= */
+
+/* =============================================================================
+   GRID
+============================================================================= */
+
+.statistics-grid{
+
+    display:grid;
+
+    grid-template-columns:repeat(4, minmax(260px,1fr));
+
+    gap:20px;
+
+}
+
+
+/* =============================================================================
+   CARD
+============================================================================= */
+
+.stat-card{
+
+    position:relative;
+
+    overflow:hidden;
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:center;
+
+    min-height:145px;
+
+    padding:24px;
+
+    border-radius:22px;
+
+    background:
+
+        linear-gradient(
+
+            160deg,
+
+            rgba(16,28,52,.78),
+
+            rgba(8,18,36,.62)
+
+        );
+
+    border:1px solid rgba(255,255,255,.08);
+
+    transition:.35s;
+
+}
+
+
+.stat-card:hover{
+
+    transform:translateY(-6px);
+
+    border-color:rgba(79,209,255,.18);
+
+    box-shadow:
+
+        0 18px 42px rgba(0,0,0,.40),
+
+        0 0 24px rgba(79,209,255,.08);
+
+}
+
+
+/* =============================================================================
+   GLOW
+============================================================================= */
+
+.stat-card::before{
+
+    content:"";
+
+    position:absolute;
+
+    right:-80px;
+
+    top:-80px;
+
+    width:180px;
+
+    height:180px;
+
+    border-radius:50%;
+
+    background:
+
+        radial-gradient(
+
+            rgba(79,209,255,.10),
+
+            transparent 72%
+
+        );
+
+}
+
+
+.stat-card::after{
+
+    content:"";
+
+    position:absolute;
+
+    left:-80px;
+
+    bottom:-80px;
+
+    width:170px;
+
+    height:170px;
+
+    border-radius:50%;
+
+    background:
+
+        radial-gradient(
+
+            rgba(124,92,255,.08),
+
+            transparent 72%
+
+        );
+
+}
+
+
+/* =============================================================================
+   CONTENT
+============================================================================= */
+
+.stat-content{
+
+    position:relative;
+
+    z-index:2;
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:8px;
+
+}
+
+
+.stat-title{
+
+    color:#8FA4C6;
+
+    font-size:.84rem;
+
+    font-weight:600;
+
+}
+
+
+.stat-value{
+
+    color:#FFFFFF;
+
+    font-size:2.5rem;
+
+    font-weight:800;
+
+    line-height:1;
+
+}
+
+
+.stat-description{
+
+    color:#7F98BC;
+
+    font-size:.82rem;
+
+}
+
+
+/* =============================================================================
+   ICON
+============================================================================= */
+
+.stat-icon{
+
+    position:relative;
+
+    z-index:2;
+
+    width:62px;
+
+    height:62px;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    border-radius:18px;
+
+    font-size:28px;
+
+    transition:.35s;
+
+}
+
+
+.stat-card:hover .stat-icon{
+
+    transform:
+
+        rotate(-6deg)
+
+        scale(1.08);
+
+}
+
+
+/* =============================================================================
+   COLORS
+============================================================================= */
+
+.stat-icon{
+
+    background:
+
+        linear-gradient(
+
+            135deg,
+
+            rgba(79,209,255,.18),
+
+            rgba(124,92,255,.14)
+
+        );
+
+}
+
+
+.stat-icon.success{
+
+    color:#22C55E;
+
+}
+
+
+.stat-icon.primary{
+
+    color:#4FD1FF;
+
+}
+
+
+.stat-icon.warning{
+
+    color:#F59E0B;
+
+}
+
+
+/* =============================================================================
+   RESPONSIVE
+============================================================================= */
+
+@media(max-width:1200px){
+
+    .statistics-grid{
+
+        grid-template-columns:repeat(2,1fr);
+
+    }
+
+}
+
+
+@media(max-width:700px){
+
+    .statistics-grid{
+
+        grid-template-columns:1fr;
+
+    }
+
+}
+/* =============================================================================
+   BUSTRACK
+   USER MANAGEMENT MODULE
+   PART 3
+   TOOLBAR
+============================================================================= */
+
+/* =============================================================================
+   TOOLBAR
+============================================================================= */
+
+.module-toolbar{
+
+    display:grid;
+
+    grid-template-columns:68% 32%;
+
+    align-items:center;
+
+    gap:18px;
+
+    padding:18px 22px;
+
+}
+
+/* =============================================================================
+   LEFT
+============================================================================= */
+
+.toolbar-left{
+
+    width:100%;
+    display:flex;
+
+    align-items:center;
+
+}
+
+
+/* =============================================================================
+   SEARCH
+============================================================================= */
+
+.search-box{
+
+    position:relative;
+
+    width:100%;
+
+    max-width:none;
+
+}
+
+
+.search-box input{
+
+    width:100%;
+
+    height:58px;
+
+    padding:0 20px 0 52px;
+
+    border-radius:16px;
+
+    border:1px solid rgba(255,255,255,.08);
+
+    outline:none;
+
+    color:#FFFFFF;
+
+    font-size:.94rem;
+
+    background:rgba(255,255,255,.05);
+
+    transition:.30s;
+
+}
+
+
+.search-box input::placeholder{
+
+    color:#8FA4C6;
+
+}
+
+
+.search-box input:focus{
+
+    border-color:#4FD1FF;
+
+    box-shadow:
+
+        0 0 0 4px rgba(79,209,255,.08),
+
+        0 0 18px rgba(79,209,255,.14);
+
+}
+
+
+.search-icon{
+
+    position:absolute;
+
+    left:18px;
+
+    top:50%;
+
+    transform:translateY(-50%);
+
+    color:#7FA4D2;
+
+    font-size:18px;
+
+    pointer-events:none;
+
+}
+
+
+/* =============================================================================
+   RIGHT
+============================================================================= */
+
+.toolbar-right{
+
+    display:flex;
+
+    justify-content:flex-end;
+
+    align-items:center;
+
+    gap:14px;
+
+}
+
+
+/* =============================================================================
+   BUTTONS
+============================================================================= */
+
+.secondary-btn{
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    gap:10px;
+
+    height:54px;
+
+    min-width:130px;
+
+    padding:0 20px;
+
+    border-radius:15px;
+
+    cursor:pointer;
+
+    border:1px solid rgba(255,255,255,.08);
+
+    color:#DDE9FF;
+
+    font-size:.90rem;
+
+    font-weight:600;
+
+    background:rgba(255,255,255,.05);
+
+    transition:.30s;
+
+}
+
+
+.secondary-btn:hover{
+
+    transform:translateY(-2px);
+
+    border-color:rgba(79,209,255,.25);
+
+    background:rgba(79,209,255,.08);
+
+    box-shadow:
+
+        0 10px 22px rgba(0,0,0,.28);
+
+}
+
+
+.secondary-btn:disabled{
+
+    opacity:.45;
+
+    cursor:not-allowed;
+
+    transform:none;
+
+    box-shadow:none;
+
+}
+
+
+/* =============================================================================
+   RESPONSIVE
+============================================================================= */
+
+@media(max-width:1100px){
+
+    .module-toolbar{
+
+        flex-direction:column;
+
+        align-items:stretch;
+
+    }
+
+    .toolbar-right{
+
+        justify-content:flex-end;
+
+    }
+
+}
+
+
+@media(max-width:700px){
+
+    .toolbar-right{
+
+        width:100%;
+
+        justify-content:stretch;
+
+    }
+
+    .secondary-btn{
+
+        flex:1;
+
+    }
+
+}
+/* =============================================================================
+   BUSTRACK
+   USER MANAGEMENT MODULE
+   PART 4
+   TABLE
+============================================================================= */
+
+/* =============================================================================
+   TABLE SECTION
+============================================================================= */
+
+.table-section{
+
+    overflow:hidden;
+
+    margin-top:18px;
+
+    padding:0;
+
+}
+
+/* =============================================================================
+   TABLE WRAPPER
+============================================================================= */
+
+.table-wrapper{
+
+    width:100%;
+
+    overflow:auto;
+
+}
+
+
+/* =============================================================================
+   TABLE
+============================================================================= */
+
+.data-table{
+
+    width:100%;
+
+    min-width:1100px;
+
+    border-collapse:collapse;
+
+}
+
+
+/* =============================================================================
+   HEADER
+============================================================================= */
+
+.data-table thead{
+
+    background:
+
+        rgba(255,255,255,.04);
+
+}
+
+
+.data-table th{
+
+    padding:28px 24px;
+
+    text-align:left;
+
+    color:#8FA4C6;
+
+    font-size:.78rem;
+
+    font-weight:700;
+
+    letter-spacing:1px;
+
+    text-transform:uppercase;
+
+}
+
+
+/* =============================================================================
+   ROWS
+============================================================================= */
+
+.data-table tbody tr{
+
+    transition:.28s;
+
+    border-bottom:1px solid rgba(255,255,255,.05);
+
+}
+
+
+.data-table tbody tr:hover{
+
+    background:
+
+        rgba(79,209,255,.04);
+
+}
+
+
+.data-table td{
+
+    padding:28px 24px;
+
+    color:#E8F1FF;
+
+    vertical-align:middle;
+
+    font-size:.92rem;
+
+}
+
+
+/* =============================================================================
+   USER CELL
+============================================================================= */
+
+.table-user{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:16px;
+
+}
+
+
+.table-avatar{
+
+    width:46px;
+
+    height:46px;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    border-radius:50%;
+
+    color:#FFFFFF;
+
+    font-weight:700;
+
+    font-size:1rem;
+
+    background:
+
+        linear-gradient(
+
+            135deg,
+
+            #4FD1FF,
+
+            #7C5CFF
+
+        );
+
+    box-shadow:
+
+        0 10px 24px rgba(79,209,255,.22);
+
+}
+
+
+.table-title{
+
+    color:#FFFFFF;
+
+    font-weight:700;
+
+}
+
+
+.table-subtitle{
+
+    margin-top:4px;
+
+    color:#8FA4C6;
+
+    font-size:.82rem;
+
+}
+
+
+/* =============================================================================
+   STATUS BADGE
+============================================================================= */
+
+.status-badge{
+
+    display:inline-flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    min-width:100px;
+
+    padding:8px 14px;
+
+    border-radius:999px;
+
+    font-size:.82rem;
+
+    font-weight:700;
+
+}
+
+
+.status-badge.success{
+
+    color:#22C55E;
+
+    background:
+
+        rgba(34,197,94,.12);
+
+}
+
+
+.status-badge.secondary{
+
+    color:#94A3B8;
+
+    background:
+
+        rgba(148,163,184,.12);
+
+}
+
+
+.status-badge.warning{
+
+    color:#F59E0B;
+
+    background:
+
+        rgba(245,158,11,.12);
+
+}
+
+
+/* =============================================================================
+   ACTIONS
+============================================================================= */
+
+.table-actions{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:12px;
+
+}
+
+
+.table-action-btn{
+
+    width:42px;
+
+    height:42px;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    border:none;
+
+    cursor:pointer;
+
+    border-radius:14px;
+
+    color:#DCEAFF;
+
+    font-size:16px;
+
+    background:
+
+        rgba(255,255,255,.05);
+
+    border:1px solid rgba(255,255,255,.08);
+
+    transition:.28s;
+
+}
+
+
+.table-action-btn:hover{
+
+    transform:
+
+        translateY(-3px);
+
+}
+
+
+/* =============================================================================
+   EDIT
+============================================================================= */
+
+.edit-user:hover{
+
+    color:#7C5CFF;
+
+    border-color:#7C5CFF;
+
+    box-shadow:
+
+        0 0 18px rgba(124,92,255,.22);
+
+}
+
+
+/* =============================================================================
+   DELETE
+============================================================================= */
+
+.delete-user:hover{
+
+    color:#FF6B81;
+
+    border-color:#FF6B81;
+
+    box-shadow:
+
+        0 0 18px rgba(255,107,129,.22);
+
+}
+
+
+/* =============================================================================
+   EMPTY STATE
+============================================================================= */
+
+.table-empty{
+
+    display:flex;
+
+    flex-direction:column;
+
+    align-items:center;
+
+    justify-content:center;
+
+    gap:18px;
+
+    padding:80px 20px;
+
+    text-align:center;
+
+}
+
+
+.table-empty-icon{
+
+    width:90px;
+
+    height:90px;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    border-radius:50%;
+
+    font-size:42px;
+
+    background:
+
+        rgba(79,209,255,.08);
+
+}
+
+
+.table-empty h3{
+
+    margin:0;
+
+    color:#FFFFFF;
+
+    font-size:1.4rem;
+
+}
+
+
+.table-empty p{
+
+    margin:0;
+
+    color:#8FA4C6;
+
+    max-width:420px;
+
+    line-height:1.7;
+
+}
+
+
+.empty-user-btn{
+
+    margin-top:8px;
+
+}
+/* =============================================================================
+   BUSTRACK
+   USER MANAGEMENT MODULE
+   PART 5
+   PAGINATION • SCROLLBAR • RESPONSIVE
+============================================================================= */
+
+/* =============================================================================
+   PAGINATION
+============================================================================= */
+
+.pagination-section{
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:center;
+
+    gap:20px;
+
+    padding:20px 24px;
+
+}
+
+
+.pagination-info{
+
+    color:#AFC4E8;
+
+    font-size:.9rem;
+
+}
+
+
+.pagination-info strong{
+
+    color:#FFFFFF;
+
+    font-weight:700;
+
+}
+
+
+.pagination-controls{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:12px;
+
+}
+
+
+.page-number{
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    min-width:120px;
+
+    height:42px;
+
+    padding:0 18px;
+
+    border-radius:14px;
+
+    color:#DCEAFF;
+
+    font-size:.9rem;
+
+    font-weight:600;
+
+    background:rgba(255,255,255,.05);
+
+    border:1px solid rgba(255,255,255,.08);
+
+}
+
+
+/* =============================================================================
+   SCROLLBAR
+============================================================================= */
+
+.table-wrapper::-webkit-scrollbar{
+
+    width:10px;
+
+    height:10px;
+
+}
+
+
+.table-wrapper::-webkit-scrollbar-track{
+
+    background:rgba(255,255,255,.03);
+
+}
+
+
+.table-wrapper::-webkit-scrollbar-thumb{
+
+    border-radius:999px;
+
+    background:
+
+        linear-gradient(
+
+            180deg,
+
+            #4FD1FF,
+
+            #7C5CFF
+
+        );
+
+}
+
+
+.table-wrapper::-webkit-scrollbar-thumb:hover{
+
+    background:
+
+        linear-gradient(
+
+            180deg,
+
+            #5AD8FF,
+
+            #8D70FF
+
+        );
+
+}
+
+
+/* =============================================================================
+   HOVER ANIMATIONS
+============================================================================= */
+
+button,
+input,
+.table-action-btn,
+.primary-btn,
+.secondary-btn,
+.stat-card{
+
+    transition:all .28s ease;
+
+}
+
+
+.table-avatar{
+
+    transition:all .30s ease;
+
+}
+
+
+.data-table tbody tr:hover .table-avatar{
+
+    transform:scale(1.08);
+
+}
+
+
+/* =============================================================================
+   RESPONSIVE
+============================================================================= */
+
+@media(max-width:1200px){
+
+    .data-table{
+
+        min-width:950px;
+
+    }
+
+}
+
+
+@media(max-width:992px){
+
+    .pagination-section{
+
+        flex-direction:column;
+
+        align-items:flex-start;
+
+    }
+
+    .pagination-controls{
+
+        width:100%;
+
+        justify-content:center;
+
+    }
+
+}
+
+
+@media(max-width:768px){
+
+    .module-toolbar{
+
+        flex-direction:column;
+
+        align-items:stretch;
+
+    }
+
+    .toolbar-left{
+
+        width:100%;
+
+    }
+
+    .toolbar-right{
+
+        width:100%;
+
+        justify-content:flex-end;
+
+    }
+
+    .statistics-grid{
+
+        grid-template-columns:repeat(2,1fr);
+
+    }
+
+}
+
+
+@media(max-width:576px){
+
+    .statistics-grid{
+
+        grid-template-columns:1fr;
+
+    }
+
+    .module-hero{
+
+        padding:22px;
+
+    }
+
+    .hero-title{
+
+        font-size:2rem;
+
+    }
+
+    .hero-tags{
+
+        flex-direction:column;
+
+        align-items:flex-start;
+
+    }
+
+    .toolbar-right{
+
+        flex-direction:column;
+
+    }
+
+    .secondary-btn{
+
+        width:100%;
+
+    }
+
+    .primary-btn{
+
+        width:100%;
+
+    }
+
+    .pagination-controls{
+
+        flex-wrap:wrap;
+
+    }
+
+}

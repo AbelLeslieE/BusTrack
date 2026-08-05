@@ -13,8 +13,12 @@
     <link
         rel="stylesheet"
         href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
+        
     />
-    
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
     <!-- Global UI Components -->
     <link rel="stylesheet" href="/static/common/modal.css">
     <link rel="stylesheet" href="/static/common/dropdown.css">
@@ -26,12 +30,46 @@
     <script type="module">
       import { requireAuthenticatedSession } from "/static/common/auth.js";
       import { loadModule } from "/static/common/router.js";
+      
 
       const profile = await requireAuthenticatedSession();
-      if (profile) {
-        const moduleName = window.location.hash.slice(1) || "dashboard";
-        loadModule(moduleName);
+
+      if (!profile) {
+          throw new Error("No authenticated session.");
       }
-    </script>
+
+      let moduleName;
+
+      switch (profile.role) {
+
+          case "Administrator":
+
+              moduleName = window.location.hash.slice(1) || "dashboard";
+
+              break;
+
+          case "Driver":
+
+              // Force the driver hash before anything loads
+              if (!window.location.hash) {
+
+                  window.location.hash = "driverDashboard";
+
+              }
+
+              moduleName = "driverDashboard";
+
+              break;
+
+          default:
+
+              moduleName = "dashboard";
+
+      }
+
+      loadModule(moduleName);
+
+  </script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   </body>
 </html>

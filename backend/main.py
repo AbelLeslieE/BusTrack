@@ -10,7 +10,9 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from backend.routes.driver import router as driver_router
-import backend.models  # noqa: F401  # Registers SQLAlchemy models before table creation.
+import backend.models 
+import backend.routes.models_tracking  # noqa: F401
+ # noqa: F401  # Registers SQLAlchemy models before table creation.
 from backend.database import initialize_database
 from backend.routes.auth import router as authentication_router
 from database.create_default_admin import create_default_admin
@@ -19,8 +21,8 @@ from backend.routes.routes import router as route_router
 from backend.routes.stops import router as stop_router
 from backend.routes.route_import import router as route_import_router
 from backend.routes.route_stops import router as route_stop_router
-
-
+from backend.routes.users import router as users_router
+from backend.routes.gps import router as gps_router
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = PROJECT_DIR / "frontend"
@@ -39,6 +41,11 @@ app.include_router(route_router)
 app.include_router(stop_router)
 app.include_router(route_import_router)
 app.include_router(route_stop_router)
+app.include_router(users_router)
+app.include_router(gps_router)
+
+
+
 # Serve the self-contained frontend files without depending on external tooling.
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="frontend")
 

@@ -18,12 +18,15 @@
 
     overflow:visible;
 
+
 }
 /* ==========================================================
    MAIN SHELL
 ========================================================== */
 
 .app-shell{
+
+    position:relative;
 
     display:grid;
 
@@ -35,6 +38,11 @@
 
     align-items:start;
 
+    border-radius:34px;
+
+    overflow:hidden;
+
+
 }
 
 /* ==========================================================
@@ -43,6 +51,8 @@
 
 .app-workspace{
 
+    position:relative;
+
     display:flex;
 
     flex-direction:column;
@@ -50,6 +60,14 @@
     gap:38px;
 
     min-width:0;
+
+    padding:0;
+
+    border-radius:34px;
+
+    overflow:hidden;
+
+
 
 }
 
@@ -303,5 +321,46 @@
     grid-template-columns:repeat(4,1fr);
 
     gap:30px;
+
+}
+/* ==========================================================
+   SIDEBAR TOGGLE
+========================================================== */
+
+.app-shell{
+
+    transition:grid-template-columns .35s ease;
+
+}
+
+.sidebar{
+
+    transition:
+        transform .35s ease,
+        opacity .35s ease;
+
+}
+
+/* ==========================================================
+   HIDE SIDEBAR
+========================================================== */
+
+.app-shell.sidebar-open{
+
+    grid-template-columns:0 minmax(0,1fr);
+
+}
+
+.app-shell.sidebar-open .sidebar{
+
+    transform:translateX(-120%);
+    opacity:0;
+    pointer-events:none;
+
+}
+
+.app-shell.sidebar-open .app-workspace{
+
+    width:100%;
 
 }

@@ -195,43 +195,7 @@ async function loadBuses() {
 }
 
 
-/**
- * ============================================================================
- * Create Driver
- * ============================================================================
- */
 
-async function createDriver(driverData) {
-
-    const response = await fetch(API.DRIVERS, {
-
-        method: "POST",
-
-        headers: {
-
-            "Content-Type": "application/json"
-
-        },
-
-        body: JSON.stringify(driverData)
-
-    });
-
-    if (!response.ok) {
-
-        const error = await response.json();
-
-        throw new Error(
-
-            error.detail || "Failed to create driver."
-
-        );
-
-    }
-
-    return await response.json();
-
-}
 
 
 /**
@@ -393,25 +357,6 @@ function renderHero() {
                 </div>
 
                 <div class="hero-actions">
-
-                    <button
-                        id="add-driver-btn"
-                        class="primary-btn"
-                    >
-
-                        <span class="btn-icon">
-
-                            +
-
-                        </span>
-
-                        <span>
-
-                            Add Driver
-
-                        </span>
-
-                    </button>
 
                 </div>
 
@@ -790,8 +735,8 @@ function renderTableRows() {
 
                         <div class="table-avatar">
 
-                            ${driver.full_name
-                                ? driver.full_name.charAt(0).toUpperCase()
+                            ${driver.user.full_name
+                                ? driver.user.full_name.charAt(0).toUpperCase()
                                 : "D"}
 
                         </div>
@@ -800,7 +745,7 @@ function renderTableRows() {
 
                             <div class="table-title">
 
-                                ${driver.full_name}
+                                ${driver.user.full_name}
 
                             </div>
 
@@ -818,7 +763,7 @@ function renderTableRows() {
 
                 <td>
 
-                    ${driver.phone || "-"}
+                    ${driver.user?.phone || "-"}
 
                 </td>
 
@@ -915,20 +860,15 @@ function renderEmptyState() {
 
                     </p>
 
-                    <button
-                        id="empty-add-driver-btn"
-                        class="primary-btn empty-driver-btn"
-                    >
+                    <div class="empty-message">
 
-                        <span class="btn-icon">
-                            +
-                        </span>
+                        Create a user with the
+                        <strong>Driver</strong>
+                        role from the
+                        <strong>Users</strong>
+                        module.
 
-                        <span>
-                            Add Driver
-                        </span>
-
-                    </button>
+                    </div>
 
                 </div>
 
@@ -1057,43 +997,7 @@ function renderPage() {
     `;
 
 }
-/* =============================================================================
-   DRIVER CRUD
-============================================================================= */
 
-/**
- * ============================================================================
- * Open Create Driver Modal
- * ============================================================================
- */
-
-async function openCreateDriverModal() {
-
-    const form = createDriverForm();
-
-    await populateBusDropdown(form);
-
-    Modal.form({
-
-        eyebrow: "DRIVER MANAGEMENT",
-
-        title: "Add Driver",
-
-        subtitle: "Register a new driver in the fleet.",
-
-        content: form,
-
-        submitText: "Save Driver",
-
-        onSubmit: async () => {
-
-            await saveDriver();
-
-        }
-
-    });
-
-}
 
 
 /**
@@ -1149,34 +1053,26 @@ async function openEditDriverModal(driverId) {
  * ============================================================================
  */
 
-async function saveDriver(driverId = null) {
+async function saveDriver(driverId) {
 
     try {
 
         const driver = getDriverFormData();
+
         validateDriver(driver);
 
-        if (driverId) {
+        if (!driverId) {
 
-            await updateDriver(
-
-                driverId,
-
-                driver
-
+            throw new Error(
+                "Drivers can only be created from the Users module."
             );
 
         }
 
-        else {
-
-            await createDriver(
-
-                driver
-
-            );
-
-        }
+        await updateDriver(
+            driverId,
+            driver
+        );
 
         Modal.close();
 
@@ -1372,45 +1268,9 @@ function bindToolbarEvents() {
 
     }
 
-    /* ---------------------------------------------------------
-       Add Driver
-    --------------------------------------------------------- */
 
-    const addButton = document.querySelector("#add-driver-btn");
 
-    if (addButton) {
 
-        addButton.addEventListener(
-
-            "click",
-
-            openCreateDriverModal
-
-        );
-
-    }
-
-    /* ---------------------------------------------------------
-       Empty State Button
-    --------------------------------------------------------- */
-
-    const emptyButton = document.querySelector(
-
-        "#empty-add-driver-btn"
-
-    );
-
-    if (emptyButton) {
-
-        emptyButton.addEventListener(
-
-            "click",
-
-            openCreateDriverModal
-
-        );
-
-    }
     /* ---------------------------------------------------------
     Previous Page
     --------------------------------------------------------- */
@@ -1558,7 +1418,7 @@ function filterDrivers() {
 
         return (
 
-            driver.full_name
+            driver.user.full_name
 
                 ?.toLowerCase()
 
@@ -1574,10 +1434,8 @@ function filterDrivers() {
 
             ||
 
-            driver.phone
-
+            driver.user?.email
                 ?.toLowerCase()
-
                 .includes(query)
 
             ||
@@ -1597,10 +1455,10 @@ function filterDrivers() {
                 .includes(query)
 
         );
-        state.currentPage = 1;
+        
 
     });
-
+    state.currentPage = 1;
 }
 
 
@@ -1861,33 +1719,15 @@ function getStatusClass(status) {
 function validateDriver(driver) {
 
     if (!driver.driver_code) {
-
         throw new Error("Driver Code is required.");
-
-    }
-
-    if (!driver.full_name) {
-
-        throw new Error("Full Name is required.");
-
-    }
-
-    if (!driver.phone) {
-
-        throw new Error("Phone Number is required.");
-
     }
 
     if (!driver.license_number) {
-
         throw new Error("License Number is required.");
-
     }
 
     if (!driver.license_expiry) {
-
         throw new Error("License Expiry is required.");
-
     }
 
     return true;

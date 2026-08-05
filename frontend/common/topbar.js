@@ -8,7 +8,14 @@ export function createTopbar(onMenuToggle) {
   topbar.className = "topbar glass-panel";
   topbar.innerHTML = `
     <div class="topbar-title">
-      <button class="icon-button mobile-menu" type="button" aria-label="Toggle navigation">☰</button>
+      <button
+          class="icon-button mobile-menu"
+          type="button"
+          aria-label="Toggle navigation">
+
+          <i class="fa-solid fa-bars"></i>
+
+      </button>
       <div><p class="section-kicker">Fleet command center</p><h1 id="page-title">Overview</h1></div>
     </div>
     <div class="topbar-actions">

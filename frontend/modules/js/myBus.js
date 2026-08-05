@@ -1,10 +1,10 @@
-/** Profile module placeholder. TODO: Generate this module's HTML and behavior here. */
+/** My Bus module placeholder. TODO: Generate this module's HTML and behavior here. */
 export function render() {
 
     const page = document.createElement("div");
 
     page.innerHTML = `
-        <h1>Profile</h1>
+        <h1>My Bus</h1>
     `;
 
     return page;

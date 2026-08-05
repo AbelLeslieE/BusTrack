@@ -28,7 +28,7 @@
 
     border-radius:30px;
 
-    background:rgba(10,18,35,.24);
+    background:transparent;
 
     backdrop-filter:blur(28px);
     -webkit-backdrop-filter:blur(28px);

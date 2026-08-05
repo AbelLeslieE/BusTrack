@@ -57,30 +57,6 @@ function renderDriverInformation(driver){
                 })}
 
                 ${createInput({
-                    id:"full_name",
-                    label:"Full Name",
-                    value:driver.full_name || "",
-                    placeholder:"John Mathew",
-                    required:true
-                })}
-
-                ${createInput({
-                    id:"phone",
-                    label:"Phone Number",
-                    value:driver.phone || "",
-                    placeholder:"+91 9876543210",
-                    required:true
-                })}
-
-                ${createInput({
-                    id:"email",
-                    label:"Email",
-                    type:"email",
-                    value:driver.email || "",
-                    placeholder:"john@email.com"
-                })}
-
-                ${createInput({
                     id:"license_number",
                     label:"License Number",
                     value:driver.license_number || "",
@@ -317,15 +293,6 @@ export function getDriverFormData() {
 
         driver_code:
             document.querySelector("#driver_code").value.trim(),
-
-        full_name:
-            document.querySelector("#full_name").value.trim(),
-
-        phone:
-            document.querySelector("#phone").value.trim(),
-
-        email:
-            document.querySelector("#email").value.trim() || null,
 
         license_number:
             document.querySelector("#license_number").value.trim(),

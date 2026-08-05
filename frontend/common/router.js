@@ -4,28 +4,132 @@
  */
 
 import { createLoader } from "./loader.js";
-import { createSidebar, setSidebarActive } from "./sidebar.js";
-import { createTopbar, setTopbarTitle } from "./topbar.js";
 
-const modules = {
-  dashboard: { title: "Overview", load: () => import("../modules/js/dashboard.js") },
-  live_tracking: { title: "Live tracking", load: () => import("../modules/js/live_tracking.js") },
-  buses: {
-      title: "Buses",
-      load: () => import("../modules/js/buses.js?v=123456")
-  },
-  routes: { title: "Routes", load: () => import("../modules/js/routes.js") },
-  stops: { title: "Stops", load: () => import("../modules/js/stops.js") },
-  drivers: { title: "Drivers", load: () => import("../modules/js/drivers.js") },
-  students: { title: "Students", load: () => import("../modules/js/students.js") },
-  users: { title: "Users", load: () => import("../modules/js/users.js") },
-  notifications: { title: "Notifications", load: () => import("../modules/js/notifications.js") },
-  profile: { title: "Profile", load: () => import("../modules/js/profile.js") },
-  settings: { title: "Settings", load: () => import("../modules/js/settings.js") },
+import { createSidebar, setSidebarActive } from "./sidebar.js";
+import { createDriverSidebar, setDriverSidebarActive } from "../modules/js/driverSidebar.js";
+
+import { createTopbar, setTopbarTitle } from "./topbar.js";
+import { createDriverTopbar, setDriverTopbarTitle } from "../modules/js/driverTopbar.js";
+// ==========================================================
+// ADMIN MODULES
+// ==========================================================
+
+const adminModules = {
+
+    dashboard: {
+        title: "Overview",
+        load: () => import("../modules/js/adminDashboard.js")
+    },
+
+    live_tracking: {
+        title: "Live Tracking",
+        load: () => import("../modules/js/live_tracking.js")
+    },
+
+    buses: {
+        title: "Buses",
+        load: () => import("../modules/js/buses.js")
+    },
+
+    routes: {
+        title: "Routes",
+        load: () => import("../modules/js/routes.js")
+    },
+
+    stops: {
+        title: "Stops",
+        load: () => import("../modules/js/stops.js")
+    },
+
+    drivers: {
+        title: "Drivers",
+        load: () => import("../modules/js/drivers.js")
+    },
+
+    students: {
+        title: "Students",
+        load: () => import("../modules/js/students.js")
+    },
+
+    users: {
+        title: "Users",
+        load: () => import("../modules/js/users.js")
+    },
+
+    notifications: {
+        title: "Notifications",
+        load: () => import("../modules/js/notifications.js")
+    },
+
+    profile: {
+        title: "Profile",
+        load: () => import("../modules/js/profile.js")
+    },
+
+    settings: {
+        title: "Settings",
+        load: () => import("../modules/js/settings.js")
+    }
+
+};
+
+
+// ==========================================================
+// DRIVER MODULES
+// ==========================================================
+
+const driverModules = {
+
+    driverDashboard: {
+        title: "Dashboard",
+        load: () => import("../modules/js/driverDashboard.js")
+    },
+
+    myBus: {
+        title: "My Bus",
+        load: () => import("../modules/js/myBus.js")
+    },
+
+    myRoute: {
+        title: "My Route",
+        load: () => import("../modules/js/myRoute.js")
+    },
+
+    driverTracking: {
+        title: "Live Tracking",
+        load: () => import("../modules/js/driverTracking.js")
+    },
+
+    tripHistory: {
+        title: "Trip History",
+        load: () => import("../modules/js/tripHistory.js")
+    },
+
+    notifications: {
+        title: "Notifications",
+        load: () => import("../modules/js/driverNotifications.js")
+    },
+
+    profile: {
+        title: "Profile",
+        load: () => import("../modules/js/driverProfile.js")
+    },
+
+    driverSettings: {
+        title: "Settings",
+        load: () => import("../modules/js/driverSettings.js")
+    }
+
 };
 
 let shell;
+const profile =
+    JSON.parse(localStorage.getItem("bus_tracker_profile") || "{}");
 
+const isDriver = profile.role === "Driver";
+const modules = isDriver
+    ? driverModules
+    : adminModules;
 function titleCase(value) {
   return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
@@ -38,46 +142,136 @@ function createFallback(title, message) {
 }
 
 function applyModuleStyles(moduleName) {
-  let stylesheet = document.querySelector("#active-module-styles");
-  if (!stylesheet) {
-    stylesheet = document.createElement("link");
-    stylesheet.id = "active-module-styles";
-    stylesheet.rel = "stylesheet";
-    document.head.append(stylesheet);
-  }
-  stylesheet.href = `/static/modules/css/${moduleName}.css`;
+
+    // Main page stylesheet
+    let pageStyle = document.querySelector("#active-module-styles");
+
+    if (!pageStyle) {
+        pageStyle = document.createElement("link");
+        pageStyle.id = "active-module-styles";
+        pageStyle.rel = "stylesheet";
+        document.head.appendChild(pageStyle);
+    }
+
+    pageStyle.href = `/static/modules/css/${moduleName}.css`;
+
+    // Driver shared styles
+    if (isDriver) {
+
+        let sidebarStyle = document.querySelector("#driver-sidebar-style");
+
+        if (!sidebarStyle) {
+            sidebarStyle = document.createElement("link");
+            sidebarStyle.id = "driver-sidebar-style";
+            sidebarStyle.rel = "stylesheet";
+            document.head.appendChild(sidebarStyle);
+        }
+
+        sidebarStyle.href = "/static/modules/css/driverSidebar.css";
+
+        let topbarStyle = document.querySelector("#driver-topbar-style");
+
+        if (!topbarStyle) {
+            topbarStyle = document.createElement("link");
+            topbarStyle.id = "driver-topbar-style";
+            topbarStyle.rel = "stylesheet";
+            document.head.appendChild(topbarStyle);
+        }
+
+        topbarStyle.href = "/static/modules/css/driverTopbar.css";
+    }
+
 }
 
 function createShell(initialRoute) {
   const root = document.querySelector("#app");
   if (!root) return null;
-  const appShell = document.createElement("div");
-  appShell.className = "app-shell";
+  document.body.classList.remove(
+        "admin-theme",
+        "driver-theme"
+    );
+
+    document.body.classList.add(
+        isDriver
+            ? "driver-theme"
+            : "admin-theme"
+    );
+
+    const appShell = document.createElement("div");
+
+    appShell.className = "app-shell";
   const navigate = (route) => {
     if (window.location.hash.slice(1) === route) loadModule(route);
     else window.location.hash = route;
   };
-  const sidebar = createSidebar(initialRoute, navigate);
-  const topbar = createTopbar(() => appShell.classList.toggle("sidebar-open"));
+  const sidebar = isDriver
+      ? createDriverSidebar(initialRoute, navigate)
+      : createSidebar(initialRoute, navigate);
+
+  const topbar = isDriver
+      ? createDriverTopbar(() =>
+          appShell.classList.toggle("sidebar-open")
+        )
+      : createTopbar(() =>
+          appShell.classList.toggle("sidebar-open")
+        );
   const content = document.createElement("main");
   content.className = "page-content";
   content.id = "page-content";
   const workspace = document.createElement("div");
-  workspace.className = "app-workspace";
-  workspace.append(topbar, content);
+
+    workspace.className = "app-workspace";
+
+    // Apply driver workspace background only for driver pages
+    if (isDriver) {
+
+        workspace.classList.add("driver-workspace");
+
+    }
+
+    workspace.append(topbar, content);
   appShell.append(sidebar, workspace);
   root.replaceChildren(appShell);
   return { appShell, sidebar, topbar, content };
 }
 
-export async function loadModule(requestedRoute = "dashboard") {
-  const route = modules[requestedRoute] ? requestedRoute : "dashboard";
+export async function loadModule(requestedRoute) {
+  const defaultRoute = isDriver
+      ? "driverDashboard"
+      : "dashboard";
+
+  if (!requestedRoute) {
+      requestedRoute = defaultRoute;
+  }
+
+  const route =
+      requestedRoute in modules
+          ? requestedRoute
+          : defaultRoute;
   shell ??= createShell(route);
   if (!shell) return;
 
   shell.appShell.classList.remove("sidebar-open");
-  setSidebarActive(shell.sidebar, route);
-  setTopbarTitle(shell.topbar, modules[route].title);
+  if (isDriver) {
+
+      setDriverSidebarActive(shell.sidebar, route);
+
+      setDriverTopbarTitle(
+          shell.topbar,
+          modules[route].title
+      );
+
+  }
+  else {
+
+      setSidebarActive(shell.sidebar, route);
+
+      setTopbarTitle(
+          shell.topbar,
+          modules[route].title
+      );
+
+  }
   applyModuleStyles(route);
   shell.content.replaceChildren(createLoader(`Loading ${modules[route].title.toLowerCase()}`));
 
@@ -97,4 +291,14 @@ export async function loadModule(requestedRoute = "dashboard") {
   }
 }
 
-window.addEventListener("hashchange", () => loadModule(window.location.hash.slice(1) || "dashboard"));
+window.addEventListener("hashchange", () => {
+
+    const defaultRoute = isDriver
+        ? "driverDashboard"
+        : "dashboard";
+
+    loadModule(
+        window.location.hash.slice(1) || defaultRoute
+    );
+
+});

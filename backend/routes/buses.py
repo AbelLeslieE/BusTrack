@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.models import Bus
+from backend.models import Bus, Driver
 from backend.schemas import BusCreate, BusUpdate, BusResponse
 
 router = APIRouter(
@@ -58,13 +58,48 @@ def create_bus(
             detail="Registration number already exists.",
         )
 
-    new_bus = Bus(**bus.model_dump())
+    new_bus = Bus(
+        bus_number=bus.bus_number,
+        registration_number=bus.registration_number,
+        capacity=bus.capacity,
+        manufacturer=bus.manufacturer,
+        model=bus.model,
+        year=bus.year,
+        fuel_type=bus.fuel_type,
+        status=bus.status,
+        route=bus.route,
+        device_id=bus.device_id,
+    )
 
     db.add(new_bus)
+    db.flush()
+
+    
+    # ------------------------------------------------------
+    # Assign Driver
+    # ------------------------------------------------------
+
+    if bus.driver_id is not None:
+
+        driver = (
+            db.query(Driver)
+            .filter(Driver.id == bus.driver_id)
+            .first()
+        )
+
+        if driver is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Driver not found.",
+            )
+
+        driver.bus_id = new_bus.id
+
     db.commit()
     db.refresh(new_bus)
 
     return new_bus
+
 @router.get("/{bus_id}", response_model=BusResponse)
 def get_bus(
     bus_id: int,
@@ -79,8 +114,9 @@ def get_bus(
             status_code=404,
             detail="Bus not found.",
         )
-
     return bus
+
+    
 
 @router.put("/{bus_id}", response_model=BusResponse)
 def update_bus(
@@ -132,8 +168,16 @@ def update_bus(
             detail="Registration number already exists.",
         )
 
-    for key, value in bus.model_dump().items():
-        setattr(existing, key, value)
+    existing.bus_number = bus.bus_number
+    existing.registration_number = bus.registration_number
+    existing.capacity = bus.capacity
+    existing.manufacturer = bus.manufacturer
+    existing.model = bus.model
+    existing.year = bus.year
+    existing.fuel_type = bus.fuel_type
+    existing.status = bus.status
+    existing.route = bus.route
+    existing.device_id = bus.device_id
 
     db.commit()
     db.refresh(existing)
