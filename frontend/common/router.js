@@ -201,20 +201,32 @@ function createShell(initialRoute) {
 
     appShell.className = "app-shell";
   const navigate = (route) => {
-    if (window.location.hash.slice(1) === route) loadModule(route);
-    else window.location.hash = route;
-  };
+
+        appShell.classList.remove("sidebar-open");
+
+        if (window.location.hash.slice(1) === route)
+            loadModule(route);
+        else
+            window.location.hash = route;
+
+    };
   const sidebar = isDriver
       ? createDriverSidebar(initialRoute, navigate)
       : createSidebar(initialRoute, navigate);
 
-  const topbar = isDriver
-      ? createDriverTopbar(() =>
-          appShell.classList.toggle("sidebar-open")
-        )
-      : createTopbar(() =>
-          appShell.classList.toggle("sidebar-open")
-        );
+  const toggleSidebar = () => {
+
+        // Only open the drawer on smaller screens
+        if (window.innerWidth <= 1200) {
+
+            appShell.classList.toggle("sidebar-open");
+
+        }
+
+    };
+    const topbar = isDriver
+        ? createDriverTopbar(toggleSidebar)
+        : createTopbar(toggleSidebar);
   const content = document.createElement("main");
   content.className = "page-content";
   content.id = "page-content";
@@ -229,8 +241,14 @@ function createShell(initialRoute) {
 
     }
 
+    
+
     workspace.append(topbar, content);
-  appShell.append(sidebar, workspace);
+
+    appShell.append(
+        sidebar,
+        workspace
+    );
   root.replaceChildren(appShell);
   return { appShell, sidebar, topbar, content };
 }
@@ -251,7 +269,7 @@ export async function loadModule(requestedRoute) {
   shell ??= createShell(route);
   if (!shell) return;
 
-  shell.appShell.classList.remove("sidebar-open");
+
   if (isDriver) {
 
       setDriverSidebarActive(shell.sidebar, route);
@@ -280,10 +298,21 @@ export async function loadModule(requestedRoute) {
     console.log("Imported module:", module);
   console.log("Module keys:", Object.keys(module));
   console.log("Render:", module.render);
-    const view = typeof module.render === "function"
-      ? module.render()
-      : createFallback(modules[route].title, "This workspace is ready for its feature implementation.");
+    const view =
+        typeof module.render === "function"
+            ? module.render()
+            : createFallback(
+                modules[route].title,
+                "This workspace is ready for its feature implementation."
+            );
+
     shell.content.replaceChildren(view);
+
+    if (window.innerWidth <= 1200) {
+
+        shell.appShell.classList.remove("sidebar-open");
+
+    }
   } catch (error) {
     console.error("========== MODULE ERROR ==========");
     console.error(error);

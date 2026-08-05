@@ -324,67 +324,89 @@
 
 }
 /* ==========================================================
-   SIDEBAR TOGGLE
+   RESPONSIVE SIDEBAR
 ========================================================== */
+
+/* --------------------------
+   Desktop
+-------------------------- */
 
 .app-shell{
 
-    transition:grid-template-columns .35s ease;
+    display:grid;
+
+    grid-template-columns:320px minmax(0,1fr);
+
+    gap:34px;
 
 }
 
 .sidebar{
 
-    transition:
-        transform .35s ease,
-        opacity .35s ease;
-
-}
-
-/* ==========================================================
-   HIDE SIDEBAR
-========================================================== */
-
-/* ==========================================================
-   SIDEBAR TOGGLE
-========================================================== */
-
-.app-shell{
-
     position:relative;
 
-    display:grid;
+    width:320px;
 
-    grid-template-columns:320px 1fr;
+    transform:none;
 
-}
-
-/* Hide sidebar */
-
-.app-shell.sidebar-open .sidebar{
-
-    transform:translateX(-340px);
-
-    opacity:0;
-
-    pointer-events:none;
-
-}
-
-/* Expand workspace */
-
-.app-shell.sidebar-open .app-workspace{
-
-    margin-left:-320px;
-
-    width:calc(100% + 320px);
-
-    transition:all .35s ease;
+    transition:transform .35s ease;
 
 }
 
 .app-workspace{
 
-    transition:all .35s ease;
+    transition:transform .35s ease;
+
+}
+
+/* --------------------------
+   Tablet / Mobile
+-------------------------- */
+
+@media (max-width:1200px){
+
+    .app-shell{
+
+        grid-template-columns:1fr;
+
+        overflow:hidden;
+
+    }
+
+    .sidebar{
+
+        position:absolute;
+
+        left:0;
+
+        top:0;
+
+        width:320px;
+
+        height:100%;
+
+        z-index:100;
+
+        transform:translateX(-100%);
+
+    }
+
+    .app-shell.sidebar-open .sidebar{
+
+        transform:translateX(0);
+
+    }
+
+    .app-workspace{
+
+        transform:translateX(0);
+
+    }
+
+    .app-shell.sidebar-open .app-workspace{
+
+        transform:translateX(320px);
+
+    }
 
 }

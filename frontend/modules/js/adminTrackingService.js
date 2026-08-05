@@ -130,6 +130,14 @@ export function startFleetRefresh() {
    UPDATE FLEET UI
 ========================================================== */
 
+/* ==========================================================
+   UPDATE FLEET UI
+========================================================== */
+
+/* ==========================================================
+   UPDATE FLEET UI
+========================================================== */
+
 function updateFleet(trips) {
 
     if (!Array.isArray(trips)) {
@@ -140,20 +148,39 @@ function updateFleet(trips) {
 
     }
 
-    document.getElementById("activeBusCount").textContent =
-        trips.length;
+    const activeBusCount =
+        document.getElementById("activeBusCount");
 
-    document.getElementById("onlineDriverCount").textContent =
-        trips.length;
-    // --------------------------------------------------
-    // Active Trip List
-    // --------------------------------------------------
+    const onlineDriverCount =
+        document.getElementById("onlineDriverCount");
 
-    const tripList = document.getElementById("tripList");
+    if (activeBusCount) {
 
-    if (!tripList) return;
+        activeBusCount.textContent = trips.length;
+
+    }
+
+    if (onlineDriverCount) {
+
+        onlineDriverCount.textContent = trips.length;
+
+    }
+
+    const tripList =
+        document.getElementById("tripList");
+
+    if (!tripList) {
+
+        return;
+
+    }
 
     tripList.innerHTML = "";
+
+    // Remove old markers
+    markers.forEach(marker => marker.remove());
+
+    markers.clear();
 
     if (trips.length === 0) {
 
@@ -171,7 +198,60 @@ function updateFleet(trips) {
 
     }
 
-    trips.forEach(trip => {
+    trips.forEach((trip) => {
+
+        // ---------------------------------------------
+        // Create Marker
+        // ---------------------------------------------
+
+        if (
+            trip.latitude != null &&
+            trip.longitude != null
+        ) {
+
+            const marker = L.marker([
+
+                trip.latitude,
+
+                trip.longitude
+
+            ]).addTo(map);
+
+            marker.bindPopup(`
+
+                <strong>
+
+                    BUS-${String(trip.bus_id).padStart(3,"0")}
+
+                </strong>
+
+                <br>
+
+                Driver : ${trip.driver_id}
+
+                <br>
+
+                Route : ${trip.route_id}
+
+                <br>
+
+                Speed : ${trip.speed ?? "--"} km/h
+
+            `);
+
+            markers.set(
+
+                trip.bus_id,
+
+                marker
+
+            );
+
+        }
+
+        // ---------------------------------------------
+        // Card
+        // ---------------------------------------------
 
         const card = document.createElement("div");
 
@@ -183,13 +263,13 @@ function updateFleet(trips) {
 
                 <strong>
 
-                    BUS-${String(trip.bus_id).padStart(3, "0")}
+                    BUS-${String(trip.bus_id).padStart(3,"0")}
 
                 </strong>
 
                 <span class="trip-status">
 
-                    🟢 ${trip.status}
+                    🟢 ${trip.status ?? "Running"}
 
                 </span>
 
@@ -200,20 +280,23 @@ function updateFleet(trips) {
                 <p>
 
                     Driver ID :
-                    <strong>${trip.driver_id}</strong>
+
+                    <strong>${trip.driver_id ?? "--"}</strong>
 
                 </p>
 
                 <p>
 
                     Route :
-                    <strong>${trip.route_id}</strong>
+
+                    <strong>${trip.route_id ?? "--"}</strong>
 
                 </p>
 
                 <p>
 
                     Speed :
+
                     <strong>${trip.speed ?? "--"} km/h</strong>
 
                 </p>
@@ -221,14 +304,15 @@ function updateFleet(trips) {
                 <p>
 
                     Updated :
+
                     <strong>
 
                         ${
                             trip.last_location_update
-                                ? new Date(
-                                      trip.last_location_update
-                                  ).toLocaleTimeString()
-                                : "--"
+                            ? new Date(
+                                trip.last_location_update
+                              ).toLocaleTimeString()
+                            : "--"
                         }
 
                     </strong>
@@ -238,6 +322,47 @@ function updateFleet(trips) {
             </div>
 
         `;
+
+        // ---------------------------------------------
+        // Click Card
+        // ---------------------------------------------
+
+        card.addEventListener("click", () => {
+
+            document
+                .querySelectorAll(".trip-card")
+                .forEach(c =>
+
+                    c.classList.remove("selected")
+
+                );
+
+            card.classList.add("selected");
+
+            const marker =
+                markers.get(trip.bus_id);
+
+            if (!marker) return;
+
+            map.flyTo(
+
+                marker.getLatLng(),
+
+                18,
+
+                {
+
+                    animate:true,
+
+                    duration:1
+
+                }
+
+            );
+
+            marker.openPopup();
+
+        });
 
         tripList.appendChild(card);
 
