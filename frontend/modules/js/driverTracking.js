@@ -146,7 +146,7 @@ export function render() {
 
                         </button>
 
-                        <button
+                        <button 
                             id="stopTripBtn"
                             class="stop-trip-btn"
                             disabled>
