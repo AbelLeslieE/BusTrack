@@ -1,25 +1,7 @@
-"""Pydantic contracts for authentication-related API data.
-
-TODO: Add schemas for fleet modules as each API area is implemented.
-"""
-
-from datetime import datetime
+from datetime import datetime, date, time
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from datetime import date, datetime, time 
-
-
-class TokenResponse(BaseModel):
-    """
-    Returned after successful authentication.
-    """
-
-    access_token: str
-
-    token_type: str = "bearer"
-
-    user: UserResponse
 
 class UserResponse(BaseModel):
     """
@@ -29,7 +11,6 @@ class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-
     username: str
     full_name: str
 
@@ -37,7 +18,6 @@ class UserResponse(BaseModel):
     phone: str | None
 
     role: str
-
     status: str
 
     last_login: datetime | None
@@ -45,6 +25,15 @@ class UserResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+
+class TokenResponse(BaseModel):
+    """
+    Returned after successful authentication.
+    """
+
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
 # ==========================================================
 # USER SCHEMAS
 # ==========================================================

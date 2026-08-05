@@ -345,22 +345,46 @@
    HIDE SIDEBAR
 ========================================================== */
 
-.app-shell.sidebar-open{
+/* ==========================================================
+   SIDEBAR TOGGLE
+========================================================== */
 
-    grid-template-columns:0 minmax(0,1fr);
+.app-shell{
+
+    position:relative;
+
+    display:grid;
+
+    grid-template-columns:320px 1fr;
 
 }
 
+/* Hide sidebar */
+
 .app-shell.sidebar-open .sidebar{
 
-    transform:translateX(-120%);
+    transform:translateX(-340px);
+
     opacity:0;
+
     pointer-events:none;
 
 }
 
+/* Expand workspace */
+
 .app-shell.sidebar-open .app-workspace{
 
-    width:100%;
+    margin-left:-320px;
+
+    width:calc(100% + 320px);
+
+    transition:all .35s ease;
+
+}
+
+.app-workspace{
+
+    transition:all .35s ease;
 
 }
