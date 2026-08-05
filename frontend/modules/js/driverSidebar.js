@@ -122,6 +122,14 @@ export function createDriverSidebar(activeRoute, onNavigate) {
 
         onNavigate(link.dataset.route);
 
+        if (window.innerWidth <= 1200) {
+
+            document
+                .querySelector(".app-shell")
+                ?.classList.remove("sidebar-open");
+
+        }
+
     });
 
     return sidebar;

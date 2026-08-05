@@ -157,18 +157,6 @@ function applyModuleStyles(moduleName) {
 
     // Driver shared styles
     if (isDriver) {
-
-        let sidebarStyle = document.querySelector("#driver-sidebar-style");
-
-        if (!sidebarStyle) {
-            sidebarStyle = document.createElement("link");
-            sidebarStyle.id = "driver-sidebar-style";
-            sidebarStyle.rel = "stylesheet";
-            document.head.appendChild(sidebarStyle);
-        }
-
-        sidebarStyle.href = "/static/modules/css/driverSidebar.css";
-
         let topbarStyle = document.querySelector("#driver-topbar-style");
 
         if (!topbarStyle) {

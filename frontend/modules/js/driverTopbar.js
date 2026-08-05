@@ -106,12 +106,15 @@ export function createDriverTopbar(toggleSidebar) {
         lucide.createIcons();
 
     }
-    topbar
-        .querySelector(".mobile-menu")
-        ?.addEventListener(
-            "click",
-            toggleSidebar
-        );
+    const menuButton = topbar.querySelector(".mobile-menu");
+
+    menuButton?.addEventListener("click", () => {
+
+        console.log("Driver hamburger clicked");
+
+        toggleSidebar();
+
+    });
     return topbar;
 
 }
