@@ -174,6 +174,8 @@ class BusUpdate(BaseModel):
         max_length=100,
     )
 class BusResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
 
     bus_number: str
@@ -188,13 +190,13 @@ class BusResponse(BaseModel):
     status: str
 
     driver_id: int | None
+    driver_name: str | None = None
+
     route: str | None
     device_id: str | None
 
     created_at: datetime
     updated_at: datetime
-
-    model_config = ConfigDict(from_attributes=True) 
 # ==========================================================
 # DRIVER SCHEMAS
 # ==========================================================
@@ -317,9 +319,8 @@ class RouteUpdate(BaseModel):
 
 
 class RouteResponse(BaseModel):
-    """
-    Route returned to the frontend.
-    """
+
+    model_config = ConfigDict(from_attributes=True)
 
     id: int
 
@@ -327,7 +328,10 @@ class RouteResponse(BaseModel):
     route_name: str
 
     bus_id: int | None
+    bus_number: str | None = None
+
     driver_id: int | None
+    driver_name: str | None = None
 
     departure_time: time | None
     arrival_time: time | None
@@ -338,8 +342,6 @@ class RouteResponse(BaseModel):
 
     created_at: datetime
     updated_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
 # ==========================================================
 # STOP SCHEMAS
 # ==========================================================

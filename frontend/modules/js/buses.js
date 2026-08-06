@@ -1411,7 +1411,7 @@ function formatDriverName(driverId) {
 
     return driver
 
-        ? driver.full_name
+        ? driver.user?.full_name ?? "—"
 
         : "—";
 

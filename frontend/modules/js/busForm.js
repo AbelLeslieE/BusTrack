@@ -355,27 +355,37 @@ async function initializeDropdowns(wrapper, bus){
                 ]
             })
         );
+    /* ==========================================================
+    DRIVER DROPDOWN
+    ========================================================== */
+
+    const driverItems = drivers.map(driver => ({
+
+        value: driver.id,
+
+        label: `${driver.user?.full_name ?? "Unknown"} • ${driver.driver_code}`
+
+    }));
+
+    console.log("Drivers API:", drivers);
+    console.log("Driver Items:", driverItems);
+
     wrapper.querySelector("#driver_container")
-    .appendChild(
-        createDropdown({
+        .appendChild(
 
-            id: "driver_id",
+            createDropdown({
 
-            value: bus.driver_id || "",
+                id: "driver_id",
 
-            placeholder: "Select Driver",
+                value: bus.driver_id || "",
 
-            items: drivers.map(driver => ({
+                placeholder: "Select Driver",
 
-                value: driver.id,
+                items: driverItems
 
-                label: driver.full_name
+            })
 
-            }))
-
-        })
-);
-
+        );
 wrapper.querySelector("#route_container")
 .appendChild(
     createDropdown({

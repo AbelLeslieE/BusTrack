@@ -20,7 +20,71 @@ from backend.schemas import (
     RouteUpdate,
     RouteResponse,
 )
+# ==========================================================
+# BUILD ROUTE RESPONSE
+# ==========================================================
 
+def build_route_response(
+    route: Route,
+    db: Session,
+) -> RouteResponse:
+
+    driver_name = None
+    bus_number = None
+
+    if route.driver_id:
+
+        driver = (
+            db.query(Driver)
+            .filter(Driver.id == route.driver_id)
+            .first()
+        )
+
+        if driver and driver.user:
+
+            driver_name = driver.user.full_name
+
+    if route.bus_id:
+
+        bus = (
+            db.query(Bus)
+            .filter(Bus.id == route.bus_id)
+            .first()
+        )
+
+        if bus:
+
+            bus_number = bus.bus_number
+
+    total_stops = (
+        db.query(RouteStop)
+        .filter(RouteStop.route_id == route.id)
+        .count()
+    )
+
+    return RouteResponse(
+
+        id=route.id,
+
+        route_code=route.route_code,
+        route_name=route.route_name,
+
+        bus_id=route.bus_id,
+        bus_number=bus_number,
+
+        driver_id=route.driver_id,
+        driver_name=driver_name,
+
+        departure_time=route.departure_time,
+        arrival_time=route.arrival_time,
+
+        status=route.status,
+
+        total_stops=total_stops,
+
+        created_at=route.created_at,
+        updated_at=route.updated_at,
+    )
 router = APIRouter(
     prefix="/api/routes",
     tags=["Routes"],
@@ -59,7 +123,10 @@ def create_route(
     db.commit()
     db.refresh(new_route)
 
-    return new_route
+    return build_route_response(
+        new_route,
+        db,
+    )
 # ==========================================================
 # GET ALL ROUTES
 # ==========================================================
@@ -72,17 +139,22 @@ def get_routes(
     db: Session = Depends(get_db),
 ):
 
-    routes = db.query(Route).order_by(Route.route_name).all()
+    routes = (
+        db.query(Route)
+        .order_by(Route.route_name)
+        .all()
+    )
 
-    for route in routes:
+    return [
 
-        route.total_stops = (
-            db.query(RouteStop)
-            .filter(RouteStop.route_id == route.id)
-            .count()
+        build_route_response(
+            route,
+            db,
         )
 
-    return routes
+        for route in routes
+
+    ]
 # ==========================================================
 # GET SINGLE ROUTE
 # ==========================================================
@@ -110,7 +182,10 @@ def get_route(
         .count()
     )
 
-    return route
+    return build_route_response(
+        route,
+        db,
+    )
 # ==========================================================
 # UPDATE ROUTE
 # ==========================================================
@@ -139,7 +214,10 @@ def update_route(
     db.commit()
     db.refresh(route)
 
-    return route
+    return build_route_response(
+        route,
+        db,
+    )
 # ==========================================================
 # DELETE ROUTE
 # ==========================================================

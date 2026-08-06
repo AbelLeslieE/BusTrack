@@ -221,6 +221,7 @@ async function loadDrivers() {
         }
 
         state.drivers = await response.json();
+        console.log("Drivers loaded:", state.drivers);
 
     }
 
@@ -1515,9 +1516,7 @@ function getDriverName(driverId) {
     }
 
     const driver = state.drivers.find(
-
-        driver => driver.id === driverId
-
+        d => d.id === driverId
     );
 
     if (!driver) {
@@ -1536,13 +1535,13 @@ function getDriverName(driverId) {
 
             <div class="table-driver-title">
 
-                ${driver.full_name}
+                ${driver.user?.full_name ?? "Unknown"}
 
             </div>
 
             <div class="table-driver-sub">
 
-                ${driver.phone}
+                ${driver.driver_code}
 
             </div>
 

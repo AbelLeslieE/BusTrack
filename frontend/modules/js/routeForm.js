@@ -323,13 +323,14 @@ function initializeDropdowns(
 
         items: drivers.map(driver => ({
 
-            label: driver.full_name,
+            value: driver.id,
 
-            value: driver.id
+            label: `${driver.user?.full_name ?? "Unknown"} • ${driver.driver_code}`
 
         }))
 
     });
+    console.log("Drivers passed to routeForm:", drivers);   
 
     wrapper
         .querySelector("#driver_container")

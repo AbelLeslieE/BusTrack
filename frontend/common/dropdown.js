@@ -99,7 +99,7 @@ export function createDropdown({
         if (root.classList.contains("open")) {
 
             searchInput.value = "";
-
+            console.log("Dropdown Items:", items);
             renderItems(items);
             searchInput.dispatchEvent(
                 new Event("input")
@@ -175,12 +175,14 @@ export function createDropdown({
         itemsContainer.innerHTML = list.map(item => {
 
             const option =
-                typeof item === "object"
-                    ? item
-                    : {
-                        value: item,
-                        label: item
-                    };
+            typeof item === "object"
+                ? item
+                : {
+                    value: item,
+                    label: item
+                };
+
+        console.log("Dropdown option:", option);
 
             return `
 
@@ -301,6 +303,7 @@ export function createDropdown({
 
         const filteredItems = items.filter(item => {
 
+
             const option =
                 typeof item === "object"
                     ? item
@@ -309,7 +312,8 @@ export function createDropdown({
                         label: item
                     };
 
-            return option.label
+            console.log("Dropdown option:", option);        
+            return String(option.label ?? "")
                 .toLowerCase()
                 .includes(query);
 
