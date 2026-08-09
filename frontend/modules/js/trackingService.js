@@ -1,10 +1,12 @@
 /* ==========================================================
    DRIVER TRACKING SERVICE
 ========================================================== */
-
+console.log("trackingService.js loaded");
 let map = null;
 let marker = null;
-
+console.log(
+    "Driver map initialized WITHOUT bus marker."
+);
 /* ==========================================================
    TRACKING STATE
 ========================================================== */
@@ -14,15 +16,31 @@ let currentTripId = null;
 let watchId = null;
 
 let tracking = false;
+
+// Used to invalidate old GPS callbacks when leaving the page.
+let trackingSession = 0;
+
 /* ==========================================================
-   INITIALIZE MAP
+INITIALIZE MAP
 ========================================================== */
 
 export function initializeMap(containerId = "driverMap") {
 
+    console.log("==================================");
+    console.log("DRIVER MAP INITIALIZED");
+    console.log("==================================");
+
     const container = document.getElementById(containerId);
 
-    if (!container) return;
+    if (!container) {
+
+        console.log("driverMap DIV NOT FOUND");
+
+        return;
+
+    }
+
+    console.log("driverMap DIV FOUND");
 
     if (map) {
 
@@ -32,21 +50,51 @@ export function initializeMap(containerId = "driverMap") {
 
     }
 
+    // Reset the old marker reference.
+    // The previous marker belonged to the old Leaflet map.
+    marker = null;
+
+    // ==========================================================
+    // Default Location - Sahrdaya College
+    // ==========================================================
+
+    const DEFAULT_LOCATION = {
+
+        lat: 10.359000,
+
+        lng: 76.286100,
+
+        zoom: 19
+
+    };
+
+    console.log(DEFAULT_LOCATION);
+
     map = L.map(containerId).setView(
-        [10.5276, 76.2144],   // Default: Sahrdaya College
-        15
+        
+
+        [
+            DEFAULT_LOCATION.lat,
+            DEFAULT_LOCATION.lng
+        ],
+
+        DEFAULT_LOCATION.zoom
+
     );
-
+        console.log("Leaflet map created");
     L.tileLayer(
+
         "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+
         {
+
             attribution: "&copy; OpenStreetMap contributors"
+
         }
+
     ).addTo(map);
 
-    marker = L.marker(
-        [10.5276, 76.2144]
-    ).addTo(map);
+
 
 }
 
@@ -57,11 +105,47 @@ export function initializeMap(containerId = "driverMap") {
 
 export function updateMarker(latitude, longitude) {
 
-    if (!map || !marker) return;
+    console.log("GPS RECEIVED:", latitude, longitude);
 
-    marker.setLatLng([latitude, longitude]);
+    if (!map) return;
 
-    map.setView([latitude, longitude]);
+    // Create the marker only once
+    if (!marker) {
+
+        marker = L.marker([
+            latitude,
+            longitude
+        ])
+        .addTo(map)
+        .bindPopup("Current Bus");
+
+    } else {
+
+        marker.setLatLng([
+            latitude,
+            longitude
+        ]);
+
+    }
+
+    map.flyTo(
+
+        [
+            latitude,
+            longitude
+        ],
+
+        map.getZoom(),
+
+        {
+
+            animate: true,
+
+            duration: 0.5
+
+        }
+
+    );
 
 }
 /* ==========================================================
@@ -108,6 +192,8 @@ export async function startTrip() {
         }
 
         const trip = await response.json();
+
+        console.log("CURRENT TRIP:", trip);
 
         currentTripId = trip.id;
 
@@ -195,6 +281,14 @@ export async function stopTrip() {
             watchId = null;
 
         }
+        // Remove the bus marker when the trip ends.
+        if (marker && map) {
+
+            map.removeLayer(marker);
+
+            marker = null;
+
+        }
 
         tracking = false;
 
@@ -227,6 +321,10 @@ export async function stopTrip() {
    START GPS WATCH
 ========================================================== */
 
+/* ==========================================================
+   START GPS WATCH
+========================================================== */
+
 function startLocationTracking() {
 
     if (!navigator.geolocation) {
@@ -237,11 +335,51 @@ function startLocationTracking() {
 
     }
 
+    // Stop an old watcher before starting a new one.
+    if (watchId !== null) {
+
+        navigator.geolocation.clearWatch(watchId);
+
+        watchId = null;
+
+    }
+
+    // Create a new tracking session.
+    trackingSession++;
+
+    const session = trackingSession;
+
     watchId = navigator.geolocation.watchPosition(
 
-        onLocationSuccess,
+        (position) => {
 
-        onLocationError,
+            // Ignore GPS callbacks from an old session.
+            if (session !== trackingSession) {
+
+                console.log(
+                    "Ignoring old GPS callback."
+                );
+
+                return;
+
+            }
+
+            onLocationSuccess(position, session);
+
+        },
+
+        (error) => {
+
+            // Ignore errors from an old session.
+            if (session !== trackingSession) {
+
+                return;
+
+            }
+
+            onLocationError(error);
+
+        },
 
         {
 
@@ -249,18 +387,46 @@ function startLocationTracking() {
 
             maximumAge: 0,
 
-            timeout: 10000,
+            timeout: 10000
 
         }
 
+    );
+
+    console.log(
+        "GPS watcher started. Session:",
+        session
     );
 
 }
 /* ==========================================================
    GPS SUCCESS
 ========================================================== */
+/* ==========================================================
+   GPS SUCCESS
+========================================================== */
 
-async function onLocationSuccess(position) {
+async function onLocationSuccess(
+    position,
+    session
+) {
+
+    // Do absolutely nothing if this page is no longer active.
+    if (session !== trackingSession) {
+
+        console.log(
+            "Ignoring GPS update from old page."
+        );
+
+        return;
+
+    }
+
+    if (!tracking || !currentTripId) {
+
+        return;
+
+    }
 
     const {
 
@@ -274,10 +440,20 @@ async function onLocationSuccess(position) {
 
     } = position.coords;
 
+
+    /* ======================================================
+       UPDATE MAP
+    ====================================================== */
+
     updateMarker(
         latitude,
         longitude
     );
+
+
+    /* ======================================================
+       SEND LOCATION
+    ====================================================== */
 
     await sendLocation(
         latitude,
@@ -286,21 +462,76 @@ async function onLocationSuccess(position) {
         accuracy
     );
 
-    document.getElementById("latitude").textContent =
-        latitude.toFixed(6);
 
-    document.getElementById("longitude").textContent =
-        longitude.toFixed(6);
+    // Check again because the user may have navigated away
+    // while the API request was running.
+    if (
+        session !== trackingSession ||
+        !tracking
+    ) {
 
-    document.getElementById("speed").textContent =
-        speed
-            ? `${speed.toFixed(1)} km/h`
-            : "--";
+        return;
 
-    document.getElementById("accuracy").textContent =
-        `${accuracy.toFixed(1)} m`;
-    document.getElementById("lastUpdate").textContent =
-        new Date().toLocaleTimeString();
+    }
+
+
+    /* ======================================================
+       UPDATE UI
+    ====================================================== */
+
+    const latitudeElement =
+        document.getElementById("latitude");
+
+    const longitudeElement =
+        document.getElementById("longitude");
+
+    const speedElement =
+        document.getElementById("speed");
+
+    const accuracyElement =
+        document.getElementById("accuracy");
+
+    const lastUpdateElement =
+        document.getElementById("lastUpdate");
+
+
+    if (latitudeElement) {
+
+        latitudeElement.textContent =
+            latitude.toFixed(6);
+
+    }
+
+    if (longitudeElement) {
+
+        longitudeElement.textContent =
+            longitude.toFixed(6);
+
+    }
+
+    if (speedElement) {
+
+        speedElement.textContent =
+            speed
+                ? `${speed.toFixed(1)} km/h`
+                : "--";
+
+    }
+
+    if (accuracyElement) {
+
+        accuracyElement.textContent =
+            `${accuracy.toFixed(1)} m`;
+
+    }
+
+    if (lastUpdateElement) {
+
+        lastUpdateElement.textContent =
+            new Date().toLocaleTimeString();
+
+    }
+
 }
 /* ==========================================================
    SEND LOCATION TO SERVER
@@ -347,52 +578,127 @@ async function sendLocation(latitude, longitude, speed, accuracy) {
    GET CURRENT ACTIVE TRIP
 ========================================================== */
 
+/* ==========================================================
+   GET CURRENT ACTIVE TRIP
+========================================================== */
+
 export async function loadCurrentTrip() {
+
+    const session = trackingSession;
 
     const token = localStorage.getItem(
         "bus_tracker_access_token"
     );
 
-    const response = await fetch(
-        "/api/gps/current",
-        {
-            headers: {
-                Authorization: `Bearer ${token}`
+    try {
+
+        const response = await fetch(
+            "/api/gps/current",
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
             }
+        );
+
+        // Page was left while the request was running.
+        if (session !== trackingSession) {
+
+            console.log(
+                "Ignoring current-trip response from old page."
+            );
+
+            return null;
+
         }
-    );
 
-    if (!response.ok) {
+        if (!response.ok) {
+
+            return null;
+
+        }
+
+        const trip = await response.json();
+
+        // No active trip.
+        if (!trip) {
+
+            return null;
+
+        }
+
+        // Page was left while the request was running.
+        if (session !== trackingSession) {
+
+            return null;
+
+        }
+
+        currentTripId = trip.id;
+
+        tracking = true;
+
+        const tripStatus =
+            document.getElementById("tripStatus");
+
+        const gpsStatus =
+            document.getElementById("gpsStatus");
+
+        const startButton =
+            document.getElementById("startTripBtn");
+
+        const stopButton =
+            document.getElementById("stopTripBtn");
+
+
+        if (tripStatus) {
+
+            tripStatus.textContent =
+                "🟢 Running";
+
+        }
+
+        if (gpsStatus) {
+
+            gpsStatus.textContent =
+                "Tracking...";
+
+        }
+
+        if (startButton) {
+
+            startButton.disabled = true;
+
+        }
+
+        if (stopButton) {
+
+            stopButton.disabled = false;
+
+        }
+
+
+        // Restart GPS only if this page is still active.
+        if (session === trackingSession) {
+
+            startLocationTracking();
+
+        }
+
+        return trip;
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "Failed to load current trip:",
+            error
+        );
 
         return null;
 
     }
-
-    const trip = await response.json();
-
-    if (!trip) {
-
-        return null;
-
-    }
-
-    currentTripId = trip.id;
-
-    tracking = true;
-
-    document.getElementById("tripStatus").textContent =
-        "🟢 Running";
-
-    document.getElementById("gpsStatus").textContent =
-        "Tracking...";
-
-    document.getElementById("startTripBtn").disabled = true;
-
-    document.getElementById("stopTripBtn").disabled = false;
-    
-
-
-    return trip;
 
 }
 /* ==========================================================
@@ -404,5 +710,82 @@ function onLocationError(error) {
     console.error(error);
 
     alert(error.message);
+
+}
+/* ==========================================================
+   CLEANUP DRIVER TRACKING
+========================================================== */
+
+/* ==========================================================
+   CLEANUP DRIVER TRACKING
+========================================================== */
+
+export function cleanupTracking() {
+
+    console.log(
+        "Cleaning up driver tracking..."
+    );
+
+
+    /* ======================================================
+       INVALIDATE ALL OLD GPS CALLBACKS
+    ====================================================== */
+
+    trackingSession++;
+
+
+    /* ======================================================
+       STOP GPS WATCHER
+    ====================================================== */
+
+    if (watchId !== null) {
+
+        navigator.geolocation.clearWatch(
+            watchId
+        );
+
+        watchId = null;
+
+    }
+
+
+    /* ======================================================
+       STOP LOCAL TRACKING STATE
+    ====================================================== */
+
+    tracking = false;
+
+    currentTripId = null;
+
+
+    /* ======================================================
+       REMOVE BUS MARKER
+    ====================================================== */
+
+    if (marker && map) {
+
+        map.removeLayer(marker);
+
+    }
+
+    marker = null;
+
+
+    /* ======================================================
+       DESTROY LEAFLET MAP
+    ====================================================== */
+
+    if (map) {
+
+        map.remove();
+
+        map = null;
+
+    }
+
+
+    console.log(
+        "Driver tracking cleanup completed."
+    );
 
 }

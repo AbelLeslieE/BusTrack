@@ -10,7 +10,9 @@ import {
 
     stopTrip,
 
-    loadCurrentTrip
+    loadCurrentTrip,
+
+    cleanupTracking
 
 } from "./trackingService.js";
 export function render() {
@@ -255,31 +257,41 @@ export function render() {
 
     setTimeout(() => {
 
+        console.log("Calling initializeMap()");
+
         initializeMap();
+
+        console.log("initializeMap() finished");
+
         if (window.lucide) {
             lucide.createIcons();
         }
+
+        console.log("Calling loadCurrentTrip()");
+
         loadCurrentTrip();
-        const startButton = document.getElementById(
-            "startTripBtn"
-        );
 
-        const stopButton = document.getElementById(
-            "stopTripBtn"
-        );
+        const startButton = document.getElementById("startTripBtn");
 
-        startButton.addEventListener(
-            "click",
-            startTrip
-        );
+        const stopButton = document.getElementById("stopTripBtn");
 
-        stopButton.addEventListener(
-            "click",
-            stopTrip
-        );
+        if (startButton) {
+            startButton.addEventListener("click", startTrip);
+        }
 
-    },100);
+        if (stopButton) {
+            stopButton.addEventListener("click", stopTrip);
+        }
+
+    }, 100);
+
+
+    /* ==========================================================
+    MODULE CLEANUP
+    ========================================================== */
+
+    page.cleanup = cleanupTracking;
 
     return page;
 
-}
+    }

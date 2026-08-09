@@ -256,6 +256,25 @@ export async function loadModule(requestedRoute) {
           : defaultRoute;
   shell ??= createShell(route);
   if (!shell) return;
+  /* ==========================================================
+    CLEANUP PREVIOUS MODULE
+    ========================================================== */
+
+    const previousView =
+        shell.content.firstElementChild;
+
+    if (
+        previousView &&
+        typeof previousView.cleanup === "function"
+    ) {
+
+        console.log(
+            "Cleaning up previous module..."
+        );
+
+        previousView.cleanup();
+
+    }
 
 
   if (isDriver) {

@@ -7,7 +7,9 @@ import {
 
     initializeFleetMap,
 
-    startFleetRefresh
+    startFleetRefresh,
+
+    cleanupFleetTracking
 
 } from "./adminTrackingService.js";
 export function render() {
@@ -128,8 +130,11 @@ export function render() {
 
         initializeFleetMap();
 
+        console.log("Map initialized");
+
         startFleetRefresh();
 
     }, 100);
+    page.cleanup = cleanupFleetTracking;
     return page;
 }
