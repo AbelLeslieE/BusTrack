@@ -151,18 +151,104 @@ export function updateMarker(latitude, longitude) {
 /* ==========================================================
    START TRIP
 ========================================================== */
-
 /* ==========================================================
    START TRIP
+   GPS permission is requested FIRST so that iPhone/Safari
+   can show the location permission prompt directly from
+   the driver's Start Trip button.
 ========================================================== */
 
 export async function startTrip() {
 
     if (tracking) return;
 
+    // ------------------------------------------------------
+    // Check browser GPS support
+    // ------------------------------------------------------
+
+    if (!navigator.geolocation) {
+
+        alert(
+            "Location services are not supported by this browser."
+        );
+
+        return;
+
+    }
+
     try {
 
-        const token = localStorage.getItem("bus_tracker_access_token");
+        const startButton =
+            document.getElementById("startTripBtn");
+
+        const stopButton =
+            document.getElementById("stopTripBtn");
+
+        const tripStatus =
+            document.getElementById("tripStatus");
+
+        const gpsStatus =
+            document.getElementById("gpsStatus");
+
+
+        // --------------------------------------------------
+        // Tell the user what is happening
+        // --------------------------------------------------
+
+        if (gpsStatus) {
+
+            gpsStatus.textContent =
+                "Requesting location...";
+
+        }
+
+        if (startButton) {
+
+            startButton.disabled = true;
+
+        }
+
+
+        // ==================================================
+        // REQUEST LOCATION PERMISSION FIRST
+        //
+        // IMPORTANT:
+        // This happens directly from the Start Trip click.
+        // This is important for iPhone/Safari.
+        // ==================================================
+
+        const initialPosition =
+            await requestLocationPermission();
+
+
+        // --------------------------------------------------
+        // GPS permission/location successful
+        // --------------------------------------------------
+
+        console.log(
+            "Initial GPS position:",
+            initialPosition.coords.latitude,
+            initialPosition.coords.longitude
+        );
+
+
+        if (gpsStatus) {
+
+            gpsStatus.textContent =
+                "Location available";
+
+        }
+
+
+        // ==================================================
+        // NOW CREATE THE SERVER-SIDE TRIP
+        // ==================================================
+
+        const token =
+            localStorage.getItem(
+                "bus_tracker_access_token"
+            );
+
 
         const response = await fetch(
 
@@ -174,8 +260,11 @@ export async function startTrip() {
 
                 headers: {
 
-                    "Authorization": `Bearer ${token}`,
-                    "Content-Type": "application/json"
+                    "Authorization":
+                        `Bearer ${token}`,
+
+                    "Content-Type":
+                        "application/json"
 
                 }
 
@@ -183,23 +272,41 @@ export async function startTrip() {
 
         );
 
+
         if (!response.ok) {
 
-            const error = await response.json();
+            const error =
+                await response.json();
 
-            throw new Error(error.detail);
+            throw new Error(
+                error.detail ||
+                "Unable to start trip."
+            );
 
         }
 
-        const trip = await response.json();
 
-        console.log("CURRENT TRIP:", trip);
+        const trip =
+            await response.json();
 
-        currentTripId = trip.id;
 
-        // ==========================================================
+        console.log(
+            "CURRENT TRIP:",
+            trip
+        );
+
+
+        // --------------------------------------------------
+        // Store current trip
+        // --------------------------------------------------
+
+        currentTripId =
+            trip.id;
+
+
+        // ==================================================
         // UPDATE CURRENT BUS
-        // ==========================================================
+        // ==================================================
 
         const tripBus =
             document.getElementById("tripBus");
@@ -208,14 +315,17 @@ export async function startTrip() {
 
             tripBus.textContent =
                 trip.bus_id != null
-                    ? `BUS-${String(trip.bus_id).padStart(3, "0")}`
+                    ? `BUS-${String(
+                        trip.bus_id
+                    ).padStart(3, "0")}`
                     : "--";
 
         }
 
-        // ==========================================================
+
+        // ==================================================
         // UPDATE CURRENT ROUTE
-        // ==========================================================
+        // ==================================================
 
         const tripRoute =
             document.getElementById("tripRoute");
@@ -229,29 +339,112 @@ export async function startTrip() {
 
         }
 
+
+        // ==================================================
+        // UPDATE UI
+        // ==================================================
+
         tracking = true;
 
-        document.getElementById("tripStatus").textContent =
-            "🟢 Running";   
 
-        document.getElementById("gpsStatus").textContent =
-            "Searching...";
+        if (tripStatus) {
 
-        document.getElementById("startTripBtn").disabled = true;
+            tripStatus.textContent =
+                "🟢 Running";
 
-        document.getElementById("stopTripBtn").disabled = false;
+        }
 
-        console.log("Trip Started", trip);
+
+        if (gpsStatus) {
+
+            gpsStatus.textContent =
+                "Tracking...";
+
+        }
+
+
+        if (startButton) {
+
+            startButton.disabled = true;
+
+        }
+
+
+        if (stopButton) {
+
+            stopButton.disabled = false;
+
+        }
+
+
+        console.log(
+            "Trip Started",
+            trip
+        );
+
+
+        // ==================================================
+        // START CONTINUOUS GPS TRACKING
+        // ==================================================
 
         startLocationTracking();
+
+
+        // --------------------------------------------------
+        // Immediately process the position we already
+        // received during the permission request.
+        // --------------------------------------------------
+
+        onLocationSuccess(
+            initialPosition
+        );
 
     }
 
     catch (error) {
 
-        console.error(error);
+        console.error(
+            "Unable to start trip:",
+            error
+        );
 
-        alert(error.message);
+
+        // --------------------------------------------------
+        // Restore Start button
+        // --------------------------------------------------
+
+        const startButton =
+            document.getElementById(
+                "startTripBtn"
+            );
+
+        if (startButton) {
+
+            startButton.disabled = false;
+
+        }
+
+
+        // --------------------------------------------------
+        // Update GPS status
+        // --------------------------------------------------
+
+        const gpsStatus =
+            document.getElementById(
+                "gpsStatus"
+            );
+
+        if (gpsStatus) {
+
+            gpsStatus.textContent =
+                "Location unavailable";
+
+        }
+
+
+        alert(
+            getLocationErrorMessage(error)
+        );
 
     }
 
@@ -350,8 +543,44 @@ export async function stopTrip() {
 
 }
 /* ==========================================================
-   START GPS WATCH
+   REQUEST LOCATION PERMISSION
 ========================================================== */
+
+function requestLocationPermission() {
+
+    return new Promise(
+        (resolve, reject) => {
+
+            navigator.geolocation.getCurrentPosition(
+
+                (position) => {
+
+                    resolve(position);
+
+                },
+
+                (error) => {
+
+                    reject(error);
+
+                },
+
+                {
+
+                    enableHighAccuracy: true,
+
+                    maximumAge: 0,
+
+                    timeout: 15000
+
+                }
+
+            );
+
+        }
+    );
+
+}
 
 /* ==========================================================
    START GPS WATCH
@@ -757,11 +986,138 @@ export async function loadCurrentTrip() {
    GPS ERROR
 ========================================================== */
 
+/* ==========================================================
+   GPS ERROR
+========================================================== */
+
 function onLocationError(error) {
 
-    console.error(error);
+    console.error(
+        "GPS ERROR:",
+        error
+    );
 
-    alert(error.message);
+
+    const gpsStatus =
+        document.getElementById(
+            "gpsStatus"
+        );
+
+
+    let message =
+        "Unable to access your location.";
+
+
+    switch (error.code) {
+
+        case error.PERMISSION_DENIED:
+
+            message =
+                "Location permission was denied. " +
+                "Please allow location access for Safari " +
+                "and try again.";
+
+            break;
+
+
+        case error.POSITION_UNAVAILABLE:
+
+            message =
+                "Your location is currently unavailable. " +
+                "Please make sure Location Services and GPS " +
+                "are enabled.";
+
+            break;
+
+
+        case error.TIMEOUT:
+
+            message =
+                "GPS location request timed out. " +
+                "Please move to an area with a better GPS signal " +
+                "and try again.";
+
+            break;
+
+    }
+
+
+    if (gpsStatus) {
+
+        gpsStatus.textContent =
+            "Location unavailable";
+
+    }
+
+
+    console.error(
+        "GPS MESSAGE:",
+        message
+    );
+
+}
+/* ==========================================================
+   LOCATION ERROR MESSAGE
+========================================================== */
+
+function getLocationErrorMessage(error) {
+
+    // ----------------------------------------------
+    // Standard Geolocation error
+    // ----------------------------------------------
+
+    if (
+        error &&
+        typeof error.code === "number"
+    ) {
+
+        switch (error.code) {
+
+            case error.PERMISSION_DENIED:
+
+                return (
+                    "Location permission was denied.\n\n" +
+                    "Please allow location access for this " +
+                    "website in Safari settings and try again."
+                );
+
+
+            case error.POSITION_UNAVAILABLE:
+
+                return (
+                    "Your location is currently unavailable.\n\n" +
+                    "Make sure Location Services are enabled " +
+                    "on your iPhone."
+                );
+
+
+            case error.TIMEOUT:
+
+                return (
+                    "The GPS request timed out.\n\n" +
+                    "Please try again in an area with a better " +
+                    "GPS signal."
+                );
+
+        }
+
+    }
+
+
+    // ----------------------------------------------
+    // Normal JavaScript / API error
+    // ----------------------------------------------
+
+    if (error && error.message) {
+
+        return error.message;
+
+    }
+
+
+    return (
+        "Unable to start GPS tracking."
+    );
 
 }
 /* ==========================================================
