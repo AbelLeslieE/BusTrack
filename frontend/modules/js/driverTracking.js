@@ -91,9 +91,7 @@ export function render() {
                             <span>Current Bus</span>
 
                             <strong id="tripBus">
-
-                                BUS-014
-
+                                --
                             </strong>
 
                         </div>
@@ -103,9 +101,7 @@ export function render() {
                             <span>Current Route</span>
 
                             <strong id="tripRoute">
-
-                                Route 5
-
+                                --
                             </strong>
 
                         </div>

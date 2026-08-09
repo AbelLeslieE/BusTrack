@@ -197,6 +197,38 @@ export async function startTrip() {
 
         currentTripId = trip.id;
 
+        // ==========================================================
+        // UPDATE CURRENT BUS
+        // ==========================================================
+
+        const tripBus =
+            document.getElementById("tripBus");
+
+        if (tripBus) {
+
+            tripBus.textContent =
+                trip.bus_id != null
+                    ? `BUS-${String(trip.bus_id).padStart(3, "0")}`
+                    : "--";
+
+        }
+
+        // ==========================================================
+        // UPDATE CURRENT ROUTE
+        // ==========================================================
+
+        const tripRoute =
+            document.getElementById("tripRoute");
+
+        if (tripRoute) {
+
+            tripRoute.textContent =
+                trip.route_id != null
+                    ? `Route ${trip.route_id}`
+                    : "--";
+
+        }
+
         tracking = true;
 
         document.getElementById("tripStatus").textContent =
@@ -406,27 +438,7 @@ function startLocationTracking() {
    GPS SUCCESS
 ========================================================== */
 
-async function onLocationSuccess(
-    position,
-    session
-) {
-
-    // Do absolutely nothing if this page is no longer active.
-    if (session !== trackingSession) {
-
-        console.log(
-            "Ignoring GPS update from old page."
-        );
-
-        return;
-
-    }
-
-    if (!tracking || !currentTripId) {
-
-        return;
-
-    }
+async function onLocationSuccess(position) {
 
     const {
 
@@ -441,9 +453,23 @@ async function onLocationSuccess(
     } = position.coords;
 
 
-    /* ======================================================
-       UPDATE MAP
-    ====================================================== */
+    // ------------------------------------------------------
+    // GPS is now successfully receiving a location
+    // ------------------------------------------------------
+
+    const gpsStatus =
+        document.getElementById("gpsStatus");
+
+    if (gpsStatus) {
+
+        gpsStatus.textContent = "Tracking...";
+
+    }
+
+
+    // ------------------------------------------------------
+    // Update map marker
+    // ------------------------------------------------------
 
     updateMarker(
         latitude,
@@ -451,9 +477,9 @@ async function onLocationSuccess(
     );
 
 
-    /* ======================================================
-       SEND LOCATION
-    ====================================================== */
+    // ------------------------------------------------------
+    // Send location to backend
+    // ------------------------------------------------------
 
     await sendLocation(
         latitude,
@@ -463,21 +489,9 @@ async function onLocationSuccess(
     );
 
 
-    // Check again because the user may have navigated away
-    // while the API request was running.
-    if (
-        session !== trackingSession ||
-        !tracking
-    ) {
-
-        return;
-
-    }
-
-
-    /* ======================================================
-       UPDATE UI
-    ====================================================== */
+    // ------------------------------------------------------
+    // Update GPS information
+    // ------------------------------------------------------
 
     const latitudeElement =
         document.getElementById("latitude");
@@ -502,6 +516,7 @@ async function onLocationSuccess(
 
     }
 
+
     if (longitudeElement) {
 
         longitudeElement.textContent =
@@ -509,21 +524,26 @@ async function onLocationSuccess(
 
     }
 
+
     if (speedElement) {
 
         speedElement.textContent =
-            speed
-                ? `${speed.toFixed(1)} km/h`
+            speed != null
+                ? `${(speed * 3.6).toFixed(1)} km/h`
                 : "--";
 
     }
 
+
     if (accuracyElement) {
 
         accuracyElement.textContent =
-            `${accuracy.toFixed(1)} m`;
+            accuracy != null
+                ? `${accuracy.toFixed(1)} m`
+                : "--";
 
     }
+
 
     if (lastUpdateElement) {
 
@@ -635,6 +655,38 @@ export async function loadCurrentTrip() {
         }
 
         currentTripId = trip.id;
+
+        /* ==========================================================
+        RESTORE CURRENT BUS
+        ========================================================== */
+
+        const tripBus =
+            document.getElementById("tripBus");
+
+        if (tripBus) {
+
+            tripBus.textContent =
+                trip.bus_id != null
+                    ? `BUS-${String(trip.bus_id).padStart(3, "0")}`
+                    : "--";
+
+        }
+
+        /* ==========================================================
+        RESTORE CURRENT ROUTE
+        ========================================================== */
+
+        const tripRoute =
+            document.getElementById("tripRoute");
+
+        if (tripRoute) {
+
+            tripRoute.textContent =
+                trip.route_id != null
+                    ? `Route ${trip.route_id}`
+                    : "--";
+
+        }
 
         tracking = true;
 

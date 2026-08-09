@@ -16,7 +16,94 @@ let map = null;
     Used for updating and selecting buses.
 */
 const markers = new Map();
+const lastServerUpdates = new Map();
+const lastDisplayTimes = new Map();
+/* ==========================================================
+   LOCAL TIME FORMATTER
+========================================================== */
 
+/*
+ * Converts the current browser time into the same format
+ * used by the Driver Live Tracking page.
+ */
+function getCurrentLocalTime() {
+
+    return new Date().toLocaleTimeString();
+
+}
+/* ==========================================================
+   GET LOCAL GPS UPDATE TIME
+========================================================== */
+
+function getDisplayUpdateTime(trip) {
+
+    const busId = String(trip.bus_id);
+
+    const serverUpdate =
+        trip.last_location_update
+            ? String(trip.last_location_update)
+            : null;
+
+
+    /*
+     * First time this bus appears.
+     */
+    if (!lastServerUpdates.has(busId)) {
+
+        lastServerUpdates.set(
+            busId,
+            serverUpdate
+        );
+
+        const localTime =
+            getCurrentLocalTime();
+
+        lastDisplayTimes.set(
+            busId,
+            localTime
+        );
+
+        return localTime;
+
+    }
+
+
+    /*
+     * Check whether a NEW GPS update
+     * has arrived from the backend.
+     */
+    const previousServerUpdate =
+        lastServerUpdates.get(busId);
+
+
+    if (
+        serverUpdate &&
+        serverUpdate !== previousServerUpdate
+    ) {
+
+        lastServerUpdates.set(
+            busId,
+            serverUpdate
+        );
+
+        const localTime =
+            getCurrentLocalTime();
+
+        lastDisplayTimes.set(
+            busId,
+            localTime
+
+        );
+
+    }
+
+
+    return (
+        lastDisplayTimes.get(busId)
+        || "--"
+    );
+
+}
 /*
     Dedicated Leaflet layer for LIVE BUS MARKERS.
 
@@ -352,26 +439,6 @@ export function startFleetRefresh() {
 }
 
 /* ==========================================================
-   UPDATE MAP
-========================================================== */
-
-/* ==========================================================
-   UPDATE FLEET UI
-========================================================== */
-
-/* ==========================================================
-   UPDATE FLEET UI
-========================================================== */
-
-/* ==========================================================
-   UPDATE FLEET UI
-========================================================== */
-
-/* ==========================================================
-   UPDATE FLEET UI
-========================================================== */
-
-/* ==========================================================
    UPDATE FLEET UI
 ========================================================== */
 
@@ -419,14 +486,10 @@ function updateFleet(trips) {
     ====================================================== */
 
     const activeBusCount =
-        document.getElementById(
-            "activeBusCount"
-        );
+        document.getElementById("activeBusCount");
 
     const onlineDriverCount =
-        document.getElementById(
-            "onlineDriverCount"
-        );
+        document.getElementById("onlineDriverCount");
 
 
     if (activeBusCount) {
@@ -450,9 +513,7 @@ function updateFleet(trips) {
     ====================================================== */
 
     const tripList =
-        document.getElementById(
-            "tripList"
-        );
+        document.getElementById("tripList");
 
 
     if (!tripList) {
@@ -466,30 +527,15 @@ function updateFleet(trips) {
 
 
     /* ======================================================
-    NO ACTIVE TRIPS
+       NO ACTIVE TRIPS
     ====================================================== */
 
     if (trips.length === 0) {
 
-        console.log(
-            "No active trips."
-        );
-
-        console.log(
-            "Removing every fleet marker from map."
-        );
-
-
-        /* ==================================================
-        REMOVE ALL BUS MARKERS
-        ================================================== */
-
         clearFleetMarkers();
 
-
-        /* ==================================================
-        UPDATE UI
-        ================================================== */
+        lastServerUpdates.clear();
+        lastDisplayTimes.clear();
 
         tripList.innerHTML = `
 
@@ -501,29 +547,26 @@ function updateFleet(trips) {
 
         `;
 
-
         return;
 
     }
 
 
     /* ======================================================
-       GET CURRENT ACTIVE BUS IDS
+       CURRENT ACTIVE BUS IDS
     ====================================================== */
 
     const activeBusIds = new Set(
 
         trips.map(
-
             trip => String(trip.bus_id)
-
         )
 
     );
 
 
     /* ======================================================
-       REMOVE MARKERS THAT ARE NO LONGER ACTIVE
+       REMOVE INACTIVE BUS MARKERS
     ====================================================== */
 
     markers.forEach(
@@ -541,10 +584,6 @@ function updateFleet(trips) {
                     busId
                 );
 
-
-                /* ==========================================
-                Remove marker from fleet layer
-                ========================================== */
 
                 if (fleetMarkerLayer) {
 
@@ -572,105 +611,153 @@ function updateFleet(trips) {
 
     trips.forEach((trip) => {
 
-        if (
-            trip.latitude == null ||
-            trip.longitude == null
-        ) {
+        /* ==================================================
+           CREATE DISPLAY VALUES
+        ================================================== */
 
-            return;
+        /* ==================================================
+        DISPLAY NAMES
+        ================================================== */
 
-        }
+        const busLabel =
+            trip.bus_number
+                ? trip.bus_number
+                : `BUS-${String(
+                    trip.bus_id
+                ).padStart(3, "0")}`;
+
+
+        const driverLabel =
+            trip.driver_name
+                ? trip.driver_name
+                : "Unknown Driver";
+
+
+        const routeLabel =
+            trip.route_name
+                ? trip.route_name
+                : (
+                    trip.route_code
+                        ? trip.route_code
+                        : `Route ${trip.route_id ?? "--"}`
+                );
+
+        const speedLabel =
+            trip.speed != null
+                ? `${Number(trip.speed).toFixed(1)} km/h`
+                : "-- km/h";
+
+        const accuracyLabel =
+            trip.accuracy != null
+                ? `${Number(trip.accuracy).toFixed(1)} m`
+                : "--";
+
+
+        const updateLabel =
+            getDisplayUpdateTime(trip);
 
 
         /* ==================================================
            CREATE / UPDATE MARKER
         ================================================== */
 
-        let marker =
-            markers.get(
-                trip.bus_id
-            );
+        if (
+            trip.latitude != null &&
+            trip.longitude != null
+        ) {
 
-
-        if (!marker) {
-
-            console.log(
-                "Creating marker for:",
-                trip.bus_id
-            );
-
-
-            marker = L.marker(
-
-                [
-
-                    trip.latitude,
-
-                    trip.longitude
-
-                ]
-
-            ).addTo(
-                fleetMarkerLayer
-            );
-
-            markers.set(
-
-                trip.bus_id,
-
-                marker
-
-            );
-
-        }
-
-        else {
-
-            marker.setLatLng(
-
-                [
-
-                    trip.latitude,
-
-                    trip.longitude
-
-                ]
-
-            );
-
-        }
-
-
-        /* ==================================================
-           UPDATE POPUP
-        ================================================== */
-
-        marker.bindPopup(`
-
-            <strong>
-
-                BUS-${String(
+            let marker =
+                markers.get(
                     trip.bus_id
-                ).padStart(3, "0")}
+                );
 
-            </strong>
 
-            <br>
+            /* ==============================================
+               CREATE MARKER
+            ============================================== */
 
-            Driver :
-            ${trip.driver_id ?? "--"}
+            if (!marker) {
 
-            <br>
+                console.log(
+                    "Creating marker for:",
+                    busLabel
+                );
 
-            Route :
-            ${trip.route_id ?? "--"}
 
-            <br>
+                marker = L.marker([
 
-            Speed :
-            ${trip.speed ?? "--"} km/h
+                    trip.latitude,
+                    trip.longitude
 
-        `);
+                ]).addTo(
+                    fleetMarkerLayer
+                );
+
+
+                markers.set(
+                    trip.bus_id,
+                    marker
+                );
+
+            }
+
+
+            /* ==============================================
+               UPDATE POSITION
+            ============================================== */
+
+            else {
+
+                marker.setLatLng([
+
+                    trip.latitude,
+                    trip.longitude
+
+                ]);
+
+            }
+
+
+            /* ==============================================
+               UPDATE POPUP
+            ============================================== */
+
+            marker.bindPopup(`
+
+                <div class="fleet-popup">
+
+                    <strong>
+                        ${busLabel}
+                    </strong>
+
+                    <br>
+
+                    ${driverLabel}
+
+                    <br>
+
+                    ${routeLabel}
+
+                    <br>
+
+                    Speed :
+                    ${speedLabel}
+
+                    <br>
+
+                    Accuracy :
+                    ${accuracyLabel}
+
+                    <br>
+
+                    Updated :
+                    ${updateLabel}
+
+                </div>
+
+            `);
+
+        }
 
 
         /* ==================================================
@@ -690,9 +777,7 @@ function updateFleet(trips) {
 
                 <strong>
 
-                    BUS-${String(
-                        trip.bus_id
-                    ).padStart(3, "0")}
+                    ${busLabel}
 
                 </strong>
 
@@ -709,11 +794,11 @@ function updateFleet(trips) {
 
                 <p>
 
-                    Driver ID :
+                    Driver :
 
                     <strong>
 
-                        ${trip.driver_id ?? "--"}
+                        ${driverLabel}
 
                     </strong>
 
@@ -726,7 +811,7 @@ function updateFleet(trips) {
 
                     <strong>
 
-                        ${trip.route_id ?? "--"}
+                        ${routeLabel}
 
                     </strong>
 
@@ -739,7 +824,20 @@ function updateFleet(trips) {
 
                     <strong>
 
-                        ${trip.speed ?? "--"} km/h
+                        ${speedLabel}
+
+                    </strong>
+
+                </p>
+
+
+                <p>
+
+                    Accuracy :
+
+                    <strong>
+
+                        ${accuracyLabel}
 
                     </strong>
 
@@ -752,15 +850,7 @@ function updateFleet(trips) {
 
                     <strong>
 
-                        ${
-                            trip.last_location_update
-
-                            ? new Date(
-                                trip.last_location_update
-                              ).toLocaleTimeString()
-
-                            : "--"
-                        }
+                        ${updateLabel}
 
                     </strong>
 
@@ -845,6 +935,7 @@ function updateFleet(trips) {
         );
 
     });
+
 }
 /* ==========================================================
    CLEANUP ADMIN LIVE TRACKING
@@ -892,6 +983,8 @@ export function cleanupFleetTracking() {
     ====================================================== */
 
     clearFleetMarkers();
+    lastServerUpdates.clear();
+    lastDisplayTimes.clear();
 
 
     /* ======================================================

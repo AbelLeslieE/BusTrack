@@ -66,6 +66,11 @@ class LiveLocationResponse(BaseModel):
     recorded_at: datetime
 
 
+
+# ==========================================================
+# LIVE TRIP RESPONSE
+# ==========================================================
+
 # ==========================================================
 # LIVE TRIP RESPONSE
 # ==========================================================
@@ -81,6 +86,13 @@ class LiveTripResponse(BaseModel):
     bus_id: int
 
     route_id: int
+
+    # Human-readable information
+    bus_number: str
+
+    route_name: str
+
+    route_code: str | None = None
 
     status: str
 
