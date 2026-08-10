@@ -66,40 +66,52 @@ export function createSidebar(activeRoute, onNavigate) {
 
   sidebar.addEventListener("click", (event) => {
 
-      const logout = event.target.closest("[data-action='logout']");
+    const logout = event.target.closest("[data-action='logout']");
 
-      if (logout) {
+    if (logout) {
 
-          event.preventDefault();
+        event.preventDefault();
 
-          localStorage.clear();
+        localStorage.clear();
 
-          window.location.href = "/";
+        window.location.href = "/";
 
-          return;
+        return;
 
-      }
+    }
 
-      const link = event.target.closest("[data-route]");
+    const link = event.target.closest("[data-route]");
 
-      if (!link) return;
+    if (!link) return;
 
-      event.preventDefault();
+    event.preventDefault();
 
-      onNavigate(link.dataset.route);
+    // ==========================================================
+    // CLOSE MOBILE SIDEBAR BEFORE NAVIGATION
+    // ==========================================================
+    // The drawer must be closed before the router starts loading
+    // the next module. This prevents the navigation event from
+    // interfering with the sidebar state on mobile devices.
 
-      // Close drawer only on tablet/mobile
-      if (window.innerWidth <= 1200) {
+    if (window.innerWidth <= 1200) {
 
-          document
-              .querySelector(".app-shell")
-              ?.classList.remove("sidebar-open");
+        const appShell = document.querySelector(".app-shell");
 
-      }
+        if (appShell) {
 
+            appShell.classList.remove("sidebar-open");
 
+        }
 
-  });
+    }
+
+    // ==========================================================
+    // NAVIGATE TO SELECTED MODULE
+    // ==========================================================
+
+    onNavigate(link.dataset.route);
+
+});
   return sidebar;
 }
 
