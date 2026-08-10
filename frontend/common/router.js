@@ -190,14 +190,47 @@ function createShell(initialRoute) {
     appShell.className = "app-shell";
   const navigate = (route) => {
 
+    // ==========================================================
+    // CLOSE SIDEBAR IMMEDIATELY WHEN A MODULE IS SELECTED
+    // ==========================================================
+
+    if (window.innerWidth <= 1200) {
+
         appShell.classList.remove("sidebar-open");
 
-        if (window.location.hash.slice(1) === route)
-            loadModule(route);
-        else
-            window.location.hash = route;
+    }
 
-    };
+    // ----------------------------------------------------------
+    // Continue normal navigation
+    // ----------------------------------------------------------
+
+    if (window.location.hash.slice(1) === route) {
+
+        loadModule(route);
+
+    } else {
+
+        window.location.hash = route;
+
+    }
+
+    // ==========================================================
+    // SAFETY CLOSE
+    // ==========================================================
+    // Prevent the sidebar's click/toggle handler from reopening
+    // it after the module click has bubbled through the DOM.
+
+    if (window.innerWidth <= 1200) {
+
+        setTimeout(() => {
+
+            appShell.classList.remove("sidebar-open");
+
+        }, 0);
+
+    }
+
+};
   const sidebar = isDriver
       ? createDriverSidebar(initialRoute, navigate)
       : createSidebar(initialRoute, navigate);
