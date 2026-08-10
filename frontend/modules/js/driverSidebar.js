@@ -100,6 +100,10 @@ export function createDriverSidebar(activeRoute, onNavigate) {
 
     sidebar.addEventListener("click", (event) => {
 
+        // ==========================================================
+        // LOGOUT
+        // ==========================================================
+
         const logout = event.target.closest("[data-action='logout']");
 
         if (logout) {
@@ -114,21 +118,40 @@ export function createDriverSidebar(activeRoute, onNavigate) {
 
         }
 
+        // ==========================================================
+        // MODULE NAVIGATION
+        // ==========================================================
+
         const link = event.target.closest("[data-route]");
 
         if (!link) return;
 
         event.preventDefault();
 
-        onNavigate(link.dataset.route);
+        // ==========================================================
+        // CLOSE MOBILE / TABLET SIDEBAR FIRST
+        // ==========================================================
+        // The sidebar must close BEFORE navigation begins.
+        // This prevents the drawer from remaining open while the
+        // SPA changes the active module.
 
         if (window.innerWidth <= 1200) {
 
-            document
-                .querySelector(".app-shell")
-                ?.classList.remove("sidebar-open");
+            const appShell = document.querySelector(".app-shell");
+
+            if (appShell) {
+
+                appShell.classList.remove("sidebar-open");
+
+            }
 
         }
+
+        // ==========================================================
+        // NAVIGATE TO SELECTED MODULE
+        // ==========================================================
+
+        onNavigate(link.dataset.route);
 
     });
 

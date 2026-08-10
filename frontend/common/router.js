@@ -190,47 +190,49 @@ function createShell(initialRoute) {
     appShell.className = "app-shell";
   const navigate = (route) => {
 
-    // ==========================================================
-    // CLOSE SIDEBAR IMMEDIATELY WHEN A MODULE IS SELECTED
-    // ==========================================================
+        // ==========================================================
+        // CLOSE SIDEBAR ON MOBILE / TABLET
+        // ==========================================================
 
-    if (window.innerWidth <= 1200) {
-
-        appShell.classList.remove("sidebar-open");
-
-    }
-
-    // ----------------------------------------------------------
-    // Continue normal navigation
-    // ----------------------------------------------------------
-
-    if (window.location.hash.slice(1) === route) {
-
-        loadModule(route);
-
-    } else {
-
-        window.location.hash = route;
-
-    }
-
-    // ==========================================================
-    // SAFETY CLOSE
-    // ==========================================================
-    // Prevent the sidebar's click/toggle handler from reopening
-    // it after the module click has bubbled through the DOM.
-
-    if (window.innerWidth <= 1200) {
-
-        setTimeout(() => {
+        if (window.innerWidth <= 1200) {
 
             appShell.classList.remove("sidebar-open");
 
-        }, 0);
+        }
 
-    }
+        // ==========================================================
+        // NAVIGATE TO REQUESTED MODULE
+        // ==========================================================
 
-};
+        if (window.location.hash.slice(1) === route) {
+
+            loadModule(route);
+
+        } else {
+
+            window.location.hash = route;
+
+        }
+
+        // ==========================================================
+        // FINAL SAFETY CLOSE
+        // ==========================================================
+        // Ensures the drawer stays closed after the current browser
+        // event cycle has completed.
+
+        if (window.innerWidth <= 1200) {
+
+            requestAnimationFrame(() => {
+
+                appShell.classList.remove("sidebar-open");
+
+            });
+
+        }
+
+    };
+
+
   const sidebar = isDriver
       ? createDriverSidebar(initialRoute, navigate)
       : createSidebar(initialRoute, navigate);
