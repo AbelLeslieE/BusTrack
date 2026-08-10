@@ -24,6 +24,7 @@
     padding:28px;
 
     overflow-y:auto;
+
     overflow-x:hidden;
 
     border-radius:30px;
@@ -31,6 +32,7 @@
     background:transparent;
 
     backdrop-filter:blur(28px);
+
     -webkit-backdrop-filter:blur(28px);
 
     border:1px solid rgba(255,255,255,.14);
@@ -42,6 +44,125 @@
     transition:.35s;
 
     scrollbar-width:none;
+
+    /*
+        Required so the ambient glow remains contained
+        relative to the sidebar.
+    */
+    isolation:isolate;
+
+}
+/* ==========================================================
+   SIDEBAR MOBILE HEADER
+========================================================== */
+
+.sidebar-mobile-header{
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:space-between;
+
+    gap:14px;
+
+}
+
+
+/*
+    On desktop the header behaves exactly like the old
+    sidebar brand area.
+*/
+.sidebar-mobile-header .brand{
+
+    flex:1;
+
+    min-width:0;
+
+}
+/* ==========================================================
+   SIDEBAR CLOSE BUTTON
+========================================================== */
+
+.sidebar-close{
+
+    display:none;
+
+    width:44px;
+
+    height:44px;
+
+    flex-shrink:0;
+
+    align-items:center;
+
+    justify-content:center;
+
+    padding:0;
+
+    border-radius:14px;
+
+    border:1px solid
+        rgba(255,255,255,.12);
+
+    background:
+        rgba(255,255,255,.06);
+
+    color:white;
+
+    cursor:pointer;
+
+    transition:
+        background .25s ease,
+        border-color .25s ease,
+        transform .2s ease,
+        box-shadow .25s ease;
+
+}
+
+
+/* ==========================================================
+   LUCIDE X
+========================================================== */
+
+.sidebar-close svg{
+
+    width:21px;
+
+    height:21px;
+
+    stroke-width:2;
+
+}
+
+
+/* ==========================================================
+   HOVER
+========================================================== */
+
+.sidebar-close:hover{
+
+    background:
+        rgba(255,255,255,.12);
+
+    border-color:
+        rgba(79,209,255,.45);
+
+    box-shadow:
+        0 0 18px
+        rgba(79,209,255,.12);
+
+}
+
+
+/* ==========================================================
+   ACTIVE / PRESS
+========================================================== */
+
+.sidebar-close:active{
+
+    transform:
+        scale(.90);
 
 }
 
@@ -292,7 +413,15 @@
     box-shadow:
         0 8px 20px rgba(79,209,255,.08);
 }
+@media (max-width:1200px){
 
+    .nav-item:hover{
+
+        transform:none;
+
+    }
+
+}
 /* ==========================================================
    ACTIVE ITEM
 ========================================================== */
@@ -505,5 +634,203 @@
     background:rgba(255,75,75,.18);
 
     color:#fff;
+
+}
+/* ==========================================================
+   MOBILE SIDEBAR
+========================================================== */
+
+@media (max-width:1200px){
+
+    /* ======================================================
+       SIDEBAR DRAWER
+    ====================================================== */
+
+    .sidebar{
+
+        position:fixed;
+
+        top:16px;
+
+        left:16px;
+
+        bottom:16px;
+
+        width:
+            min(
+                320px,
+                calc(100vw - 32px)
+            );
+
+        height:auto;
+
+        max-height:
+            calc(100dvh - 32px);
+
+        z-index:1000;
+
+        padding:22px;
+
+        transform:
+            translateX(
+                calc(-100% - 32px)
+            );
+
+        transition:
+            transform .32s
+            cubic-bezier(
+                .4,
+                0,
+                .2,
+                1
+            );
+
+    }
+
+
+    /* ======================================================
+       OPEN DRAWER
+    ====================================================== */
+
+    .app-shell.sidebar-open .sidebar{
+
+        transform:
+            translateX(0);
+
+    }
+
+
+    /* ======================================================
+       SHOW LUCIDE CLOSE BUTTON
+    ====================================================== */
+
+    .sidebar-close{
+
+        display:flex;
+
+    }
+
+
+    /* ======================================================
+       MOBILE HEADER
+    ====================================================== */
+
+    .sidebar-mobile-header{
+
+        position:sticky;
+
+        top:0;
+
+        z-index:10;
+
+        padding-bottom:18px;
+
+        margin-bottom:4px;
+
+        background:
+            transparent;
+
+    }
+
+
+    /* ======================================================
+       MOBILE BRAND
+    ====================================================== */
+
+    .sidebar-mobile-header .brand{
+
+        margin-bottom:0;
+
+    }
+
+
+    .sidebar-mobile-header .brand-mark{
+
+        width:52px;
+
+        height:52px;
+
+        flex-shrink:0;
+
+    }
+
+
+    .sidebar-mobile-header .brand-title{
+
+        font-size:1.15rem;
+
+    }
+
+
+    /* ======================================================
+       MOBILE NAV ITEMS
+    ====================================================== */
+
+    .nav-item{
+
+        min-height:58px;
+
+        padding:0 16px;
+
+    }
+
+
+    /* ======================================================
+       MOBILE ICON
+    ====================================================== */
+
+    .nav-icon{
+
+        width:40px;
+
+        height:40px;
+
+        flex-shrink:0;
+
+    }
+
+}
+/* ==========================================================
+   MOBILE SIDEBAR OVERLAY
+========================================================== */
+
+@media (max-width:1200px){
+
+    .app-shell::before{
+
+        content:"";
+
+        position:fixed;
+
+        inset:0;
+
+        z-index:900;
+
+        background:
+            rgba(2,8,23,.64);
+
+        backdrop-filter:
+            blur(4px);
+
+        -webkit-backdrop-filter:
+            blur(4px);
+
+        opacity:0;
+
+        pointer-events:none;
+
+        transition:
+            opacity .32s ease;
+
+    }
+
+
+    .app-shell.sidebar-open::before{
+
+        opacity:1;
+
+        pointer-events:auto;
+
+    }
 
 }

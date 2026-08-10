@@ -214,3 +214,79 @@
         0 0 25px rgba(73,183,255,.45);
 
 }
+/* ==========================================================
+   CUSTOM BUS MARKER
+========================================================== */
+
+/*
+    Remove Leaflet's default marker background/border.
+
+    The actual bus design is created with our SVG inside
+    .bus-marker-visual.
+*/
+.bus-marker{
+
+    background:transparent;
+
+    border:none;
+
+}
+
+
+/* ==========================================================
+   PREMIUM BUS MARKER
+========================================================== */
+
+.bus-marker{
+
+    background:transparent;
+
+    border:none;
+
+}
+
+
+/* ==========================================================
+   BUS VISUAL
+========================================================== */
+
+.bus-marker-visual{
+
+    width:54px;
+
+    height:74px;
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    transform-origin:center center;
+
+    pointer-events:none;
+
+    filter:
+        drop-shadow(
+            0 4px 5px
+            rgba(0,0,0,.35)
+        );
+
+}
+
+
+/* ==========================================================
+   BUS SVG
+========================================================== */
+
+.bus-marker-icon{
+
+    width:54px;
+
+    height:74px;
+
+    display:block;
+
+    overflow:visible;
+
+}

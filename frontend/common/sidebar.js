@@ -26,93 +26,300 @@ function navigationItem([route, label, icon], activeRoute) {
 }
 
 export function createSidebar(activeRoute, onNavigate) {
-  const sidebar = document.createElement("aside");
-  sidebar.className = "sidebar glass-panel";
-  sidebar.setAttribute("aria-label", "Primary navigation");
-  sidebar.innerHTML = `
-    <a class="brand" href="#dashboard">
-        <span class="brand-mark">🚌</span>
 
-        <div class="brand-text">
-            <span class="brand-title">BusTrack</span>
-            <span class="brand-subtitle">Fleet OS</span>
+    const sidebar = document.createElement("aside");
+
+    sidebar.className = "sidebar glass-panel";
+
+    sidebar.setAttribute(
+        "aria-label",
+        "Primary navigation"
+    );
+
+
+    /* ==========================================================
+       SIDEBAR HTML
+    ========================================================== */
+
+    sidebar.innerHTML = `
+
+        <!-- ==============================================
+             SIDEBAR MOBILE HEADER
+        =============================================== -->
+
+        <div class="sidebar-mobile-header">
+
+            <a
+                class="brand"
+                href="#dashboard">
+
+                <span class="brand-mark">
+                    🚌
+                </span>
+
+                <div class="brand-text">
+
+                    <span class="brand-title">
+                        BusTrack
+                    </span>
+
+                    <span class="brand-subtitle">
+                        Fleet OS
+                    </span>
+
+                </div>
+
+            </a>
+
+
+            <!-- ==========================================
+                 MOBILE CLOSE BUTTON
+            =========================================== -->
+
+            <button
+                type="button"
+                class="sidebar-close"
+                aria-label="Close navigation"
+                title="Close navigation">
+
+                <i
+                    data-lucide="x"
+                    aria-hidden="true">
+                </i>
+
+            </button>
+
         </div>
-    </a>
-    <nav class="sidebar-nav">
-      <p class="nav-label">Workspace</p>
-      ${primaryItems.map((item) => navigationItem(item, activeRoute)).join("")}
-      <p class="nav-label nav-label-spaced">Management</p>
-      ${managementItems.map((item) => navigationItem(item, activeRoute)).join("")}
-    </nav>
-    <div class="sidebar-footer">
 
-        <a class="nav-item" href="#settings" data-route="settings">
-            <span class="nav-icon">⚙</span>
-            <span>Settings</span>
-        </a>
 
-        <a class="nav-item logout-btn" href="#" data-action="logout">
-            <span class="nav-icon">⇦</span>
-            <span>Logout</span>
-        </a>
+        <!-- ==============================================
+             NAVIGATION
+        =============================================== -->
 
-        <div class="help-card">
-            <span>Need help?</span>
-            <small>View the fleet guide</small>
+        <nav class="sidebar-nav">
+
+            <p class="nav-label">
+                Workspace
+            </p>
+
+            ${primaryItems
+                .map((item) =>
+                    navigationItem(
+                        item,
+                        activeRoute
+                    )
+                )
+                .join("")}
+
+
+            <p class="nav-label nav-label-spaced">
+                Management
+            </p>
+
+            ${managementItems
+                .map((item) =>
+                    navigationItem(
+                        item,
+                        activeRoute
+                    )
+                )
+                .join("")}
+
+        </nav>
+
+
+        <!-- ==============================================
+             SIDEBAR FOOTER
+        =============================================== -->
+
+        <div class="sidebar-footer">
+
+            <a
+                class="nav-item"
+                href="#settings"
+                data-route="settings">
+
+                <span
+                    class="nav-icon"
+                    aria-hidden="true">
+
+                    ⚙
+
+                </span>
+
+                <span>
+                    Settings
+                </span>
+
+            </a>
+
+
+            <a
+                class="nav-item logout-btn"
+                href="#"
+                data-action="logout">
+
+                <span
+                    class="nav-icon"
+                    aria-hidden="true">
+
+                    ⇦
+
+                </span>
+
+                <span>
+                    Logout
+                </span>
+
+            </a>
+
+
+            <div class="help-card">
+
+                <span>
+                    Need help?
+                </span>
+
+                <small>
+                    View the fleet guide
+                </small>
+
+            </div>
+
         </div>
 
-    </div>
     `;
 
-  sidebar.addEventListener("click", (event) => {
 
-    const logout = event.target.closest("[data-action='logout']");
+    /* ==========================================================
+       CREATE LUCIDE ICONS
+    ========================================================== */
 
-    if (logout) {
 
-        event.preventDefault();
 
-        localStorage.clear();
 
-        window.location.href = "/";
+    /* ==========================================================
+       SIDEBAR CLICK HANDLER
+    ========================================================== */
 
-        return;
+    sidebar.addEventListener(
+        "click",
+        (event) => {
 
-    }
 
-    const link = event.target.closest("[data-route]");
+            /* ==============================================
+               MOBILE CLOSE BUTTON
+            =============================================== */
 
-    if (!link) return;
+            const closeButton =
+                event.target.closest(
+                    ".sidebar-close"
+                );
 
-    event.preventDefault();
 
-    // ==========================================================
-    // CLOSE MOBILE SIDEBAR BEFORE NAVIGATION
-    // ==========================================================
-    // The drawer must be closed before the router starts loading
-    // the next module. This prevents the navigation event from
-    // interfering with the sidebar state on mobile devices.
+            if (closeButton) {
 
-    if (window.innerWidth <= 1200) {
+                event.preventDefault();
 
-        const appShell = document.querySelector(".app-shell");
 
-        if (appShell) {
+                const appShell =
+                    document.querySelector(
+                        ".app-shell"
+                    );
 
-            appShell.classList.remove("sidebar-open");
+
+                if (appShell) {
+
+                    appShell.classList.remove(
+                        "sidebar-open"
+                    );
+
+                }
+
+
+                return;
+
+            }
+
+
+            /* ==============================================
+               LOGOUT
+            =============================================== */
+
+            const logout =
+                event.target.closest(
+                    "[data-action='logout']"
+                );
+
+
+            if (logout) {
+
+                event.preventDefault();
+
+                localStorage.clear();
+
+                window.location.href = "/";
+
+                return;
+
+            }
+
+
+            /* ==============================================
+               NAVIGATION
+            =============================================== */
+
+            const link =
+                event.target.closest(
+                    "[data-route]"
+                );
+
+
+            if (!link) return;
+
+            event.preventDefault();
+
+
+            /* ==============================================
+               CLOSE MOBILE SIDEBAR
+               BEFORE NAVIGATION
+            =============================================== */
+
+            if (
+                window.innerWidth <= 1200
+            ) {
+
+                const appShell =
+                    document.querySelector(
+                        ".app-shell"
+                    );
+
+
+                if (appShell) {
+
+                    appShell.classList.remove(
+                        "sidebar-open"
+                    );
+
+                }
+
+            }
+
+
+            /* ==============================================
+               NAVIGATE
+            =============================================== */
+
+            onNavigate(
+                link.dataset.route
+            );
 
         }
+    );
 
-    }
 
-    // ==========================================================
-    // NAVIGATE TO SELECTED MODULE
-    // ==========================================================
+    return sidebar;
 
-    onNavigate(link.dataset.route);
-
-});
-  return sidebar;
 }
 
 export function setSidebarActive(sidebar, activeRoute) {

@@ -272,8 +272,42 @@ function createShell(initialRoute) {
         sidebar,
         workspace
     );
-  root.replaceChildren(appShell);
-  return { appShell, sidebar, topbar, content };
+  /* ==========================================================
+   ATTACH APPLICATION SHELL
+========================================================== */
+
+root.replaceChildren(appShell);
+
+
+/* ==========================================================
+   INITIALIZE LUCIDE ICONS
+========================================================== */
+
+/*
+    The sidebar contains dynamically-created Lucide icons.
+
+    createSidebar() runs before the sidebar is attached to
+    #app, so Lucide must be initialized AFTER appShell has
+    been inserted into the document.
+*/
+
+if (window.lucide) {
+
+    window.lucide.createIcons();    
+
+}
+
+
+/* ==========================================================
+   RETURN SHELL REFERENCES
+========================================================== */
+
+return {
+    appShell,
+    sidebar,
+    topbar,
+    content
+};
 }
 
 export async function loadModule(requestedRoute) {
