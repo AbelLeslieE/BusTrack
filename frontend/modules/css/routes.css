@@ -2327,9 +2327,6 @@ input,
     color:var(--text);
 
 }
-/* ==========================================================================
-   ACTIONS
-========================================================================== */
 
 .route-stop-actions{
 
@@ -2339,139 +2336,247 @@ input,
 
 }
 /* ==========================================================================
-   ACTION BUTTON
+   ROUTE STOP ACTION BUTTONS
 ========================================================================== */
 
-/* ==========================================================================
-   PREMIUM ACTION BUTTON
-========================================================================== */
+/* ----------------------------------------------------------
+   BASE BUTTON
+---------------------------------------------------------- */
 
 .stop-action-btn{
 
-    width:46px;
+    width:42px;
 
-    height:46px;
+    height:42px;
 
-    display:flex;
-
-    justify-content:center;
+    display:inline-flex;
 
     align-items:center;
 
+    justify-content:center;
+
+    flex-shrink:0;
+
+    padding:0;
+
+    margin:0;
+
+    border-radius:13px;
+
+    border:1px solid rgba(255,255,255,.09);
+
+    outline:none;
+
     cursor:pointer;
 
-    border-radius:14px;
+    appearance:none;
 
-    background:rgba(255,255,255,.03);
+    -webkit-appearance:none;
 
-    backdrop-filter:blur(18px);
+    background:
 
-    transition:all .28s ease;
+        linear-gradient(
+            145deg,
+            rgba(255,255,255,.075),
+            rgba(255,255,255,.025)
+        );
 
-    border:1px solid rgba(255,255,255,.08);
+    color:#DCEBFF;
 
-    color:#DDEBFF;
+    backdrop-filter:blur(16px);
+
+    -webkit-backdrop-filter:blur(16px);
 
     box-shadow:
 
-        inset 0 1px 0 rgba(255,255,255,.05),
+        inset 0 1px 0 rgba(255,255,255,.06),
 
-        0 10px 18px rgba(0,0,0,.18);
+        0 8px 18px rgba(0,0,0,.20);
+
+    transition:
+
+        transform .25s ease,
+
+        color .25s ease,
+
+        background .25s ease,
+
+        border-color .25s ease,
+
+        box-shadow .25s ease;
 
 }
+
+
+/* ----------------------------------------------------------
+   FONT AWESOME ICON
+---------------------------------------------------------- */
 
 .stop-action-btn i{
 
-    font-size:17px;
+    display:inline-block;
+
+    width:1em;
+
+    height:1em;
+
+    margin:0;
+
+    padding:0;
+
+    font-size:16px;
+
+    line-height:1;
+
+    font-style:normal;
+
+    font-weight:900;
+
+    font-family:"Font Awesome 6 Free";
+
+    text-rendering:auto;
+
+    -webkit-font-smoothing:antialiased;
 
 }
+
+
+/* ----------------------------------------------------------
+   HOVER
+---------------------------------------------------------- */
 
 .stop-action-btn:hover{
 
-    transform:translateY(-3px);
+    transform:translateY(-3px) scale(1.04);
 
 }
 
 
- 
-/* ==========================================================================
-   BUTTON COLORS
-========================================================================== */
-/* ==========================================================================
-   MOVE UP
-========================================================================== */
+/* ----------------------------------------------------------
+   CLICK
+---------------------------------------------------------- */
 
-.move-up{
+.stop-action-btn:active{
+
+    transform:scale(.94);
+
+}
+
+
+/* ----------------------------------------------------------
+   MOVE UP
+---------------------------------------------------------- */
+
+.stop-action-btn.move-up{
 
     color:#4FD1FF;
 
-    border:1px solid rgba(79,209,255,.35);
+    border-color:rgba(79,209,255,.30);
 
 }
 
-.move-up:hover{
+.stop-action-btn.move-up:hover{
 
-    color:#fff;
+    color:#FFFFFF;
 
     background:rgba(79,209,255,.12);
 
-    border-color:#4FD1FF;
+    border-color:rgba(79,209,255,.70);
 
     box-shadow:
 
-        0 0 18px rgba(79,209,255,.25);
+        0 0 18px rgba(79,209,255,.25),
+
+        0 10px 22px rgba(0,0,0,.25);
 
 }
 
-/* ==========================================================================
+
+/* ----------------------------------------------------------
    MOVE DOWN
-========================================================================== */
+---------------------------------------------------------- */
 
-.move-down{
+.stop-action-btn.move-down{
 
-    color:#7C5CFF;
+    color:#A78BFA;
 
-    border:1px solid rgba(124,92,255,.35);
+    border-color:rgba(167,139,250,.30);
 
 }
 
-.move-down:hover{
+.stop-action-btn.move-down:hover{
 
-    color:#fff;
+    color:#FFFFFF;
 
-    background:rgba(124,92,255,.14);
+    background:rgba(167,139,250,.12);
 
-    border-color:#7C5CFF;
+    border-color:rgba(167,139,250,.70);
 
     box-shadow:
 
-        0 0 18px rgba(124,92,255,.25);
+        0 0 18px rgba(167,139,250,.25),
+
+        0 10px 22px rgba(0,0,0,.25);
 
 }
 
-/* ==========================================================================
-   DELETE
-========================================================================== */
 
-.remove-stop{
+/* ----------------------------------------------------------
+   REMOVE STOP
+---------------------------------------------------------- */
 
-    color:#FF6B81;
+.stop-action-btn.remove-stop{
 
-    border:1px solid rgba(255,107,129,.35);
+    color:#FB7185;
+
+    border-color:rgba(251,113,133,.30);
 
 }
 
-.remove-stop:hover{
+.stop-action-btn.remove-stop:hover{
 
-    color:#fff;
+    color:#FFFFFF;
 
-    background:rgba(255,107,129,.14);
+    background:rgba(251,113,133,.12);
 
-    border-color:#FF6B81;
+    border-color:rgba(251,113,133,.70);
 
     box-shadow:
 
-        0 0 18px rgba(255,107,129,.22);
+        0 0 18px rgba(251,113,133,.25),
+
+        0 10px 22px rgba(0,0,0,.25);
+
+}
+
+
+/* ----------------------------------------------------------
+   MOBILE
+---------------------------------------------------------- */
+
+@media(max-width:600px){
+
+    .route-stop-actions{
+
+        gap:8px;
+
+    }
+
+    .stop-action-btn{
+
+        width:40px;
+
+        height:40px;
+
+        border-radius:12px;
+
+    }
+
+    .stop-action-btn i{
+
+        font-size:15px;
+
+    }
 
 }
 /* ==========================================================

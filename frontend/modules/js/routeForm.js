@@ -470,9 +470,15 @@ function initializeRouteBuilder() {
 
 function renderSelectedStops() {
 
-    const container = document.getElementById("route-stop-list");
+    const container =
+        document.getElementById("route-stop-list");
 
     if (!container) return;
+
+
+    /* ==========================================================
+       EMPTY STATE
+    ========================================================== */
 
     if (selectedStops.length === 0) {
 
@@ -490,61 +496,108 @@ function renderSelectedStops() {
 
     }
 
-    container.innerHTML = selectedStops.map((stop, index) => `
 
-        <div class="route-stop-card">
+    /* ==========================================================
+       RENDER SELECTED STOPS
+    ========================================================== */
 
-            <div class="route-stop-left">
+    container.innerHTML = selectedStops.map(
+        (stop, index) => `
 
-                <div class="route-stop-number">
+            <div class="route-stop-card">
 
-                    ${index + 1}
+                <div class="route-stop-left">
 
-                </div>
+                    <div class="route-stop-number">
 
-                <div class="route-stop-details">
+                        ${index + 1}
 
-                    <div class="route-stop-title">
+                    </div>
 
-                        ${stop.stop_name}
+
+                    <div class="route-stop-details">
+
+                        <div class="route-stop-title">
+
+                            ${stop.stop_name}
+
+                        </div>
 
                     </div>
 
                 </div>
 
+
+                <!-- ==========================================
+                     ROUTE STOP ACTIONS
+                =========================================== -->
+
+                <div class="route-stop-actions">
+
+                    <!-- MOVE UP -->
+
+                    <button
+                        type="button"
+                        class="stop-action-btn move-up"
+                        data-index="${index}"
+                        title="Move Up"
+                        aria-label="Move stop up"
+                    >
+
+                        <i
+                            class="fa-solid fa-chevron-up"
+                            aria-hidden="true"
+                        ></i>
+
+                    </button>
+
+
+                    <!-- MOVE DOWN -->
+
+                    <button
+                        type="button"
+                        class="stop-action-btn move-down"
+                        data-index="${index}"
+                        title="Move Down"
+                        aria-label="Move stop down"
+                    >
+
+                        <i
+                            class="fa-solid fa-chevron-down"
+                            aria-hidden="true"
+                        ></i>
+
+                    </button>
+
+
+                    <!-- REMOVE -->
+
+                    <button
+                        type="button"
+                        class="stop-action-btn remove-stop"
+                        data-index="${index}"
+                        title="Remove Stop"
+                        aria-label="Remove stop"
+                    >
+
+                        <i
+                            class="fa-solid fa-trash"
+                            aria-hidden="true"
+                        ></i>
+
+                    </button>
+
+                </div>
+
             </div>
 
-            <div class="route-stop-actions">
+        `
+    ).join("");
 
-                <button
-                    class="stop-action-btn move-up"
-                    data-index="${index}"
-                    title="Move Up"
-                >
-                    <i data-lucide="chevron-up"></i>
-                </button>
 
-                <button
-                    class="stop-action-btn move-down"
-                    data-index="${index}"
-                    title="Move Down"
-                >
-                    <i data-lucide="chevron-down"></i>
-                </button>
-
-                <button
-                    class="stop-action-btn remove-stop"
-                    data-index="${index}"
-                    title="Remove Stop"
-                >
-                    <i data-lucide="trash-2"></i>
-                </button>
-
-            </div>
-
-        </div>
-
-    `).join("");
+    /* ==========================================================
+       BIND BUTTON EVENTS
+    ========================================================== */
 
     bindRouteStopEvents();
 

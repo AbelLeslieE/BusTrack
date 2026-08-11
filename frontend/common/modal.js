@@ -39,7 +39,35 @@ const modalState = {
     onClose: null
 
 };
+/* ==========================================================================
+   LUCIDE ICONS
+========================================================================== */
 
+/**
+ * Initialize Lucide icons inside a specific modal container.
+ *
+ * The modal content is dynamically created, so icons must be
+ * initialized after the HTML has been inserted into the DOM.
+ */
+function initializeLucideIcons(container){
+
+    if(!window.lucide){
+
+        console.warn(
+            "BusTrack: Lucide library is not available."
+        );
+
+        return;
+
+    }
+
+    window.lucide.createIcons({
+
+        root: container
+
+    });
+
+}
 /* ==========================================================================
    EVENT BINDINGS
 ========================================================================== */
@@ -117,9 +145,13 @@ function createModalHTML(){
                     <button
                         class="modal-close"
                         type="button"
-                        aria-label="Close Modal">
+                        aria-label="Close Modal"
+                        title="Close Modal">
 
-                        ✕
+                        <i
+                            data-lucide="x"
+                            aria-hidden="true">
+                        </i>
 
                     </button>
 
@@ -197,6 +229,16 @@ function initialize(){
         modalState.overlay.querySelector(".modal-actions");
 
     modalState.initialized = true;
+
+
+    /* ==========================================================
+    INITIALIZE MODAL ICONS
+    ========================================================== */
+
+    initializeLucideIcons(
+        modalState.overlay
+    );
+
 
     bindEvents();
 
@@ -292,7 +334,13 @@ function open(options = {}){
         modalState.body.innerHTML = content;
 
     }
+    /* ==========================================================
+    INITIALIZE CONTENT ICONS
+    ========================================================== */
 
+    initializeLucideIcons(
+        modalState.body
+    );
     /* -----------------------------
     Footer
     ------------------------------ */
