@@ -9,6 +9,10 @@ import { createDropdown } from "/static/common/dropdown.js";
    CREATE FORM
 ========================================================================== */
 
+/* ==========================================================================
+   CREATE FORM
+========================================================================== */
+
 export async function createUserForm(user = {}) {
 
     const wrapper = document.createElement("div");
@@ -25,7 +29,10 @@ export async function createUserForm(user = {}) {
 
         ${renderDriverInformation(user)}
 
+        ${renderStudentInformation(user)}
+
     `;
+
     await initializeDropdowns(wrapper, user);
 
     return wrapper;
@@ -286,6 +293,49 @@ function renderDriverInformation(user) {
 
 }
 /* ==========================================================================
+   STUDENT INFORMATION
+========================================================================== */
+
+function renderStudentInformation(user) {
+
+    return `
+
+        <section
+            id="student_information_section"
+            class="modal-section"
+            style="display:none;"
+        >
+
+            <h3 class="modal-section-title">
+
+                Student Information
+
+            </h3>
+
+            <div class="modal-grid">
+
+                ${createInput({
+
+                    id: "student_code",
+
+                    label: "Student Code",
+
+                    value: user.student_code || "",
+
+                    placeholder: "STU001",
+
+                    required: true
+
+                })}
+
+            </div>
+
+        </section>
+
+    `;
+
+}
+/* ==========================================================================
    FORM COMPONENTS
 ========================================================================== */
 
@@ -490,33 +540,73 @@ async function initializeDropdowns(wrapper, user) {
                 })
 
             );
-        /* ----------------------------------------------------------
-        Driver Section Visibility
-        ---------------------------------------------------------- */
+                /* ----------------------------------------------------------
+                Role-Based Information Section Visibility
+                ---------------------------------------------------------- */
 
-        const roleDropdown = wrapper.querySelector("#role");
+                const roleDropdown =
+                    wrapper.querySelector("#role");
 
-        const driverSection = wrapper.querySelector(
-            "#driver_information_section"
-        );
+                const driverSection =
+                    wrapper.querySelector(
+                        "#driver_information_section"
+                    );
 
-        function toggleDriverSection() {
+                const studentSection =
+                    wrapper.querySelector(
+                        "#student_information_section"
+                    );
 
-            if (!driverSection) return;
 
-            driverSection.style.display =
-                roleDropdown.getValue() === "Driver"
-                    ? ""
-                    : "none";
+                function toggleRoleInformationSections() {
 
-        }
+                    if (!roleDropdown) return;
 
-        roleDropdown.addEventListener(
-            "change",
-            toggleDriverSection
-        );
+                    const role =
+                        roleDropdown.getValue();
 
-        toggleDriverSection();
+
+                    /* ------------------------------------------------------
+                    DRIVER
+                    ------------------------------------------------------ */
+
+                    if (driverSection) {
+
+                        driverSection.style.display =
+                            role === "Driver"
+                                ? ""
+                                : "none";
+
+                    }
+
+
+                    /* ------------------------------------------------------
+                    STUDENT
+                    ------------------------------------------------------ */
+
+                    if (studentSection) {
+
+                        studentSection.style.display =
+                            role === "Student"
+                                ? ""
+                                : "none";
+
+                    }
+
+                }
+
+
+                roleDropdown.addEventListener(
+                    "change",
+                    toggleRoleInformationSections
+                );
+
+
+                /* ----------------------------------------------------------
+                Apply initial state
+                ---------------------------------------------------------- */
+
+                toggleRoleInformationSections();
 
 }
 /* ==========================================================================
@@ -621,6 +711,15 @@ export function getUserFormData() {
         bus_id:
             role === "Driver"
                 ? document.querySelector("#bus_id")?.getValue() || null
+                : null,
+
+        // --------------------------------------------------
+        // Student fields
+        // --------------------------------------------------
+
+        student_code:
+            role === "Student"
+                ? document.querySelector("#student_code")?.value.trim() || null
                 : null
 
     };
@@ -688,6 +787,58 @@ export function validateUserForm() {
 
     }
 
+
+    /* ----------------------------------------------------------
+       Student Validation
+    ---------------------------------------------------------- */
+
+    if (
+        data.role === "Student" &&
+        !data.student_code
+    ) {
+
+        throw new Error(
+
+            "Student Code is required."
+
+        );
+
+    }
+
+
+    /* ----------------------------------------------------------
+       Driver Validation
+    ---------------------------------------------------------- */
+
+    if (data.role === "Driver") {
+
+        if (!data.driver_code) {
+
+            throw new Error(
+                "Driver Code is required."
+            );
+
+        }
+
+        if (!data.license_number) {
+
+            throw new Error(
+                "License Number is required."
+            );
+
+        }
+
+        if (!data.license_expiry) {
+
+            throw new Error(
+                "License Expiry is required."
+            );
+
+        }
+
+    }
+
+
     return data;
 
 }
@@ -699,27 +850,163 @@ export function validateUserForm() {
 /**
  * Reset all form fields.
  */
+/* ==========================================================================
+   RESET FORM
+========================================================================== */
+/* ==========================================================================
+   RESET FORM
+========================================================================== */
+
+/**
+ * Reset all form fields.
+ */
 
 export function resetUserForm() {
 
-    document.querySelector("#full_name").value = "";
+    /* ----------------------------------------------------------
+       Account fields
+    ---------------------------------------------------------- */
 
-    document.querySelector("#username").value = "";
+    const fullName =
+        document.querySelector("#full_name");
 
-    document.querySelector("#password").value = "";
+    const username =
+        document.querySelector("#username");
 
-    document.querySelector("#confirm_password").value = "";
+    const password =
+        document.querySelector("#password");
 
-    document.querySelector("#email").value = "";
+    const confirmPassword =
+        document.querySelector("#confirm_password");
 
-    document.querySelector("#phone").value = "";
+    const email =
+        document.querySelector("#email");
 
-    document
-        .querySelector("#role")
-        .clear();
+    const phone =
+        document.querySelector("#phone");
 
-    document
-        .querySelector("#status")
-        .setValue("Active");
 
-}   
+    if (fullName) {
+        fullName.value = "";
+    }
+
+    if (username) {
+        username.value = "";
+    }
+
+    if (password) {
+        password.value = "";
+    }
+
+    if (confirmPassword) {
+        confirmPassword.value = "";
+    }
+
+    if (email) {
+        email.value = "";
+    }
+
+    if (phone) {
+        phone.value = "";
+    }
+
+
+    /* ----------------------------------------------------------
+       Driver fields
+    ---------------------------------------------------------- */
+
+    const driverCode =
+        document.querySelector("#driver_code");
+
+    const licenseNumber =
+        document.querySelector("#license_number");
+
+    const licenseExpiry =
+        document.querySelector("#license_expiry");
+
+    const address =
+        document.querySelector("#address");
+
+
+    if (driverCode) {
+        driverCode.value = "";
+    }
+
+    if (licenseNumber) {
+        licenseNumber.value = "";
+    }
+
+    if (licenseExpiry) {
+        licenseExpiry.value = "";
+    }
+
+    if (address) {
+        address.value = "";
+    }
+
+
+    /* ----------------------------------------------------------
+       Student fields
+    ---------------------------------------------------------- */
+
+    const studentCode =
+        document.querySelector("#student_code");
+
+
+    if (studentCode) {
+        studentCode.value = "";
+    }
+
+
+    /* ----------------------------------------------------------
+       Role
+    ---------------------------------------------------------- */
+
+    const role =
+        document.querySelector("#role");
+
+    if (role) {
+        role.clear();
+    }
+
+
+    /* ----------------------------------------------------------
+       Status
+    ---------------------------------------------------------- */
+
+    const status =
+        document.querySelector("#status");
+
+    if (status) {
+        status.setValue("Active");
+    }
+
+
+    /* ----------------------------------------------------------
+       Driver information section
+    ---------------------------------------------------------- */
+
+    const driverSection =
+        document.querySelector(
+            "#driver_information_section"
+        );
+
+    if (driverSection) {
+        driverSection.style.display = "none";
+    }
+
+
+    /* ----------------------------------------------------------
+       Student information section
+    ---------------------------------------------------------- */
+
+    const studentSection =
+        document.querySelector(
+            "#student_information_section"
+        );
+
+    if (studentSection) {
+        studentSection.style.display = "none";
+    }
+
+}
