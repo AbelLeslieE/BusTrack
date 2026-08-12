@@ -84,6 +84,7 @@ class UserCreate(BaseModel):
     # --------------------------------------------------
 
     student_code: str | None = None
+    stop_id: int | None = None
 
 class UserUpdate(BaseModel):
     """
@@ -99,6 +100,20 @@ class UserUpdate(BaseModel):
     role: str
 
     status: str
+
+    # --------------------------------------------------
+    # Transport assignment
+    # --------------------------------------------------
+
+    bus_id: int | None = None
+
+    # --------------------------------------------------
+    # Student-only fields
+    # --------------------------------------------------
+
+    student_code: str | None = None
+
+    stop_id: int | None = None
 
 
 class UserListResponse(BaseModel):

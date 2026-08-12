@@ -17,6 +17,9 @@ from backend.models import (
     Driver,
     Bus,
     Student,
+    Stop,
+    Route,
+    RouteStop,
 )
 from backend.schemas import (
     UserCreate,
@@ -358,10 +361,124 @@ async def create_user(
 
 
             # ----------------------------------------------
+            # Validate assigned bus
+            # ----------------------------------------------
+
+            assigned_bus = None
+
+            if user.bus_id is not None:
+
+                assigned_bus = (
+                    db.query(Bus)
+                    .filter(
+                        Bus.id == user.bus_id
+                    )
+                    .first()
+                )
+
+                if assigned_bus is None:
+
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Assigned bus not found.",
+                    )
+
+
+            # ----------------------------------------------
+            # Validate assigned boarding stop
+            # ----------------------------------------------
+
+            if user.stop_id is not None:
+
+                # A boarding stop cannot be assigned
+                # without an assigned bus.
+
+                if assigned_bus is None:
+
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            "A bus must be assigned "
+                            "before selecting a boarding stop."
+                        ),
+                    )
+
+
+                # ------------------------------------------
+                # Check that the stop exists
+                # ------------------------------------------
+
+                assigned_stop = (
+                    db.query(Stop)
+                    .filter(
+                        Stop.id == user.stop_id
+                    )
+                    .first()
+                )
+
+                if assigned_stop is None:
+
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Boarding stop not found.",
+                    )
+
+
+                # ------------------------------------------
+                # Find the route assigned to the bus
+                # ------------------------------------------
+
+                assigned_route = (
+                    db.query(Route)
+                    .filter(
+                        Route.bus_id
+                        == assigned_bus.id
+                    )
+                    .first()
+                )
+
+                if assigned_route is None:
+
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            "The selected bus "
+                            "has no route assigned."
+                        ),
+                    )
+
+
+                # ------------------------------------------
+                # Verify that the stop belongs
+                # to the selected bus route
+                # ------------------------------------------
+
+                route_stop = (
+                    db.query(RouteStop)
+                    .filter(
+                        RouteStop.route_id
+                        == assigned_route.id,
+
+                        RouteStop.stop_id
+                        == assigned_stop.id,
+                    )
+                    .first()
+                )
+
+                if route_stop is None:
+
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            "The selected boarding stop "
+                            "does not belong to the "
+                            "selected bus route."
+                        ),
+                    )
+
+
+            # ----------------------------------------------
             # Create Student profile
-            #
-            # A student does not need a bus or stop
-            # immediately. These can be assigned later.
             # ----------------------------------------------
 
             student = Student(
@@ -370,13 +487,13 @@ async def create_user(
 
                 student_code=user.student_code,
 
-                bus_id=None,
+                bus_id=user.bus_id,
 
-                stop_id=None,
+                stop_id=user.stop_id,
+
             )
 
             db.add(student)
-
 
         # ==================================================
         # COMMIT
@@ -395,7 +512,6 @@ async def create_user(
 
 
     return new_user
-
 
 # ==========================================================
 # GET ALL USERS

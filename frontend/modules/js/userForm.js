@@ -296,6 +296,10 @@ function renderDriverInformation(user) {
    STUDENT INFORMATION
 ========================================================================== */
 
+/* ==========================================================================
+   STUDENT INFORMATION
+========================================================================== */
+
 function renderStudentInformation(user) {
 
     return `
@@ -327,6 +331,30 @@ function renderStudentInformation(user) {
                     required: true
 
                 })}
+
+                <div class="modal-group">
+
+                    <label class="modal-label">
+
+                        Assigned Bus
+
+                    </label>
+
+                    <div id="student_bus_container"></div>
+
+                </div>
+
+                <div class="modal-group">
+
+                    <label class="modal-label">
+
+                        Boarding Stop
+
+                    </label>
+
+                    <div id="student_stop_container"></div>
+
+                </div>
 
             </div>
 
@@ -435,180 +463,539 @@ function createTextarea({
 /* ==========================================================================
    INITIALIZE DROPDOWNS
 ========================================================================== */
+/* ==========================================================================
+   INITIALIZE DROPDOWNS
+========================================================================== */
 
 async function initializeDropdowns(wrapper, user) {
 
     /* ----------------------------------------------------------
-       Role Dropdown
+       Load buses and routes.
+
+       The bus determines the route.
+       The route determines the valid boarding stops.
     ---------------------------------------------------------- */
 
-    wrapper
+    let buses = [];
+    let routes = [];
 
-        .querySelector("#role_container")
+    try {
 
-        .appendChild(
+        const [
+            busResponse,
+            routeResponse
+        ] = await Promise.all([
 
-            createDropdown({
+            fetch("/api/buses/"),
 
-                id: "role",
+            fetch("/api/routes")
 
-                value: user.role || "Administrator",
+        ]);
 
-                placeholder: "Select Role",
 
-                items: [
+        if (!busResponse.ok) {
 
-                    {
-                        value: "Administrator",
-                        label: "Administrator"
-                    },
-
-                    {
-                        value: "Driver",
-                        label: "Driver"
-                    },
-
-                    {
-                        value: "Student",
-                        label: "Student"
-                    },
-
-                    {
-                        value: "Transport Manager",
-                        label: "Transport Manager (Coming Soon)"
-                    },
-
-                    {
-                        value: "Dispatcher",
-                        label: "Dispatcher (Coming Soon)"
-                    },
-
-                    {
-                        value: "Technician",
-                        label: "Technician (Coming Soon)"
-                    }
-
-                ]
-
-            })
-
-        );
-
-    /* ----------------------------------------------------------
-       Status Dropdown
-    ---------------------------------------------------------- */
-
-    wrapper
-
-        .querySelector("#status_container")
-
-        .appendChild(
-
-            createDropdown({
-
-                id: "status",
-
-                value: user.status || "Active",
-
-                placeholder: "Select Status",
-
-                items: [
-
-                    "Active",
-
-                    "Inactive",
-
-                    "Locked"
-
-                ]
-
-            })
-
-        );
-        wrapper
-            .querySelector("#driver_bus_container")
-            ?.appendChild(
-
-                createDropdown({
-
-                    id: "bus_id",
-
-                    placeholder: "Select Bus",
-
-                    items: []
-
-                })
-
+            throw new Error(
+                "Failed to load buses."
             );
-                /* ----------------------------------------------------------
-                Role-Based Information Section Visibility
-                ---------------------------------------------------------- */
 
-                const roleDropdown =
-                    wrapper.querySelector("#role");
-
-                const driverSection =
-                    wrapper.querySelector(
-                        "#driver_information_section"
-                    );
-
-                const studentSection =
-                    wrapper.querySelector(
-                        "#student_information_section"
-                    );
+        }
 
 
-                function toggleRoleInformationSections() {
+        if (!routeResponse.ok) {
 
-                    if (!roleDropdown) return;
+            throw new Error(
+                "Failed to load routes."
+            );
 
-                    const role =
-                        roleDropdown.getValue();
-
-
-                    /* ------------------------------------------------------
-                    DRIVER
-                    ------------------------------------------------------ */
-
-                    if (driverSection) {
-
-                        driverSection.style.display =
-                            role === "Driver"
-                                ? ""
-                                : "none";
-
-                    }
+        }
 
 
-                    /* ------------------------------------------------------
-                    STUDENT
-                    ------------------------------------------------------ */
+        buses =
+            await busResponse.json();
 
-                    if (studentSection) {
+        routes =
+            await routeResponse.json();
 
-                        studentSection.style.display =
-                            role === "Student"
-                                ? ""
-                                : "none";
+    }
+    catch (error) {
 
-                    }
+        console.error(
+            "BusTrack: Failed to load transport data.",
+            error
+        );
 
+        buses = [];
+
+        routes = [];
+
+    }
+
+
+    /* ==========================================================
+       ROLE DROPDOWN
+    ========================================================== */
+
+    const roleDropdown =
+        createDropdown({
+
+            id: "role",
+
+            value:
+                user.role ||
+                "Administrator",
+
+            placeholder:
+                "Select Role",
+
+            items: [
+
+                {
+                    value: "Administrator",
+
+                    label: "Administrator"
+                },
+
+                {
+                    value: "Driver",
+
+                    label: "Driver"
+                },
+
+                {
+                    value: "Student",
+
+                    label: "Student"
+                },
+
+                {
+                    value: "Transport Manager",
+
+                    label:
+                        "Transport Manager (Coming Soon)"
+                },
+
+                {
+                    value: "Dispatcher",
+
+                    label:
+                        "Dispatcher (Coming Soon)"
+                },
+
+                {
+                    value: "Technician",
+
+                    label:
+                        "Technician (Coming Soon)"
                 }
 
+            ]
 
-                roleDropdown.addEventListener(
-                    "change",
-                    toggleRoleInformationSections
+        });
+
+
+    wrapper
+        .querySelector("#role_container")
+        .appendChild(
+            roleDropdown
+        );
+
+
+    /* ==========================================================
+       STATUS DROPDOWN
+    ========================================================== */
+
+    const statusDropdown =
+        createDropdown({
+
+            id: "status",
+
+            value:
+                user.status ||
+                "Active",
+
+            placeholder:
+                "Select Status",
+
+            items: [
+
+                "Active",
+
+                "Inactive",
+
+                "Locked"
+
+            ]
+
+        });
+
+
+    wrapper
+        .querySelector("#status_container")
+        .appendChild(
+            statusDropdown
+        );
+
+
+    /* ==========================================================
+       DRIVER ASSIGNED BUS
+    ========================================================== */
+
+    const driverBusDropdown =
+        createDropdown({
+
+            id: "bus_id",
+
+            value:
+                user.role === "Driver"
+                    ? user.bus_id ?? ""
+                    : "",
+
+            placeholder:
+                "Select Bus",
+
+            items:
+                buses.map(
+                    bus => ({
+
+                        value:
+                            bus.id,
+
+                        label:
+                            `${bus.bus_number} • ${bus.status}`
+
+                    })
+                )
+
+        });
+
+
+    wrapper
+        .querySelector("#driver_bus_container")
+        ?.appendChild(
+            driverBusDropdown
+        );
+
+
+    /* ==========================================================
+       STUDENT ASSIGNED BUS
+    ========================================================== */
+
+    const studentBusDropdown =
+        createDropdown({
+
+            id: "student_bus_id",
+
+            value:
+                user.role === "Student"
+                    ? user.bus_id ?? ""
+                    : "",
+
+            placeholder:
+                "Select Bus",
+
+            items:
+                buses.map(
+                    bus => ({
+
+                        value:
+                            bus.id,
+
+                        label:
+                            `${bus.bus_number} • ${bus.status}`
+
+                    })
+                )
+
+        });
+
+
+    wrapper
+        .querySelector("#student_bus_container")
+        ?.appendChild(
+            studentBusDropdown
+        );
+
+
+    /* ==========================================================
+       STUDENT BOARDING STOP
+       
+       Initially empty.
+       It will be populated after a bus is selected.
+    ========================================================== */
+
+    const studentStopDropdown =
+        createDropdown({
+
+            id: "student_stop_id",
+
+            value: "",
+
+            placeholder:
+                "Select Boarding Stop",
+
+            items: []
+
+        });
+
+
+    wrapper
+        .querySelector("#student_stop_container")
+        ?.appendChild(
+            studentStopDropdown
+        );
+
+
+    /* ==========================================================
+       LOAD STUDENT BOARDING STOPS
+    ========================================================== */
+
+    async function loadStudentStops(
+        busId,
+        selectedStopId = null
+    ) {
+
+        /* ------------------------------------------------------
+           Clear existing stops.
+        ------------------------------------------------------ */
+
+        studentStopDropdown.setItems([]);
+
+
+        if (!busId) {
+
+            studentStopDropdown.clear();
+
+            return;
+
+        }
+
+
+        /* ------------------------------------------------------
+           Find the route assigned to this bus.
+           
+           Route.bus_id is the authoritative relationship.
+        ------------------------------------------------------ */
+
+        const route =
+            routes.find(
+                item =>
+                    Number(item.bus_id) ===
+                    Number(busId)
+            );
+
+
+        if (!route) {
+
+            studentStopDropdown.clear();
+
+            console.warn(
+                "BusTrack: Selected bus has no assigned route."
+            );
+
+            return;
+
+        }
+
+
+        /* ------------------------------------------------------
+           Load stops belonging to that route.
+        ------------------------------------------------------ */
+
+        try {
+
+            const response =
+                await fetch(
+                    `/api/route-stops/${route.id}`
                 );
 
 
-                /* ----------------------------------------------------------
-                Apply initial state
-                ---------------------------------------------------------- */
+            if (!response.ok) {
 
-                toggleRoleInformationSections();
+                throw new Error(
+                    "Failed to load boarding stops."
+                );
+
+            }
+
+
+            const routeStops =
+                await response.json();
+
+
+            /* --------------------------------------------------
+               Convert route stops into dropdown items.
+            -------------------------------------------------- */
+
+            studentStopDropdown.setItems(
+
+                routeStops.map(
+                    routeStop => ({
+
+                        value:
+                            routeStop.stop_id,
+
+                        label:
+                            `${routeStop.stop_name} • ${routeStop.stop_code}`
+
+                    })
+                )
+
+            );
+
+
+            /* --------------------------------------------------
+               Restore existing assignment when editing.
+            -------------------------------------------------- */
+
+            if (
+                selectedStopId !== null &&
+                selectedStopId !== undefined
+            ) {
+
+                studentStopDropdown.setValue(
+                    Number(selectedStopId)
+                );
+
+            }
+
+        }
+        catch (error) {
+
+            console.error(
+                "BusTrack: Failed to load student boarding stops.",
+                error
+            );
+
+            studentStopDropdown.clear();
+
+        }
+
+    }
+
+
+    /* ==========================================================
+       STUDENT BUS CHANGE
+    ========================================================== */
+
+    studentBusDropdown.addEventListener(
+        "change",
+        async () => {
+
+            const selectedBusId =
+                studentBusDropdown.getValue();
+
+
+            /* --------------------------------------------------
+               Changing the bus invalidates the previous stop.
+            -------------------------------------------------- */
+
+            studentStopDropdown.clear();
+
+
+            await loadStudentStops(
+                selectedBusId
+            );
+
+        }
+    );
+
+
+    /* ==========================================================
+       ROLE-BASED SECTION VISIBILITY
+    ========================================================== */
+
+    const driverSection =
+        wrapper.querySelector(
+            "#driver_information_section"
+        );
+
+
+    const studentSection =
+        wrapper.querySelector(
+            "#student_information_section"
+        );
+
+
+    function toggleRoleInformationSections() {
+
+        const role =
+            roleDropdown.getValue();
+
+
+        /* ------------------------------------------------------
+           Driver section
+        ------------------------------------------------------ */
+
+        if (driverSection) {
+
+            driverSection.style.display =
+                role === "Driver"
+                    ? ""
+                    : "none";
+
+        }
+
+
+        /* ------------------------------------------------------
+           Student section
+        ------------------------------------------------------ */
+
+        if (studentSection) {
+
+            studentSection.style.display =
+                role === "Student"
+                    ? ""
+                    : "none";
+
+        }
+
+    }
+
+
+    roleDropdown.addEventListener(
+        "change",
+        toggleRoleInformationSections
+    );
+
+
+    /* ==========================================================
+       INITIAL ROLE VISIBILITY
+    ========================================================== */
+
+    toggleRoleInformationSections();
+
+
+    /* ==========================================================
+       RESTORE EXISTING STUDENT ASSIGNMENT
+       
+       This is used when editing a Student.
+    ========================================================== */
+
+    if (
+        user.role === "Student" &&
+        user.bus_id
+    ) {
+
+        await loadStudentStops(
+
+            user.bus_id,
+
+            user.stop_id ?? null
+
+        );
+
+    }
 
 }
+/* ==========================================================================
+   FORM DATA
+========================================================================== */
+
+/**
+ * Collect all values from the form.
+ */
+
 /* ==========================================================================
    FORM DATA
 ========================================================================== */
@@ -622,107 +1009,262 @@ export function getUserFormData() {
     const passwordInput =
         document.querySelector("#password");
 
+
     const confirmPasswordInput =
         document.querySelector("#confirm_password");
 
+
     const password =
-        passwordInput && !passwordInput.disabled
+        passwordInput &&
+        !passwordInput.disabled
+
             ? passwordInput.value.trim()
+
             : "";
 
+
     const confirmPassword =
-        confirmPasswordInput && !confirmPasswordInput.disabled
+        confirmPasswordInput &&
+        !confirmPasswordInput.disabled
+
             ? confirmPasswordInput.value.trim()
+
             : "";
+
 
     /* ----------------------------------------------------------
        Password Validation
     ---------------------------------------------------------- */
 
-    if (!passwordInput?.disabled) {
+    if (
+        passwordInput &&
+        !passwordInput.disabled
+    ) {
 
-        if (password !== confirmPassword) {
+        if (
+            password !==
+            confirmPassword
+        ) {
 
             throw new Error(
-
                 "Passwords do not match."
-
             );
 
         }
 
     }
+
+
+    /* ----------------------------------------------------------
+       Role
+    ---------------------------------------------------------- */
+
+    const role =
+        document
+            .querySelector("#role")
+            .getValue();
+
+
+    /* ----------------------------------------------------------
+       Status
+    ---------------------------------------------------------- */
+
+    const status =
+        document
+            .querySelector("#status")
+            .getValue();
+
+
     console.log(
         "ROLE VALUE:",
-        document.querySelector("#role").getValue()
+        role
     );
+
 
     console.log(
         "STATUS VALUE:",
-        document.querySelector("#status").getValue()
+        status
     );
-    const role = document.querySelector("#role").getValue();
 
-    return {
+
+    /* ----------------------------------------------------------
+       Driver Bus
+    ---------------------------------------------------------- */
+
+    const driverBusDropdown =
+        document.querySelector(
+            "#bus_id"
+        );
+
+
+    /* ----------------------------------------------------------
+       Student Bus
+    ---------------------------------------------------------- */
+
+    const studentBusDropdown =
+        document.querySelector(
+            "#student_bus_id"
+        );
+
+
+    /* ----------------------------------------------------------
+       Student Boarding Stop
+    ---------------------------------------------------------- */
+
+    const studentStopDropdown =
+        document.querySelector(
+            "#student_stop_id"
+        );
+
+
+    /* ----------------------------------------------------------
+       Build final form object
+    ---------------------------------------------------------- */
+
+    const formData = {
 
         full_name:
-            document.querySelector("#full_name").value.trim(),
+            document
+                .querySelector("#full_name")
+                .value
+                .trim(),
+
 
         username:
-            document.querySelector("#username").value.trim(),
+            document
+                .querySelector("#username")
+                .value
+                .trim(),
+
 
         password,
 
+
         email:
-            document.querySelector("#email").value.trim(),
+            document
+                .querySelector("#email")
+                .value
+                .trim(),
+
 
         phone:
-            document.querySelector("#phone").value.trim(),
+            document
+                .querySelector("#phone")
+                .value
+                .trim(),
+
 
         role,
 
-        status:
-            document.querySelector("#status").getValue(),
 
-        // --------------------------------------------------
-        // Driver fields
-        // --------------------------------------------------
+        status,
+
+
+        /* ======================================================
+           DRIVER FIELDS
+        ====================================================== */
 
         driver_code:
             role === "Driver"
-                ? document.querySelector("#driver_code")?.value.trim() || null
+
+                ? document
+                    .querySelector("#driver_code")
+                    ?.value
+                    .trim() || null
+
                 : null,
+
 
         license_number:
             role === "Driver"
-                ? document.querySelector("#license_number")?.value.trim() || null
+
+                ? document
+                    .querySelector("#license_number")
+                    ?.value
+                    .trim() || null
+
                 : null,
+
 
         license_expiry:
             role === "Driver"
-                ? document.querySelector("#license_expiry")?.value || null
+
+                ? document
+                    .querySelector("#license_expiry")
+                    ?.value || null
+
                 : null,
+
 
         address:
             role === "Driver"
-                ? document.querySelector("#address")?.value.trim() || null
+
+                ? document
+                    .querySelector("#address")
+                    ?.value
+                    .trim() || null
+
                 : null,
+
+
+        /* ======================================================
+           BUS ASSIGNMENT
+        ====================================================== */
 
         bus_id:
-            role === "Driver"
-                ? document.querySelector("#bus_id")?.getValue() || null
-                : null,
 
-        // --------------------------------------------------
-        // Student fields
-        // --------------------------------------------------
+            role === "Driver"
+
+                ? driverBusDropdown
+                    ?.getValue() || null
+
+                : role === "Student"
+
+                    ? studentBusDropdown
+                        ?.getValue() || null
+
+                    : null,
+
+
+        /* ======================================================
+           STUDENT FIELDS
+        ====================================================== */
 
         student_code:
+
             role === "Student"
-                ? document.querySelector("#student_code")?.value.trim() || null
+
+                ? document
+                    .querySelector("#student_code")
+                    ?.value
+                    .trim() || null
+
+                : null,
+
+
+        stop_id:
+
+            role === "Student"
+
+                ? studentStopDropdown
+                    ?.getValue() || null
+
                 : null
 
     };
+
+
+    /* ----------------------------------------------------------
+       DEBUG
+    ---------------------------------------------------------- */
+
+    console.log(
+        "FINAL USER FORM DATA:",
+        formData
+    );
+
+
+    return formData;
 
 }
 /* ==========================================================================
