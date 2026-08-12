@@ -67,12 +67,32 @@ form?.addEventListener("submit", async (event) => {
     localStorage.setItem(PROFILE_KEY, JSON.stringify(data.user));
 
     // ------------------------------------------------
-    // Redirect based on role
+    // Normalize user role
+    // ------------------------------------------------
+    // The backend may return roles using different casing,
+    // for example:
+    //     admin
+    //     Administrator
+    //     ADMIN
+    //
+    // We normalize the value here so the frontend
+    // handles all of them consistently.
     // ------------------------------------------------
 
-    switch (data.user.role) {
+    const normalizedRole =
+        String(data.user.role || "")
+            .trim()
+            .toLowerCase();
 
-        case "Administrator":
+
+    // ------------------------------------------------
+    // Redirect based on normalized role
+    // ------------------------------------------------
+
+    switch (normalizedRole) {
+
+        case "admin":
+        case "administrator":
 
             window.location.assign(
                 "/dashboard"
@@ -81,7 +101,7 @@ form?.addEventListener("submit", async (event) => {
             break;
 
 
-        case "Driver":
+        case "driver":
 
             window.location.assign(
                 "/dashboard#driverDashboard"
@@ -90,7 +110,7 @@ form?.addEventListener("submit", async (event) => {
             break;
 
 
-        case "Student":
+        case "student":
 
             window.location.assign(
                 "/dashboard#studentDashboard"
@@ -112,7 +132,6 @@ form?.addEventListener("submit", async (event) => {
             clearSession();
 
             break;
-
     }
   } catch (error) {
     clearSession();
