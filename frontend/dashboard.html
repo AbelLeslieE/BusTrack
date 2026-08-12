@@ -27,49 +27,102 @@
   </head>
   <body>
     <main id="app" class="app-root" aria-live="polite"></main>
+    <!-- ==========================================================
+        LEAFLET MAP ENGINE
+    ========================================================== -->
+
+    <script
+        src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+    </script>
+
+    <!-- ==========================================================
+        BUSTRACK APPLICATION
+    ========================================================== -->
+
     <script type="module">
-      import { requireAuthenticatedSession } from "/static/common/auth.js";
-      import { loadModule } from "/static/common/router.js";
-      
 
-      const profile = await requireAuthenticatedSession();
+        import {
+            requireAuthenticatedSession
+        } from "/static/common/auth.js";
 
-      if (!profile) {
-          throw new Error("No authenticated session.");
-      }
+        import {
+            loadModule
+        } from "/static/common/router.js";
 
-      let moduleName;
 
-      switch (profile.role) {
+        const profile =
+            await requireAuthenticatedSession();
 
-          case "Administrator":
 
-              moduleName = window.location.hash.slice(1) || "dashboard";
+        if (!profile) {
 
-              break;
+            throw new Error(
+                "No authenticated session."
+            );
 
-          case "Driver":
+        }
 
-              // Force the driver hash before anything loads
-              if (!window.location.hash) {
 
-                  window.location.hash = "driverDashboard";
+        let moduleName;
 
-              }
 
-              moduleName = "driverDashboard";
+        switch (profile.role) {
 
-              break;
+            case "Administrator":
 
-          default:
+                moduleName =
+                    window.location.hash.slice(1) ||
+                    "dashboard";
 
-              moduleName = "dashboard";
+                break;
 
-      }
 
-      loadModule(moduleName);
+            case "Driver":
 
-  </script>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+                if (!window.location.hash) {
+
+                    window.location.hash =
+                        "driverDashboard";
+
+                }
+
+                moduleName =
+                    "driverDashboard";
+
+                break;
+
+
+            case "Student":
+
+                if (!window.location.hash) {
+
+                    window.location.hash =
+                        "studentDashboard";
+
+                }
+
+                moduleName =
+                    "studentDashboard";
+
+                break;
+
+
+            default:
+
+                console.error(
+                    "BusTrack: Unsupported role:",
+                    profile.role
+                );
+
+                throw new Error(
+                    `Unsupported user role: ${profile.role}`
+                );
+
+        }
+
+
+        loadModule(moduleName);
+
+    </script>
   </body>
 </html>

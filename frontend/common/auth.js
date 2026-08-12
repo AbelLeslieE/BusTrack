@@ -74,17 +74,45 @@ form?.addEventListener("submit", async (event) => {
 
         case "Administrator":
 
-            window.location.assign("/dashboard");
+            window.location.assign(
+                "/dashboard"
+            );
+
             break;
 
+
         case "Driver":
-            window.location.assign("/dashboard#driverDashboard");
+
+            window.location.assign(
+                "/dashboard#driverDashboard"
+            );
+
             break;
+
+
+        case "Student":
+
+            window.location.assign(
+                "/dashboard#studentDashboard"
+            );
+
+            break;
+
 
         default:
 
-            window.location.assign("/dashboard");
+            console.error(
+                "BusTrack: Unknown user role:",
+                data.user.role
+            );
+
+            message.textContent =
+                `Unsupported account role: ${data.user.role}`;
+
+            clearSession();
+
             break;
+
     }
   } catch (error) {
     clearSession();

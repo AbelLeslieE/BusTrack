@@ -17,8 +17,41 @@ let watchId = null;
 
 let tracking = false;
 
+let trackingAccessToken = null;
+
+/*
+ * Timestamp of the last GPS position successfully sent
+ * to the BusTrack backend.
+ *
+ * The driver map can update immediately from GPS,
+ * but the server/database will receive an update
+ * at most once every 10 seconds.
+ */
+let lastServerUpdateTime = 0;
+
+/*
+ * Server update interval.
+ *
+ * 10 seconds = 10000 milliseconds.
+ */
+const SERVER_UPDATE_INTERVAL = 2000;
+
 // Used to invalidate old GPS callbacks when leaving the page.
 let trackingSession = 0;
+/* ==========================================================
+   LOCAL GPS SPEED CALCULATION
+========================================================== */
+
+/*
+ * Some browsers/GPS devices return:
+ *
+ *     position.coords.speed = null
+ *
+ * Therefore we keep the previous GPS point and calculate
+ * speed ourselves when necessary.
+ */
+
+let previousGpsSample = null;
 
 /* ==========================================================
 INITIALIZE MAP
@@ -248,6 +281,7 @@ export async function startTrip() {
             localStorage.getItem(
                 "bus_tracker_access_token"
             );
+        trackingAccessToken = token;
 
 
         const response = await fetch(
@@ -386,7 +420,7 @@ export async function startTrip() {
         // ==================================================
         // START CONTINUOUS GPS TRACKING
         // ==================================================
-
+        previousGpsSample = null;
         startLocationTracking();
 
 
@@ -463,6 +497,8 @@ export async function stopTrip() {
             "bus_tracker_access_token"
         );
 
+
+
         const response = await fetch(
 
             "/api/gps/stop",
@@ -518,6 +554,11 @@ export async function stopTrip() {
         tracking = false;
 
         currentTripId = null;
+
+        trackingAccessToken = null;
+
+        lastServerUpdateTime = 0;
+        previousGpsSample = null;
 
         document.getElementById("tripStatus").textContent =
             "⚫ Ready";
@@ -661,8 +702,159 @@ function startLocationTracking() {
 
 }
 /* ==========================================================
-   GPS SUCCESS
+   CALCULATE LOCAL GPS SPEED
 ========================================================== */
+
+/*
+ * Calculates speed using two GPS positions.
+ *
+ * Formula:
+ *
+ * speed = distance / time
+ *
+ * Distance is calculated using the Haversine formula.
+ *
+ * Returns speed in km/h.
+ */
+
+function calculateLocalSpeedKmh(
+    latitude,
+    longitude,
+    timestamp
+) {
+
+    // ------------------------------------------------------
+    // First GPS point
+    // ------------------------------------------------------
+
+    if (!previousGpsSample) {
+
+        previousGpsSample = {
+            latitude,
+            longitude,
+            timestamp
+        };
+
+        return null;
+    }
+
+
+    const previous =
+        previousGpsSample;
+
+
+    // ------------------------------------------------------
+    // Calculate elapsed time in seconds
+    // ------------------------------------------------------
+
+    const elapsedSeconds =
+        (timestamp - previous.timestamp) / 1000;
+
+
+    // Invalid timestamp difference.
+    if (elapsedSeconds <= 0) {
+
+        return null;
+
+    }
+
+
+    // ------------------------------------------------------
+    // Convert coordinates to radians
+    // ------------------------------------------------------
+
+    const toRadians =
+        degrees =>
+            degrees * Math.PI / 180;
+
+
+    const lat1 =
+        toRadians(previous.latitude);
+
+    const lat2 =
+        toRadians(latitude);
+
+    const deltaLat =
+        toRadians(
+            latitude - previous.latitude
+        );
+
+    const deltaLng =
+        toRadians(
+            longitude - previous.longitude
+        );
+
+
+    // ------------------------------------------------------
+    // Haversine formula
+    // ------------------------------------------------------
+
+    const earthRadiusMeters =
+        6371000;
+
+    const a =
+        Math.sin(deltaLat / 2) ** 2 +
+        Math.cos(lat1) *
+        Math.cos(lat2) *
+        Math.sin(deltaLng / 2) ** 2;
+
+
+    const c =
+        2 *
+        Math.atan2(
+            Math.sqrt(a),
+            Math.sqrt(1 - a)
+        );
+
+
+    const distanceMeters =
+        earthRadiusMeters * c;
+
+
+    // ------------------------------------------------------
+    // Update previous GPS point
+    // ------------------------------------------------------
+
+    previousGpsSample = {
+
+        latitude,
+        longitude,
+        timestamp
+
+    };
+
+
+    // ------------------------------------------------------
+    // Calculate km/h
+    // ------------------------------------------------------
+
+    const speedKmh =
+        (
+            distanceMeters /
+            elapsedSeconds
+        ) * 3.6;
+
+
+    // ------------------------------------------------------
+    // Ignore impossible GPS spikes.
+    //
+    // A school bus cannot realistically travel at
+    // hundreds of km/h.
+    // ------------------------------------------------------
+
+    if (
+        speedKmh < 0 ||
+        speedKmh > 150
+    ) {
+
+        return null;
+
+    }
+
+
+    return speedKmh;
+
+}
 /* ==========================================================
    GPS SUCCESS
 ========================================================== */
@@ -670,35 +862,97 @@ function startLocationTracking() {
 async function onLocationSuccess(position) {
 
     const {
-
         latitude,
-
         longitude,
-
         speed,
-
         accuracy
-
     } = position.coords;
 
 
-    // ------------------------------------------------------
-    // GPS is now successfully receiving a location
-    // ------------------------------------------------------
+    // ======================================================
+    // GPS STATUS
+    // ======================================================
 
     const gpsStatus =
         document.getElementById("gpsStatus");
 
     if (gpsStatus) {
 
-        gpsStatus.textContent = "Tracking...";
+        gpsStatus.textContent =
+            "Tracking...";
 
     }
 
 
-    // ------------------------------------------------------
-    // Update map marker
-    // ------------------------------------------------------
+    // ======================================================
+    // GPS TIMESTAMP
+    // ======================================================
+
+    const gpsTimestamp =
+        position.timestamp ||
+        Date.now();
+
+
+    // ======================================================
+    // CALCULATE SPEED
+    // ======================================================
+
+    let speedKmh = null;
+
+
+    /*
+     * Prefer the speed supplied by the GPS device when
+     * available.
+     *
+     * position.coords.speed is in metres/second.
+     */
+
+    if (
+        speed != null &&
+        Number.isFinite(speed) &&
+        speed >= 0
+    ) {
+
+        speedKmh =
+            speed * 3.6;
+
+
+        /*
+         * Keep the previous GPS point synchronized so that
+         * our fallback calculation remains valid.
+         */
+
+        previousGpsSample = {
+
+            latitude,
+            longitude,
+            timestamp: gpsTimestamp
+
+        };
+
+    }
+
+    else {
+
+        /*
+         * Browser did not provide speed.
+         *
+         * Calculate it ourselves from GPS movement.
+         */
+
+        speedKmh =
+            calculateLocalSpeedKmh(
+                latitude,
+                longitude,
+                gpsTimestamp
+            );
+
+    }
+
+
+    // ======================================================
+    // UPDATE DRIVER MAP IMMEDIATELY
+    // ======================================================
 
     updateMarker(
         latitude,
@@ -706,21 +960,9 @@ async function onLocationSuccess(position) {
     );
 
 
-    // ------------------------------------------------------
-    // Send location to backend
-    // ------------------------------------------------------
-
-    await sendLocation(
-        latitude,
-        longitude,
-        speed,
-        accuracy
-    );
-
-
-    // ------------------------------------------------------
-    // Update GPS information
-    // ------------------------------------------------------
+    // ======================================================
+    // UPDATE DRIVER GPS INFORMATION IMMEDIATELY
+    // ======================================================
 
     const latitudeElement =
         document.getElementById("latitude");
@@ -757,9 +999,9 @@ async function onLocationSuccess(position) {
     if (speedElement) {
 
         speedElement.textContent =
-            speed != null
-                ? `${(speed * 3.6).toFixed(1)} km/h`
-                : "--";
+            speedKmh != null
+                ? `${speedKmh.toFixed(1)} km/h`
+                : "Calculating...";
 
     }
 
@@ -777,50 +1019,235 @@ async function onLocationSuccess(position) {
     if (lastUpdateElement) {
 
         lastUpdateElement.textContent =
-            new Date().toLocaleTimeString();
+            new Date(
+                gpsTimestamp
+            ).toLocaleTimeString();
 
     }
+
+
+    // ======================================================
+    // SEND GPS TO BACKEND
+    // ======================================================
+
+    /*
+     * Backend receives the calculated speed instead of
+     * receiving null when browser GPS does not provide speed.
+     *
+     * sendLocation() still controls the 10-second server
+     * update interval.
+     */
+
+    sendLocation(
+        latitude,
+        longitude,
+        speedKmh != null
+            ? speedKmh / 3.6
+            : null,
+        accuracy
+    );
 
 }
 /* ==========================================================
    SEND LOCATION TO SERVER
 ========================================================== */
 
-async function sendLocation(latitude, longitude, speed, accuracy) {
+/*
+ * Sends the latest GPS position to the backend.
+ *
+ * IMPORTANT:
+ *
+ * The browser GPS may generate positions more frequently
+ * than we need.
+ *
+ * Therefore:
+ *
+ * - Driver map updates immediately.
+ * - Backend receives a position at most every 10 seconds.
+ *
+ * This prevents unnecessary database/API traffic while
+ * keeping the student live-tracking page responsive.
+ */
+async function sendLocation(
+    latitude,
+    longitude,
+    speed,
+    accuracy
+) {
 
-    if (!currentTripId) return;
+    // ------------------------------------------------------
+    // There is nothing to send without an active trip.
+    // ------------------------------------------------------
 
-    const token = localStorage.getItem(
-        "bus_tracker_access_token"
-    );
+    if (!currentTripId) {
 
-    await fetch("/api/gps/update", {
+        return;
 
-        method: "POST",
+    }
 
-        headers: {
 
-            "Authorization": `Bearer ${token}`,
+    // ------------------------------------------------------
+    // Check whether 10 seconds have passed since the last
+    // server update.
+    // ------------------------------------------------------
 
-            "Content-Type": "application/json"
+    const now = Date.now();
 
-        },
+    const elapsed =
+        now - lastServerUpdateTime;
 
-        body: JSON.stringify({
 
-            trip_id: currentTripId,
+    if (
+        lastServerUpdateTime !== 0 &&
+        elapsed < SERVER_UPDATE_INTERVAL
+    ) {
 
-            latitude,
+        console.log(
+            "GPS received locally. " +
+            "Server update throttled."
+        );
 
-            longitude,
+        return;
 
-            speed,
+    }
 
-            accuracy
 
-        })
+    // ------------------------------------------------------
+    // Get authentication token.
+    // ------------------------------------------------------
 
-    });
+    const token =
+        trackingAccessToken ||
+        localStorage.getItem(
+            "bus_tracker_access_token"
+        );
+
+
+    if (!token) {
+
+        console.error(
+            "No authentication token found."
+        );
+
+        return;
+
+    }
+
+
+    // ------------------------------------------------------
+    // Send GPS position to backend.
+    // ------------------------------------------------------
+
+    try {
+
+        const response =
+            await fetch(
+                "/api/gps/update",
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Authorization":
+                            `Bearer ${token}`,
+
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body: JSON.stringify({
+
+                        trip_id:
+                            currentTripId,
+
+                        latitude:
+                            latitude,
+
+                        longitude:
+                            longitude,
+
+                        speed:
+                            speed,
+
+                        accuracy:
+                            accuracy
+                    })
+                }
+            );
+
+
+        // --------------------------------------------------
+        // IMPORTANT:
+        // fetch() does NOT throw for HTTP 4xx/5xx.
+        //
+        // Therefore we MUST check response.ok.
+        // --------------------------------------------------
+
+        if (!response.ok) {
+
+            let errorMessage =
+                `GPS update failed (${response.status}).`;
+
+            try {
+
+                const error =
+                    await response.json();
+
+                if (error.detail) {
+
+                    errorMessage =
+                        error.detail;
+
+                }
+
+            }
+            catch {
+
+                // Keep the default error message.
+            }
+
+
+            console.error(
+                "BusTrack GPS update failed:",
+                errorMessage
+            );
+
+            return;
+
+        }
+
+
+        // --------------------------------------------------
+        // Read backend response.
+        // --------------------------------------------------
+
+        const result =
+            await response.json();
+
+
+        // --------------------------------------------------
+        // Only mark the timestamp after the server accepted
+        // the GPS update.
+        // --------------------------------------------------
+
+        lastServerUpdateTime =
+            Date.now();
+
+
+        console.log(
+            "GPS sent to server successfully:",
+            result
+        );
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "Unable to send GPS update:",
+            error
+        );
+
+    }
 
 }
 /* ==========================================================
@@ -838,6 +1265,7 @@ export async function loadCurrentTrip() {
     const token = localStorage.getItem(
         "bus_tracker_access_token"
     );
+    trackingAccessToken = token;
 
     try {
 
@@ -884,6 +1312,10 @@ export async function loadCurrentTrip() {
         }
 
         currentTripId = trip.id;
+        /*
+        * Allow the first GPS position to be sent immediately.
+        */
+        lastServerUpdateTime = 0;
 
         /* ==========================================================
         RESTORE CURRENT BUS
@@ -1164,6 +1596,11 @@ export function cleanupTracking() {
     tracking = false;
 
     currentTripId = null;
+
+    trackingAccessToken = null;
+
+    lastServerUpdateTime = 0;
+    previousGpsSample = null;
 
 
     /* ======================================================

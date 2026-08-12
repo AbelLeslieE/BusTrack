@@ -14,6 +14,17 @@ let availableStops = [];
 // Stops currently selected for this route
 let selectedStops = [];
 /* ==========================================================================
+   ROUTE MAP STATE
+========================================================================== */
+
+let routeMap = null;
+
+let routeMapContainer = null;
+
+let routeLayer = null;
+
+let routeStopMarkers = [];
+/* ==========================================================================
    CREATE FORM
 ========================================================================== */
 
@@ -48,15 +59,20 @@ export function createRouteForm(
         drivers
     );
 
+
+
     /* ==========================================================
     INITIALIZE ROUTE BUILDER
     ========================================================== */
 
     selectedStops = [];
 
+    clearRouteMap();
+
     renderSelectedStops();
 
-    loadMasterStops().then(() => {
+
+    loadMasterStops().then(()=>{
 
         initializeRouteBuilder();
 
@@ -383,6 +399,956 @@ function initializeDropdowns(
     wrapper.stopDropdown = stopDropdown;
 }
 /* ==========================================================================
+   ROUTE MAP
+========================================================================== */
+
+/**
+ * Initialize the Leaflet route preview map.
+ *
+ * The map is intentionally initialized after the form exists.
+ */
+/* ==========================================================================
+   INITIALIZE ROUTE MAP
+========================================================================== */
+
+function initializeRouteMap(){
+
+    const mapContainer =
+        document.getElementById(
+            "route-preview-map"
+        );
+
+
+    /* ==========================================================
+       MAP CONTAINER CHECK
+    ========================================================== */
+
+    if(!mapContainer){
+
+        console.warn(
+            "BusTrack: Route map container was not found."
+        );
+
+        return false;
+
+    }
+
+
+    /* ==========================================================
+       LEAFLET CHECK
+    ========================================================== */
+
+    if(!window.L){
+
+        console.error(
+            "BusTrack: Leaflet is not loaded."
+        );
+
+        updateRouteMapStatus(
+            "Map engine is unavailable."
+        );
+
+        return false;
+
+    }
+
+
+    /* ==========================================================
+       EXISTING MAP CHECK
+    ========================================================== */
+
+    /*
+     * If the current map belongs to THIS exact DOM element,
+     * simply refresh its dimensions.
+     */
+
+    if(
+        routeMap &&
+        routeMapContainer === mapContainer
+    ){
+
+        setTimeout(()=>{
+
+            routeMap.invalidateSize();
+
+        },100);
+
+        return true;
+
+    }
+
+
+    /* ==========================================================
+       DESTROY OLD MAP
+    ========================================================== */
+
+    /*
+     * This is important for the SPA modal.
+     *
+     * A new Add Route modal creates a new
+     * #route-preview-map element.
+     *
+     * The old Leaflet instance must not be
+     * reused for that new element.
+     */
+
+    if(routeMap){
+
+        try{
+
+            routeMap.remove();
+
+        }
+
+        catch(error){
+
+            console.warn(
+                "BusTrack: Failed to remove previous route map.",
+                error
+            );
+
+        }
+
+    }
+
+
+    routeMap = null;
+
+    routeMapContainer = null;
+
+    routeLayer = null;
+
+    routeStopMarkers = [];
+
+
+    /* ==========================================================
+       CREATE NEW MAP
+    ========================================================== */
+
+    routeMap =
+        window.L.map(
+
+            mapContainer,
+
+            {
+
+                zoomControl:true,
+
+                attributionControl:true
+
+            }
+
+        );
+
+
+    routeMapContainer =
+        mapContainer;
+
+
+    /* ==========================================================
+       DEFAULT VIEW
+    ========================================================== */
+
+    routeMap.setView(
+
+        [10.45, 76.25],
+
+        9
+
+    );
+
+
+    /* ==========================================================
+       OPENSTREETMAP TILE LAYER
+    ========================================================== */
+
+    window.L.tileLayer(
+
+        "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+
+        {
+
+            maxZoom:19,
+
+            minZoom:2,
+
+            attribution:
+                "&copy; OpenStreetMap contributors"
+
+        }
+
+    ).addTo(routeMap);
+
+
+    /* ==========================================================
+       FORCE LEAFLET TO RECALCULATE SIZE
+    ========================================================== */
+
+    requestAnimationFrame(()=>{
+
+        if(routeMap){
+
+            routeMap.invalidateSize();
+
+        }
+
+    });
+
+
+    setTimeout(()=>{
+
+        if(routeMap){
+
+            routeMap.invalidateSize();
+
+        }
+
+    },300);
+
+
+    return true;
+
+}
+/* ==========================================================================
+   GENERATE ROAD ROUTE
+========================================================================== */
+
+/**
+ * Ask OSRM to calculate the actual driving route
+ * through all selected Master Stops.
+ */
+/* ==========================================================================
+   GENERATE ROAD ROUTE
+========================================================================== */
+
+async function generateRoadRoute(){
+
+    if(selectedStops.length < 2){
+
+        clearRouteLayer();
+
+        updateRouteMapStatus();
+
+        return;
+
+    }
+
+
+    /* ==========================================================
+       VALIDATE EVERY SELECTED STOP
+    ========================================================== */
+
+    const coordinates = [];
+
+
+    for(
+        let index = 0;
+        index < selectedStops.length;
+        index++
+    ){
+
+        const stop =
+            selectedStops[index];
+
+
+        const latitude =
+            Number(stop.latitude);
+
+
+        const longitude =
+            Number(stop.longitude);
+
+
+        console.log(
+
+            `BusTrack route stop ${index + 1}:`,
+
+            {
+
+                id:stop.id,
+
+                name:stop.stop_name,
+
+                latitude,
+
+                longitude
+
+            }
+
+        );
+
+
+        if(
+            !Number.isFinite(latitude) ||
+            !Number.isFinite(longitude) ||
+            latitude < -90 ||
+            latitude > 90 ||
+            longitude < -180 ||
+            longitude > 180
+        ){
+
+            console.error(
+
+                "BusTrack: Invalid route stop coordinates.",
+
+                stop
+
+            );
+
+
+            clearRouteLayer();
+
+
+            updateRouteMapStatus(
+
+                `${stop.stop_name} has invalid coordinates.`
+
+            );
+
+
+            return;
+
+        }
+
+
+        coordinates.push(
+
+            `${longitude},${latitude}`
+
+        );
+
+    }
+
+
+    /* ==========================================================
+       OSRM COORDINATE STRING
+    ========================================================== */
+
+    const coordinateString =
+        coordinates.join(";");
+
+
+    /* ==========================================================
+       OSRM REQUEST
+    ========================================================== */
+
+    const url =
+        "https://router.project-osrm.org/route/v1/driving/" +
+
+        coordinateString +
+
+        "?overview=full&geometries=geojson&steps=false";
+
+
+    console.log(
+        "BusTrack OSRM request:",
+        url
+    );
+
+
+    try{
+
+        updateRouteMapStatus(
+            "Calculating road route..."
+        );
+
+
+        const response =
+            await fetch(url);
+
+
+        /* ======================================================
+           HTTP ERROR
+        ======================================================= */
+
+        if(!response.ok){
+
+            const responseText =
+                await response.text();
+
+
+            console.error(
+
+                "BusTrack OSRM HTTP error:",
+
+                {
+
+                    status:response.status,
+
+                    response:responseText,
+
+                    url
+
+                }
+
+            );
+
+
+            throw new Error(
+
+                `Routing service returned HTTP ${response.status}.`
+
+            );
+
+        }
+
+
+        /* ======================================================
+           PARSE RESPONSE
+        ======================================================= */
+
+        const data =
+            await response.json();
+
+
+        console.log(
+            "BusTrack OSRM response:",
+            data
+        );
+
+
+        /* ======================================================
+           ROUTE VALIDATION
+        ======================================================= */
+
+        if(
+            data.code !== "Ok" ||
+            !Array.isArray(data.routes) ||
+            data.routes.length === 0
+        ){
+
+            throw new Error(
+
+                "No road route could be calculated."
+
+            );
+
+        }
+
+
+        /* ======================================================
+           DRAW ROUTE
+        ======================================================= */
+
+        drawRoadRoute(
+
+            data.routes[0].geometry
+
+        );
+
+
+        updateRouteMapStatus(
+            "Road route ready"
+        );
+
+    }
+
+    catch(error){
+
+        console.error(
+
+            "BusTrack: Route generation error:",
+
+            error
+
+        );
+
+
+        clearRouteLayer();
+
+
+        updateRouteMapStatus(
+
+            error.message ||
+
+            "Unable to calculate road route."
+
+        );
+
+    }
+
+}
+/* ==========================================================================
+   DRAW ROAD ROUTE
+========================================================================== */
+/* ==========================================================================
+   DRAW ROAD ROUTE
+========================================================================== */
+
+function drawRoadRoute(geometry){
+
+    if(!routeMap){
+
+        return;
+
+    }
+
+
+    if(!geometry){
+
+        console.error(
+            "BusTrack: OSRM returned no route geometry."
+        );
+
+        return;
+
+    }
+
+
+    /* ==========================================================
+       REMOVE PREVIOUS ROUTE
+    ========================================================== */
+
+    clearRouteLayer();
+
+
+    /* ==========================================================
+       DRAW GEOJSON
+    ========================================================== */
+
+    routeLayer =
+        window.L.geoJSON(
+
+            geometry,
+
+            {
+
+                style:{
+
+                    color:"#4FD1FF",
+
+                    weight:6,
+
+                    opacity:.9,
+
+                    lineCap:"round",
+
+                    lineJoin:"round"
+
+                }
+
+            }
+
+        ).addTo(routeMap);
+
+
+    /* ==========================================================
+       FIT MAP TO ROAD ROUTE
+    ========================================================== */
+
+    const bounds =
+        routeLayer.getBounds();
+
+
+    if(bounds.isValid()){
+
+        routeMap.fitBounds(
+
+            bounds,
+
+            {
+
+                padding:[50,50],
+
+                maxZoom:17
+
+            }
+
+        );
+
+    }
+
+
+    /* ==========================================================
+       RESTORE STOP MARKERS ABOVE ROUTE
+    ========================================================== */
+
+    renderRouteStopMarkers();
+
+}
+/* ==========================================================================
+   ROUTE STOP MARKERS
+========================================================================== */
+
+/* ==========================================================================
+   ROUTE STOP MARKERS
+========================================================================== */
+
+function renderRouteStopMarkers(){
+
+    if(!routeMap){
+
+        return;
+
+    }
+
+
+    /* ==========================================================
+       REMOVE OLD MARKERS
+    ========================================================== */
+
+    routeStopMarkers.forEach(
+
+        marker=>{
+
+            routeMap.removeLayer(
+                marker
+            );
+
+        }
+
+    );
+
+
+    routeStopMarkers = [];
+
+
+    /* ==========================================================
+       CREATE NEW MARKERS
+    ========================================================== */
+
+    selectedStops.forEach(
+
+        (stop,index)=>{
+
+            const latitude =
+                Number(stop.latitude);
+
+
+            const longitude =
+                Number(stop.longitude);
+
+
+            if(
+                !Number.isFinite(latitude) ||
+                !Number.isFinite(longitude)
+            ){
+
+                console.warn(
+
+                    "BusTrack: Cannot place marker.",
+
+                    stop
+
+                );
+
+                return;
+
+            }
+
+
+            const marker =
+                window.L.marker(
+
+                    [
+
+                        latitude,
+
+                        longitude
+
+                    ]
+
+                ).addTo(routeMap);
+
+
+            marker.bindPopup(`
+
+                <div class="route-stop-popup">
+
+                    <strong>
+
+                        ${index + 1}.
+                        ${escapeRouteText(
+                            stop.stop_name
+                        )}
+
+                    </strong>
+
+                    <br>
+
+                    <span>
+
+                        ${latitude.toFixed(6)},
+                        ${longitude.toFixed(6)}
+
+                    </span>
+
+                </div>
+
+            `);
+
+
+            routeStopMarkers.push(
+                marker
+            );
+
+        }
+
+    );
+
+}
+
+
+/* ==========================================================================
+   ESCAPE ROUTE TEXT
+========================================================================== */
+
+function escapeRouteText(value){
+
+    return String(value ?? "")
+
+        .replaceAll("&","&amp;")
+
+        .replaceAll("<","&lt;")
+
+        .replaceAll(">","&gt;")
+
+        .replaceAll('"',"&quot;")
+
+        .replaceAll("'","&#039;");
+
+}
+/* ==========================================================================
+   UPDATE ROUTE MAP
+========================================================================== */
+
+function updateRouteMap(){
+
+    const mapReady =
+        initializeRouteMap();
+
+
+    if(!mapReady){
+
+        return;
+
+    }
+
+
+    /* ==========================================================
+       RENDER STOP MARKERS
+    ========================================================== */
+
+    renderRouteStopMarkers();
+
+
+    /* ==========================================================
+       NO STOPS
+    ========================================================== */
+
+    if(selectedStops.length === 0){
+
+        clearRouteLayer();
+
+
+        routeMap.setView(
+
+            [10.45, 76.25],
+
+            9
+
+        );
+
+
+        updateRouteMapStatus(
+            "Waiting for stops"
+        );
+
+
+        return;
+
+    }
+
+
+    /* ==========================================================
+       ONE STOP
+    ========================================================== */
+
+    if(selectedStops.length === 1){
+
+        const stop =
+            selectedStops[0];
+
+
+        const latitude =
+            Number(stop.latitude);
+
+
+        const longitude =
+            Number(stop.longitude);
+
+
+        if(
+            !Number.isFinite(latitude) ||
+            !Number.isFinite(longitude)
+        ){
+
+            updateRouteMapStatus(
+                `${stop.stop_name} has invalid coordinates.`
+            );
+
+            return;
+
+        }
+
+
+        clearRouteLayer();
+
+
+        routeMap.setView(
+
+            [
+
+                latitude,
+
+                longitude
+
+            ],
+
+            16
+
+        );
+
+
+        updateRouteMapStatus(
+            "1 stop selected"
+        );
+
+
+        return;
+
+    }
+
+
+    /* ==========================================================
+       TWO OR MORE STOPS
+    ========================================================== */
+
+    generateRoadRoute();
+
+}
+/* ==========================================================================
+   CLEAR ROUTE LAYER
+========================================================================== */
+
+function clearRouteLayer(){
+
+    if(routeLayer && routeMap){
+
+        routeMap.removeLayer(
+            routeLayer
+        );
+
+        routeLayer = null;
+
+    }
+
+}
+
+
+/* ==========================================================================
+   CLEAR COMPLETE ROUTE MAP
+========================================================================== */
+
+function clearRouteMap(){
+
+    clearRouteLayer();
+
+
+    routeStopMarkers.forEach(
+        marker => {
+
+            if(routeMap){
+
+                routeMap.removeLayer(
+                    marker
+                );
+
+            }
+
+        }
+    );
+
+
+    routeStopMarkers = [];
+
+}
+
+
+/* ==========================================================================
+   ROUTE MAP STATUS
+========================================================================== */
+
+function updateRouteMapStatus(
+    message = null
+){
+
+    const status =
+        document.getElementById(
+            "route-map-status"
+        );
+
+
+    if(!status){
+
+        return;
+
+    }
+
+
+    if(message){
+
+        status.innerHTML = `
+
+            <i class="fa-solid fa-route"></i>
+
+            ${message}
+
+        `;
+
+        return;
+
+    }
+
+
+    if(selectedStops.length === 0){
+
+        status.innerHTML = `
+
+            <i class="fa-solid fa-route"></i>
+
+            Waiting for stops
+
+        `;
+
+    }
+
+    else if(selectedStops.length === 1){
+
+        status.innerHTML = `
+
+            <i class="fa-solid fa-location-dot"></i>
+
+            1 stop selected
+
+        `;
+
+    }
+
+    else{
+
+        status.innerHTML = `
+
+            <i class="fa-solid fa-route"></i>
+
+            ${selectedStops.length} stops selected
+
+        `;
+
+    }
+
+}
+/* ==========================================================================
    LOAD MASTER STOPS
 ========================================================================== */
 
@@ -673,16 +1639,27 @@ function bindRouteStopEvents() {
 
             renderSelectedStops();
 
+            updateRouteMap();
+
         }
+
 
 
         /* ==========================================================================
         MOVE STOP DOWN
         ========================================================================== */
 
-        function moveStopDown(index) {
+        function moveStopDown(index){
 
-            if (index >= selectedStops.length - 1) return;
+            if(
+                index >=
+                selectedStops.length - 1
+            ){
+
+                return;
+
+            }
+
 
             [
 
@@ -698,7 +1675,16 @@ function bindRouteStopEvents() {
 
             ];
 
+
             renderSelectedStops();
+
+
+            /*
+            * The order of the stops determines the
+            * order in which OSRM calculates the route.
+            */
+
+            updateRouteMap();
 
         }
 
@@ -709,12 +1695,16 @@ function bindRouteStopEvents() {
 
         function removeStop(index) {
 
-            selectedStops.splice(index, 1);
+            selectedStops.splice(
+                index,
+                1
+            );
 
             renderSelectedStops();
 
-        }
+            updateRouteMap();
 
+        }
 }
 /* ==========================================================================
    ADD STOP TO ROUTE
@@ -748,7 +1738,17 @@ function addStopToRoute() {
 
     stopDropdown.clear();
 
-    document.getElementById("add_stop_btn").disabled = true;
+    document.getElementById(
+        "add_stop_btn"
+    ).disabled = true;
+
+
+    /*
+    * Recalculate the route whenever a new stop
+    * is added.
+    */
+
+    updateRouteMap();
 
 }
 /* ==========================================================================
@@ -817,6 +1817,59 @@ function renderRouteStops() {
 
                 </div>
 
+
+            </div>
+            <!-- ==========================================================
+                ROUTE PREVIEW
+            =========================================================== -->
+
+            <div class="route-preview-section">
+
+                <div class="route-preview-header">
+
+                    <div>
+
+                        <span class="route-preview-caption">
+
+                            ROUTE PREVIEW
+
+                        </span>
+
+                        <h4 class="route-preview-title">
+
+                            Road Route
+
+                        </h4>
+
+                        <p class="route-preview-description">
+
+                            The route follows the actual road network
+                            between the selected stops.
+
+                        </p>
+
+                    </div>
+
+
+                    <div
+                        id="route-map-status"
+                        class="route-map-status"
+                    >
+
+                        <i class="fa-solid fa-route"></i>
+
+                        Waiting for stops
+
+                    </div>
+
+                </div>
+
+
+                <div
+                    id="route-preview-map"
+                    class="route-preview-map"
+                ></div>
+
             </div>
 
         </section>
@@ -837,10 +1890,52 @@ export function getSelectedStops() {
    SET SELECTED ROUTE STOPS
 ========================================================================== */
 
-export function setSelectedStops(stops = []) {
+export function setSelectedStops(
+    stops = []
+){
 
     selectedStops = [...stops];
 
     renderSelectedStops();
+
+    updateRouteMap();
+
+}
+/* ==========================================================================
+   DESTROY ROUTE MAP
+========================================================================== */
+
+export function destroyRouteMap(){
+
+    if(routeMap){
+
+        try{
+
+            routeMap.remove();
+
+        }
+
+        catch(error){
+
+            console.warn(
+
+                "BusTrack: Failed to destroy route map.",
+
+                error
+
+            );
+
+        }
+
+    }
+
+
+    routeMap = null;
+
+    routeMapContainer = null;
+
+    routeLayer = null;
+
+    routeStopMarkers = [];
 
 }

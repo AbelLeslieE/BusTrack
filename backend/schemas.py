@@ -78,6 +78,13 @@ class UserCreate(BaseModel):
 
     bus_id: int | None = None
 
+
+    # --------------------------------------------------
+    # Student-only fields
+    # --------------------------------------------------
+
+    student_code: str | None = None
+
 class UserUpdate(BaseModel):
     """
     Update an existing user.

@@ -1273,17 +1273,86 @@ function bindTableEvents(root) {
             LOAD EXISTING ROUTE STOPS
             ---------------------------------------------------------- */
 
-            const routeStops = await getRouteStops(route.id);
+            const routeStops =
+                await getRouteStops(
+                    route.id
+                );
 
-            const formattedStops = routeStops.map(stop => ({
 
-                id: stop.stop_id,
+            const formattedStops =
+                routeStops.map(
+                    routeStop => {
 
-                stop_name: stop.stop_name
+                        /*
+                        * RouteStop stores the stop_id.
+                        * The actual coordinates belong to
+                        * the master Stop record in state.stops.
+                        */
 
-            }));
+                        const stopId =
+                            routeStop.stop_id ??
+                            routeStop.stop?.id;
 
-            setSelectedStops(formattedStops);
+
+                        const masterStop =
+                            state.stops.find(
+                                stop =>
+                                    Number(stop.id) ===
+                                    Number(stopId)
+                            );
+
+
+                        if (!masterStop) {
+
+                            console.warn(
+                                "BusTrack: Master stop not found.",
+                                routeStop
+                            );
+
+                            return {
+
+                                id:
+                                    stopId,
+
+                                stop_name:
+                                    routeStop.stop_name ||
+                                    routeStop.name ||
+                                    "Transport Stop"
+
+                            };
+
+                        }
+
+
+                        return {
+
+                            id:
+                                masterStop.id,
+
+                            stop_name:
+                                masterStop.stop_name,
+
+                            latitude:
+                                masterStop.latitude,
+
+                            longitude:
+                                masterStop.longitude
+
+                        };
+
+                    }
+                );
+
+
+            console.log(
+                "BusTrack: Existing route stops loaded:",
+                formattedStops
+            );
+
+
+            setSelectedStops(
+                formattedStops
+            );
 
             return;
 

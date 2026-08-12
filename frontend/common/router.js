@@ -5,11 +5,36 @@
 
 import { createLoader } from "./loader.js";
 
-import { createSidebar, setSidebarActive } from "./sidebar.js";
-import { createDriverSidebar, setDriverSidebarActive } from "../modules/js/driverSidebar.js";
+import {
+    createSidebar,
+    setSidebarActive
+} from "./sidebar.js";
 
-import { createTopbar, setTopbarTitle } from "./topbar.js";
-import { createDriverTopbar, setDriverTopbarTitle } from "../modules/js/driverTopbar.js";
+import {
+    createDriverSidebar,
+    setDriverSidebarActive
+} from "../modules/js/driverSidebar.js";
+
+import {
+    createStudentSidebar,
+    setStudentSidebarActive
+} from "../modules/js/studentSidebar.js";
+
+
+import {
+    createTopbar,
+    setTopbarTitle
+} from "./topbar.js";
+
+import {
+    createDriverTopbar,
+    setDriverTopbarTitle
+} from "../modules/js/driverTopbar.js";
+
+import {
+    createStudentTopbar,
+    setStudentTopbarTitle
+} from "../modules/js/studentTopbar.js";
 // ==========================================================
 // ADMIN MODULES
 // ==========================================================
@@ -121,15 +146,75 @@ const driverModules = {
     }
 
 };
+// ==========================================================
+// STUDENT MODULES
+// ==========================================================
 
+const studentModules = {
+
+    studentDashboard: {
+        title: "Where Is My Bus?",
+        load: () => import("../modules/js/studentDashboard.js")
+    },
+
+    myBuses: {
+        title: "My Buses",
+        load: () => import("../modules/js/studentBuses.js")
+    },
+
+    studentTracking: {
+        title: "Live Tracking",
+        load: () => import("../modules/js/studentTracking.js")
+    },
+
+    notifications: {
+        title: "Notifications",
+        load: () => import("../modules/js/studentNotifications.js")
+    },
+
+    profile: {
+        title: "Profile",
+        load: () => import("../modules/js/studentProfile.js")
+    },
+
+    studentSettings: {
+        title: "Settings",
+        load: () => import("../modules/js/studentSettings.js")
+    }
+
+};
 let shell;
-const profile =
-    JSON.parse(localStorage.getItem("bus_tracker_profile") || "{}");
 
-const isDriver = profile.role === "Driver";
-const modules = isDriver
-    ? driverModules
-    : adminModules;
+const profile =
+    JSON.parse(
+        localStorage.getItem(
+            "bus_tracker_profile"
+        ) || "{}"
+    );
+
+
+/* ==========================================================
+   ROLE DETECTION
+========================================================== */
+
+const isDriver =
+    profile.role === "Driver";
+
+
+const isStudent =
+    profile.role === "Student";
+
+
+/* ==========================================================
+   MODULE COLLECTION
+========================================================== */
+
+const modules =
+    isDriver
+        ? driverModules
+        : isStudent
+            ? studentModules
+            : adminModules;
 function titleCase(value) {
   return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
@@ -176,14 +261,34 @@ function createShell(initialRoute) {
   if (!root) return null;
   document.body.classList.remove(
         "admin-theme",
-        "driver-theme"
+        "driver-theme",
+        "student-theme"
     );
 
-    document.body.classList.add(
-        isDriver
-            ? "driver-theme"
-            : "admin-theme"
-    );
+
+    if (isDriver) {
+
+        document.body.classList.add(
+            "driver-theme"
+        );
+
+    }
+
+    else if (isStudent) {
+
+        document.body.classList.add(
+            "student-theme"
+        );
+
+    }
+
+    else {
+
+        document.body.classList.add(
+            "admin-theme"
+        );
+
+    }
 
     const appShell = document.createElement("div");
 
@@ -233,9 +338,25 @@ function createShell(initialRoute) {
     };
 
 
-  const sidebar = isDriver
-      ? createDriverSidebar(initialRoute, navigate)
-      : createSidebar(initialRoute, navigate);
+  const sidebar =
+        isDriver
+
+            ? createDriverSidebar(
+                initialRoute,
+                navigate
+            )
+
+            : isStudent
+
+                ? createStudentSidebar(
+                    initialRoute,
+                    navigate
+                )
+
+                : createSidebar(
+                    initialRoute,
+                    navigate
+                );
 
   const toggleSidebar = () => {
 
@@ -247,9 +368,22 @@ function createShell(initialRoute) {
         }
 
     };
-    const topbar = isDriver
-        ? createDriverTopbar(toggleSidebar)
-        : createTopbar(toggleSidebar);
+    const topbar =
+        isDriver
+
+            ? createDriverTopbar(
+                toggleSidebar
+            )
+
+            : isStudent
+
+                ? createStudentTopbar(
+                    toggleSidebar
+                )
+
+                : createTopbar(
+                    toggleSidebar
+                );
   const content = document.createElement("main");
   content.className = "page-content";
   content.id = "page-content";
@@ -311,9 +445,12 @@ return {
 }
 
 export async function loadModule(requestedRoute) {
-  const defaultRoute = isDriver
-      ? "driverDashboard"
-      : "dashboard";
+  const defaultRoute =
+        isDriver
+            ? "driverDashboard"
+            : isStudent
+                ? "studentDashboard"
+                : "dashboard";
 
   if (!requestedRoute) {
       requestedRoute = defaultRoute;
@@ -348,24 +485,48 @@ export async function loadModule(requestedRoute) {
 
   if (isDriver) {
 
-      setDriverSidebarActive(shell.sidebar, route);
+        setDriverSidebarActive(
+            shell.sidebar,
+            route
+        );
 
-      setDriverTopbarTitle(
-          shell.topbar,
-          modules[route].title
-      );
 
-  }
-  else {
+        setDriverTopbarTitle(
+            shell.topbar,
+            modules[route].title
+        );
 
-      setSidebarActive(shell.sidebar, route);
+    }
 
-      setTopbarTitle(
-          shell.topbar,
-          modules[route].title
-      );
+    else if (isStudent) {
 
-  }
+        setStudentSidebarActive(
+            shell.sidebar,
+            route
+        );
+
+
+        setStudentTopbarTitle(
+            shell.topbar,
+            modules[route].title
+        );
+
+    }
+
+    else {
+
+        setSidebarActive(
+            shell.sidebar,
+            route
+        );
+
+
+        setTopbarTitle(
+            shell.topbar,
+            modules[route].title
+        );
+
+    }
   applyModuleStyles(route);
   shell.content.replaceChildren(createLoader(`Loading ${modules[route].title.toLowerCase()}`));
 
@@ -396,14 +557,23 @@ export async function loadModule(requestedRoute) {
   }
 }
 
-window.addEventListener("hashchange", () => {
+window.addEventListener(
+    "hashchange",
+    () => {
 
-    const defaultRoute = isDriver
-        ? "driverDashboard"
-        : "dashboard";
+        const defaultRoute =
+            isDriver
+                ? "driverDashboard"
+                : isStudent
+                    ? "studentDashboard"
+                    : "dashboard";
 
-    loadModule(
-        window.location.hash.slice(1) || defaultRoute
-    );
 
-});
+        loadModule(
+            window.location.hash.slice(1)
+            ||
+            defaultRoute
+        );
+
+    }
+);

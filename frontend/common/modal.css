@@ -1644,3 +1644,792 @@
     border:1px dashed rgba(255,255,255,.08);
 
 }
+/* ==========================================================================
+   BUS TRACK
+   ROUTE VIEW MODAL
+   MAP + ROUTE VIEW UI
+========================================================================== */
+
+
+/* ==========================================================
+   ROUTE VIEW ROOT
+========================================================== */
+
+.route-view{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:30px;
+
+    width:100%;
+
+}
+
+
+/* ==========================================================
+   ROUTE VIEW SECTION
+========================================================== */
+
+.route-view-section{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:20px;
+
+    width:100%;
+
+}
+
+
+/* ==========================================================
+   SECTION HEADER
+========================================================== */
+
+.route-view-section-header{
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:flex-start;
+
+    gap:20px;
+
+}
+
+
+/* ==========================================================
+   EYEBROW
+========================================================== */
+
+.route-view-eyebrow{
+
+    display:block;
+
+    margin-bottom:6px;
+
+    color:#4FD1FF;
+
+    font-size:.72rem;
+
+    font-weight:700;
+
+    letter-spacing:2.5px;
+
+    text-transform:uppercase;
+
+}
+
+
+/* ==========================================================
+   SECTION TITLE
+========================================================== */
+
+.route-view-section-header h3{
+
+    margin:0;
+
+    color:#FFFFFF;
+
+    font-size:1.15rem;
+
+    font-weight:700;
+
+}
+
+
+/* ==========================================================
+   ROUTE STATUS
+========================================================== */
+
+.route-view-status{
+
+    display:inline-flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    flex-shrink:0;
+
+    padding:8px 14px;
+
+    border-radius:999px;
+
+    color:#22C55E;
+
+    background:rgba(34,197,94,.10);
+
+    border:1px solid rgba(34,197,94,.18);
+
+    font-size:.78rem;
+
+    font-weight:700;
+
+}
+
+
+/* ==========================================================
+   MAP STATUS
+========================================================== */
+
+.route-view-map-status{
+
+    display:inline-flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    gap:8px;
+
+    flex-shrink:0;
+
+    padding:8px 14px;
+
+    border-radius:999px;
+
+    color:#7FDFFF;
+
+    background:rgba(79,209,255,.07);
+
+    border:1px solid rgba(79,209,255,.16);
+
+    font-size:.76rem;
+
+    font-weight:600;
+
+}
+
+
+/* ==========================================================
+   MAP CONTAINER
+========================================================== */
+
+.route-view-map{
+
+    position:relative;
+
+    width:100%;
+
+    height:460px;
+
+    min-height:460px;
+
+    overflow:hidden;
+
+    border-radius:20px;
+
+    background:#0B1628;
+
+    border:1px solid rgba(255,255,255,.08);
+
+    box-shadow:
+
+        0 16px 40px rgba(0,0,0,.35),
+
+        inset 0 1px 0 rgba(255,255,255,.04);
+
+}
+
+
+/* ==========================================================
+   LEAFLET MAP
+========================================================== */
+
+.route-view-map .leaflet-container{
+
+    width:100%;
+
+    height:100%;
+
+    min-height:100%;
+
+    border-radius:20px;
+
+    background:#0B1628;
+
+    font-family:inherit;
+
+}
+
+
+/* ==========================================================
+   LEAFLET TILE LAYER
+========================================================== */
+
+.route-view-map .leaflet-tile{
+
+    filter:
+
+        brightness(.78)
+
+        saturate(.82);
+
+}
+
+
+/* ==========================================================
+   LEAFLET CONTROLS
+========================================================== */
+
+.route-view-map .leaflet-control-zoom{
+
+    border:none;
+
+    box-shadow:
+
+        0 8px 20px rgba(0,0,0,.35);
+
+}
+
+
+.route-view-map .leaflet-control-zoom a{
+
+    width:36px;
+
+    height:36px;
+
+    line-height:36px;
+
+    color:#DCEBFF;
+
+    background:#101F37;
+
+    border:none;
+
+    border-bottom:1px solid rgba(255,255,255,.08);
+
+}
+
+
+.route-view-map .leaflet-control-zoom a:hover{
+
+    color:#FFFFFF;
+
+    background:#18304F;
+
+}
+
+
+/* ==========================================================
+   LEAFLET ATTRIBUTION
+========================================================== */
+
+.route-view-map .leaflet-control-attribution{
+
+    color:#7890B1;
+
+    background:rgba(8,18,35,.82);
+
+    backdrop-filter:blur(8px);
+
+}
+
+
+.route-view-map .leaflet-control-attribution a{
+
+    color:#6FDFFF;
+
+}
+
+
+/* ==========================================================
+   POPUP
+========================================================== */
+
+.route-view-map .leaflet-popup-content-wrapper{
+
+    padding:0;
+
+    border-radius:14px;
+
+    overflow:hidden;
+
+    color:#FFFFFF;
+
+    background:#0D1B31;
+
+    border:1px solid rgba(79,209,255,.18);
+
+    box-shadow:
+
+        0 15px 35px rgba(0,0,0,.45);
+
+}
+
+
+.route-view-map .leaflet-popup-content{
+
+    margin:0;
+
+}
+
+
+.route-view-map .leaflet-popup-tip{
+
+    background:#0D1B31;
+
+}
+
+
+/* ==========================================================
+   ROUTE POPUP
+========================================================== */
+
+.route-view-popup{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:12px;
+
+    min-width:190px;
+
+    padding:13px 15px;
+
+}
+
+
+.route-view-popup-number{
+
+    width:34px;
+
+    height:34px;
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    flex-shrink:0;
+
+    border-radius:50%;
+
+    color:#FFFFFF;
+
+    font-size:.82rem;
+
+    font-weight:800;
+
+    background:
+
+        linear-gradient(
+            135deg,
+            #4FD1FF,
+            #7C5CFF
+        );
+
+    box-shadow:
+
+        0 6px 15px rgba(79,209,255,.22);
+
+}
+
+
+.route-view-popup strong{
+
+    display:block;
+
+    margin-bottom:3px;
+
+    color:#FFFFFF;
+
+    font-size:.88rem;
+
+}
+
+
+.route-view-popup small{
+
+    display:block;
+
+    color:#8FA4C6;
+
+    font-size:.7rem;
+
+}
+
+
+/* ==========================================================
+   STOP COUNT
+========================================================== */
+
+.route-view-stop-count{
+
+    display:inline-flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    padding:7px 12px;
+
+    border-radius:999px;
+
+    color:#4FD1FF;
+
+    background:rgba(79,209,255,.08);
+
+    border:1px solid rgba(79,209,255,.12);
+
+    font-size:.76rem;
+
+    font-weight:700;
+
+}
+
+
+/* ==========================================================
+   STOP LIST
+========================================================== */
+
+.route-view-stop-list{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:12px;
+
+}
+
+
+/* ==========================================================
+   STOP BUTTON
+========================================================== */
+
+button.route-view-stop{
+
+    position:relative;
+
+    width:100%;
+
+    display:flex;
+
+    align-items:center;
+
+    gap:15px;
+
+    padding:15px 17px;
+
+    margin:0;
+
+    border-radius:17px;
+
+    border:1px solid rgba(255,255,255,.07);
+
+    outline:none;
+
+    cursor:pointer;
+
+    text-align:left;
+
+    color:#FFFFFF;
+
+    background:
+
+        linear-gradient(
+            145deg,
+            rgba(255,255,255,.055),
+            rgba(255,255,255,.025)
+        );
+
+    transition:
+
+        transform .25s ease,
+
+        border-color .25s ease,
+
+        background .25s ease,
+
+        box-shadow .25s ease;
+
+}
+
+
+button.route-view-stop:hover{
+
+    transform:translateY(-2px);
+
+    border-color:rgba(79,209,255,.30);
+
+    background:
+
+        linear-gradient(
+            145deg,
+            rgba(79,209,255,.09),
+            rgba(124,92,255,.05)
+        );
+
+    box-shadow:
+
+        0 10px 25px rgba(0,0,0,.20);
+
+}
+
+
+/* ==========================================================
+   SELECTED STOP
+========================================================== */
+
+button.route-view-stop.is-selected{
+
+    border-color:rgba(79,209,255,.55);
+
+    background:
+
+        linear-gradient(
+            145deg,
+            rgba(79,209,255,.13),
+            rgba(124,92,255,.09)
+        );
+
+    box-shadow:
+
+        0 0 25px rgba(79,209,255,.10),
+
+        inset 0 0 20px rgba(79,209,255,.03);
+
+}
+
+
+/* ==========================================================
+   STOP NUMBER
+========================================================== */
+
+.route-view-stop-number{
+
+    width:42px;
+
+    height:42px;
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    flex-shrink:0;
+
+    border-radius:50%;
+
+    color:#FFFFFF;
+
+    font-size:.85rem;
+
+    font-weight:800;
+
+    background:
+
+        linear-gradient(
+            135deg,
+            #4FD1FF,
+            #7C5CFF
+        );
+
+    box-shadow:
+
+        0 8px 20px rgba(79,209,255,.22);
+
+}
+
+
+/* ==========================================================
+   STOP CONTENT
+========================================================== */
+
+.route-view-stop-content{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:4px;
+
+    min-width:0;
+
+    flex:1;
+
+}
+
+
+.route-view-stop-content strong{
+
+    overflow:hidden;
+
+    color:#FFFFFF;
+
+    font-size:.94rem;
+
+    font-weight:700;
+
+    white-space:nowrap;
+
+    text-overflow:ellipsis;
+
+}
+
+
+.route-view-stop-content span{
+
+    color:#8FA4C6;
+
+    font-size:.75rem;
+
+}
+
+
+/* ==========================================================
+   STOP COORDINATES
+========================================================== */
+
+.route-view-stop-coordinates{
+
+    flex-shrink:0;
+
+    color:#7E96B8;
+
+    font-size:.7rem;
+
+    font-family:
+
+        "Consolas",
+
+        "Courier New",
+
+        monospace;
+
+}
+
+
+/* ==========================================================
+   CHEVRON
+========================================================== */
+
+.route-view-stop > i{
+
+    flex-shrink:0;
+
+    color:#6F88AA;
+
+    font-size:.75rem;
+
+    transition:.25s;
+
+}
+
+
+button.route-view-stop:hover > i{
+
+    color:#4FD1FF;
+
+    transform:translateX(3px);
+
+}
+
+
+/* ==========================================================
+   EMPTY STATE
+========================================================== */
+
+.route-view-empty{
+
+    display:flex;
+
+    flex-direction:column;
+
+    align-items:center;
+
+    justify-content:center;
+
+    gap:10px;
+
+    min-height:180px;
+
+    padding:30px;
+
+    text-align:center;
+
+    border-radius:18px;
+
+    border:1px dashed rgba(255,255,255,.10);
+
+    background:rgba(255,255,255,.025);
+
+    color:#8FA4C6;
+
+}
+
+
+.route-view-empty i{
+
+    color:#4FD1FF;
+
+    font-size:30px;
+
+}
+
+
+.route-view-empty strong{
+
+    color:#FFFFFF;
+
+    font-size:1rem;
+
+}
+
+
+.route-view-empty span{
+
+    color:#8FA4C6;
+
+    font-size:.82rem;
+
+}
+
+
+/* ==========================================================
+   RESPONSIVE
+========================================================== */
+
+@media(max-width:700px){
+
+    .route-view-map{
+
+        height:360px;
+
+        min-height:360px;
+
+    }
+
+
+    .route-view-section-header{
+
+        flex-direction:column;
+
+        align-items:flex-start;
+
+    }
+
+
+    .route-view-stop-coordinates{
+
+        display:none;
+
+    }
+
+
+    button.route-view-stop{
+
+        padding:14px;
+
+    }
+
+}

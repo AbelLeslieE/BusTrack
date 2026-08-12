@@ -23,6 +23,7 @@ from backend.routes.route_import import router as route_import_router
 from backend.routes.route_stops import router as route_stop_router
 from backend.routes.users import router as users_router
 from backend.routes.gps import router as gps_router
+from backend.routes.student import router as student_router
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = PROJECT_DIR / "frontend"
@@ -42,6 +43,7 @@ app.include_router(stop_router)
 app.include_router(route_import_router)
 app.include_router(route_stop_router)
 app.include_router(users_router)
+app.include_router(student_router)
 app.include_router(gps_router)
 
 

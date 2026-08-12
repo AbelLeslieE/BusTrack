@@ -86,6 +86,30 @@ class LiveTrip(Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    # ======================================================
+    # ROUTE STOP PROGRESSION
+    # ======================================================
+
+    current_route_stop_id: Mapped[int | None] = mapped_column(
+        ForeignKey("route_stops.id"),
+        nullable=True,
+        index=True,
+    )
+
+    current_stop_status: Mapped[str] = mapped_column(
+        String(20),
+        default="Approaching",
+    )
+
+    current_stop_arrived_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    current_stop_departed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
     # ======================================================
     # TRIP TIMESTAMPS

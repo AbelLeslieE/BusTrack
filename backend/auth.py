@@ -65,7 +65,7 @@ def authenticate_user(database_session: Session, username: str, password: str) -
     return user
 
 
-def create_user(database_session: Session, username: str, password: str, role: str = "admin") -> User:
+def create_user(database_session: Session, username: str, password: str, role: str = "Administrator"    ) -> User:
     """Create an active user using a salted hash instead of a plaintext password."""
 
     normalized_username = normalize_username(username)
@@ -87,8 +87,7 @@ def get_current_user(
     database_session: DatabaseSession,
 ) -> User:
 
-    print("========== TOKEN ==========")
-    print(token)
+    
 
     credentials_error = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -108,7 +107,7 @@ def get_current_user(
         select(User).where(User.username == username)
     )
 
-    print("DATABASE USER:", user)
+    
 
     if user is None:
         raise credentials_error

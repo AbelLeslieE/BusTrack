@@ -1,0 +1,2978 @@
+/* ==========================================================
+   BUSTRACK
+   STUDENT PORTAL
+   LIVE TRACKING
+   BASE + HEADER + VIEW SWITCHER
+   ========================================================== */
+
+
+/* ==========================================================
+   MAIN PAGE
+========================================================== */
+
+.student-tracking-page {
+
+    width: 100%;
+
+    min-height: 100%;
+
+    padding: 28px 34px 48px;
+
+    box-sizing: border-box;
+
+}
+
+
+/* ==========================================================
+   PAGE HEADER
+========================================================== */
+
+.student-tracking-header {
+
+    display: flex;
+
+    align-items: flex-start;
+
+    justify-content: space-between;
+
+    gap: 24px;
+
+    margin-bottom: 24px;
+
+}
+
+
+.student-tracking-header h2 {
+
+    margin: 0;
+
+    color: #f2f7ff;
+
+    font-size: clamp(
+        28px,
+        3vw,
+        40px
+    );
+
+    font-weight: 750;
+
+    line-height: 1.1;
+
+    letter-spacing: -0.8px;
+
+}
+
+
+.student-tracking-header p:not(
+    .student-section-eyebrow
+) {
+
+    margin: 8px 0 0;
+
+    color: #9eafc8;
+
+    font-size: 14px;
+
+    line-height: 1.6;
+
+}
+
+
+/* ==========================================================
+   SECTION EYEBROW
+========================================================== */
+
+.student-tracking-page
+.student-section-eyebrow {
+
+    margin: 0 0 8px;
+
+    color: #5ddfff;
+
+    font-size: 11px;
+
+    font-weight: 750;
+
+    letter-spacing: 2px;
+
+    text-transform: uppercase;
+
+}
+
+
+/* ==========================================================
+   VIEW SWITCHER
+========================================================== */
+
+.student-tracking-view-switcher {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    gap: 4px;
+
+    padding: 4px;
+
+    border: 1px solid
+        rgba(
+            132,
+            174,
+            230,
+            0.14
+        );
+
+    border-radius: 14px;
+
+    background:
+        rgba(
+            10,
+            25,
+            46,
+            0.78
+        );
+
+    box-shadow:
+        inset 0 1px 0
+        rgba(
+            255,
+            255,
+            255,
+            0.025
+        );
+
+}
+
+
+.student-tracking-view-button {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    gap: 8px;
+
+    min-width: 112px;
+
+    min-height: 40px;
+
+    padding: 0 16px;
+
+    border: 0;
+
+    border-radius: 10px;
+
+    background:
+        transparent;
+
+    color: #8396b2;
+
+    font-family: inherit;
+
+    font-size: 12px;
+
+    font-weight: 700;
+
+    cursor: pointer;
+
+    transition:
+        background 180ms ease,
+        color 180ms ease,
+        box-shadow 180ms ease,
+        transform 180ms ease;
+
+}
+
+
+.student-tracking-view-button:hover {
+
+    color: #dceaff;
+
+}
+
+
+.student-tracking-view-button.active {
+
+    background:
+        linear-gradient(
+            135deg,
+            rgba(
+                54,
+                178,
+                255,
+                0.22
+            ),
+            rgba(
+                105,
+                92,
+                255,
+                0.22
+            )
+        );
+
+    color: #eef7ff;
+
+    box-shadow:
+        0 5px 18px
+        rgba(
+            55,
+            143,
+            255,
+            0.10
+        );
+
+}
+
+
+.student-tracking-view-button i {
+
+    font-size: 13px;
+
+}
+
+
+.student-tracking-view-button:active {
+
+    transform:
+        scale(0.98);
+
+}
+
+
+/* ==========================================================
+   TRACKING SUMMARY
+========================================================== */
+
+.student-tracking-summary {
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(
+            4,
+            minmax(
+                0,
+                1fr
+            )
+        );
+
+    gap: 12px;
+
+    margin-bottom: 14px;
+
+}
+
+
+.student-tracking-summary-card {
+
+    min-width: 0;
+
+    padding: 15px 17px;
+
+    border: 1px solid
+        rgba(
+            132,
+            174,
+            230,
+            0.11
+        );
+
+    border-radius: 15px;
+
+    background:
+        linear-gradient(
+            145deg,
+            rgba(
+                20,
+                42,
+                72,
+                0.72
+            ),
+            rgba(
+                8,
+                22,
+                42,
+                0.82
+            )
+        );
+
+    box-shadow:
+        inset 0 1px 0
+        rgba(
+            255,
+            255,
+            255,
+            0.025
+        );
+
+}
+
+
+.student-tracking-summary-card span {
+
+    display: block;
+
+    margin-bottom: 5px;
+
+    color: #7185a4;
+
+    font-size: 10px;
+
+    font-weight: 750;
+
+    letter-spacing: 1px;
+
+    text-transform: uppercase;
+
+}
+
+
+.student-tracking-summary-card strong {
+
+    display: block;
+
+    overflow: hidden;
+
+    color: #eaf3ff;
+
+    font-size: 14px;
+
+    font-weight: 700;
+
+    line-height: 1.35;
+
+    text-overflow: ellipsis;
+
+    white-space: nowrap;
+
+}
+
+
+/* ==========================================================
+   CURRENT / NEXT STOP CARDS
+========================================================== */
+
+.student-tracking-stop-information {
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(
+            3,
+            minmax(
+                0,
+                1fr
+            )
+        );
+
+    gap: 12px;
+
+    margin-bottom: 14px;
+
+}
+
+
+.student-tracking-stop-card {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 13px;
+
+    min-width: 0;
+
+    padding: 14px 16px;
+
+    border: 1px solid
+        rgba(
+            132,
+            174,
+            230,
+            0.10
+        );
+
+    border-radius: 15px;
+
+    background:
+        rgba(
+            11,
+            28,
+            50,
+            0.68
+        );
+
+}
+
+
+.student-tracking-stop-card-icon {
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    flex: 0 0 40px;
+
+    width: 40px;
+
+    height: 40px;
+
+    border-radius: 12px;
+
+    font-size: 14px;
+
+}
+
+
+.student-tracking-stop-card-icon.current {
+
+    background:
+        rgba(
+            67,
+            206,
+            139,
+            0.11
+        );
+
+    color: #65e6a0;
+
+}
+
+
+.student-tracking-stop-card-icon.next {
+
+    background:
+        rgba(
+            74,
+            187,
+            255,
+            0.11
+        );
+
+    color: #62ddff;
+
+}
+
+
+.student-tracking-stop-card-icon.eta {
+
+    background:
+        rgba(
+            119,
+            103,
+            255,
+            0.12
+        );
+
+    color: #a79bff;
+
+}
+
+
+.student-tracking-stop-card-content {
+
+    min-width: 0;
+
+}
+
+
+.student-tracking-stop-card-content span {
+
+    display: block;
+
+    margin-bottom: 4px;
+
+    color: #7185a4;
+
+    font-size: 9px;
+
+    font-weight: 750;
+
+    letter-spacing: 0.9px;
+
+    text-transform: uppercase;
+
+}
+
+
+.student-tracking-stop-card-content strong {
+
+    display: block;
+
+    overflow: hidden;
+
+    color: #eaf3ff;
+
+    font-size: 13px;
+
+    font-weight: 700;
+
+    text-overflow: ellipsis;
+
+    white-space: nowrap;
+
+}
+
+
+/* ==========================================================
+   TRACKING STATUS
+========================================================== */
+
+.student-tracking-status {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    gap: 7px;
+
+    padding: 7px 11px;
+
+    border-radius: 999px;
+
+    font-size: 10px;
+
+    font-weight: 750;
+
+    letter-spacing: 0.6px;
+
+    text-transform: uppercase;
+
+}
+
+
+.student-tracking-status-dot {
+
+    width: 7px;
+
+    height: 7px;
+
+    border-radius: 50%;
+
+}
+
+
+.student-tracking-status-live {
+
+    border: 1px solid
+        rgba(
+            63,
+            226,
+            137,
+            0.18
+        );
+
+    background:
+        rgba(
+            48,
+            204,
+            123,
+            0.10
+        );
+
+    color: #6aeda4;
+
+}
+
+
+.student-tracking-status-live
+.student-tracking-status-dot {
+
+    background: #4ce792;
+
+    box-shadow:
+        0 0 10px
+        rgba(
+            76,
+            231,
+            146,
+            0.75
+        );
+
+}
+
+
+.student-tracking-status-warning {
+
+    border: 1px solid
+        rgba(
+            255,
+            185,
+            70,
+            0.18
+        );
+
+    background:
+        rgba(
+            255,
+            185,
+            70,
+            0.09
+        );
+
+    color: #ffc66e;
+
+}
+
+
+.student-tracking-status-warning
+.student-tracking-status-dot {
+
+    background: #ffba49;
+
+}
+
+
+.student-tracking-status-neutral {
+
+    border: 1px solid
+        rgba(
+            147,
+            168,
+            198,
+            0.15
+        );
+
+    background:
+        rgba(
+            147,
+            168,
+            198,
+            0.07
+        );
+
+    color: #b5c4d9;
+
+}
+
+
+.student-tracking-status-neutral
+.student-tracking-status-dot {
+
+    background: #9aaec8;
+
+}
+
+
+/* ==========================================================
+   RESPONSIVE — TABLET
+========================================================== */
+
+@media (
+    max-width: 1100px
+) {
+
+    .student-tracking-page {
+
+        padding:
+            24px 24px 40px;
+
+    }
+
+
+    .student-tracking-summary {
+
+        grid-template-columns:
+            repeat(
+                2,
+                minmax(
+                    0,
+                    1fr
+                )
+            );
+
+    }
+
+
+    .student-tracking-stop-information {
+
+        grid-template-columns:
+            1fr;
+
+    }
+
+}
+
+
+/* ==========================================================
+   RESPONSIVE — MOBILE
+========================================================== */
+
+@media (
+    max-width: 700px
+) {
+
+    .student-tracking-page {
+
+        padding:
+            20px 16px 32px;
+
+    }
+
+
+    .student-tracking-header {
+
+        flex-direction: column;
+
+        align-items: stretch;
+
+    }
+
+
+    .student-tracking-view-switcher {
+
+        align-self: flex-start;
+
+    }
+
+
+    .student-tracking-view-button {
+
+        min-width: 100px;
+
+    }
+
+
+    .student-tracking-summary {
+
+        grid-template-columns:
+            1fr 1fr;
+
+    }
+
+}
+
+
+/* ==========================================================
+   VERY SMALL MOBILE
+========================================================== */
+
+@media (
+    max-width: 460px
+) {
+
+    .student-tracking-summary {
+
+        grid-template-columns:
+            1fr;
+
+    }
+
+
+    .student-tracking-view-switcher {
+
+        width: 100%;
+
+    }
+
+
+    .student-tracking-view-button {
+
+        flex: 1;
+
+        min-width: 0;
+
+    }
+
+}
+/* ==========================================================
+   MAP VIEW
+========================================================== */
+
+.student-tracking-map-section {
+
+    position: relative;
+
+    width: 100%;
+
+    overflow: hidden;
+
+    border: 1px solid
+        rgba(
+            132,
+            174,
+            230,
+            0.13
+        );
+
+    border-radius: 22px;
+
+    background:
+        rgba(
+            8,
+            20,
+            38,
+            0.78
+        );
+
+    box-shadow:
+        0 18px 50px
+        rgba(
+            0,
+            0,
+            0,
+            0.18
+        );
+
+}
+
+
+/* ==========================================================
+   MAP CONTAINER
+========================================================== */
+
+.student-tracking-map-container {
+
+    position: relative;
+
+    width: 100%;
+
+    min-height: 540px;
+
+    overflow: hidden;
+
+    background:
+        #dfe8ef;
+
+}
+
+
+/*
+ * Leaflet requires the map container to have
+ * an explicit height.
+ */
+
+.student-tracking-map-container
+.leaflet-container {
+
+    width: 100%;
+
+    height: 540px;
+
+}
+
+
+/* ==========================================================
+   MAP LOADING
+========================================================== */
+
+.student-tracking-map-loading {
+
+    position: absolute;
+
+    inset: 0;
+
+    z-index: 500;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    flex-direction: column;
+
+    gap: 12px;
+
+    background:
+        rgba(
+            7,
+            20,
+            38,
+            0.72
+        );
+
+    backdrop-filter:
+        blur(5px);
+
+    pointer-events: none;
+
+}
+
+
+.student-tracking-map-loading p {
+
+    margin: 0;
+
+    color: #dce9f8;
+
+    font-size: 13px;
+
+    font-weight: 600;
+
+}
+
+
+/* ==========================================================
+   MAP OVERLAY
+========================================================== */
+
+.student-tracking-map-overlay {
+
+    position: absolute;
+
+    left: 18px;
+
+    bottom: 18px;
+
+    z-index: 900;
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 1px;
+
+    overflow: hidden;
+
+    border: 1px solid
+        rgba(
+            255,
+            255,
+            255,
+            0.10
+        );
+
+    border-radius: 15px;
+
+    background:
+        rgba(
+            8,
+            22,
+            42,
+            0.88
+        );
+
+    box-shadow:
+        0 10px 30px
+        rgba(
+            0,
+            0,
+            0,
+            0.28
+        );
+
+    backdrop-filter:
+        blur(14px);
+
+}
+
+
+.student-tracking-map-overlay > div {
+
+    min-width: 130px;
+
+    padding: 13px 16px;
+
+}
+
+
+.student-tracking-map-overlay > div + div {
+
+    border-left: 1px solid
+        rgba(
+            255,
+            255,
+            255,
+            0.08
+        );
+
+}
+
+
+.student-tracking-map-overlay span {
+
+    display: block;
+
+    margin-bottom: 4px;
+
+    color: #8094b2;
+
+    font-size: 9px;
+
+    font-weight: 750;
+
+    letter-spacing: 1px;
+
+    text-transform: uppercase;
+
+}
+
+
+.student-tracking-map-overlay strong {
+
+    display: block;
+
+    color: #eef6ff;
+
+    font-size: 13px;
+
+    font-weight: 700;
+
+}
+
+
+/* ==========================================================
+   BUS MAP MARKER
+========================================================== */
+
+.student-map-bus-marker {
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    background:
+        transparent;
+
+    border: 0;
+
+}
+
+
+.student-map-bus-marker-inner {
+
+    position: relative;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    width: 42px;
+
+    height: 42px;
+
+    border: 3px solid
+        #ffffff;
+
+    border-radius: 50%;
+
+    background:
+        linear-gradient(
+            135deg,
+            #31c9ff,
+            #675cff
+        );
+
+    color: #ffffff;
+
+    font-size: 16px;
+
+    box-shadow:
+        0 5px 18px
+        rgba(
+            47,
+            152,
+            255,
+            0.45
+        );
+
+}
+
+
+.student-map-bus-marker-inner::before {
+
+    content: "";
+
+    position: absolute;
+
+    inset: -7px;
+
+    border: 2px solid
+        rgba(
+            79,
+            215,
+            255,
+            0.35
+        );
+
+    border-radius: 50%;
+
+    animation:
+        studentBusPulse
+        1.8s ease-out infinite;
+
+}
+
+
+@keyframes studentBusPulse {
+
+    0% {
+
+        transform:
+            scale(0.75);
+
+        opacity: 0.9;
+
+    }
+
+    70% {
+
+        transform:
+            scale(1.25);
+
+        opacity: 0;
+
+    }
+
+    100% {
+
+        transform:
+            scale(1.25);
+
+        opacity: 0;
+
+    }
+
+}
+
+
+/* ==========================================================
+   STOP MAP MARKER
+========================================================== */
+
+.student-map-stop-marker {
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    background:
+        transparent;
+
+    border: 0;
+
+}
+
+
+.student-map-stop-marker-inner {
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    width: 28px;
+
+    height: 28px;
+
+    border: 2px solid
+        #ffffff;
+
+    border-radius: 50%;
+
+    background:
+        #344e70;
+
+    color: #eef6ff;
+
+    font-size: 10px;
+
+    font-weight: 750;
+
+    box-shadow:
+        0 3px 12px
+        rgba(
+            0,
+            0,
+            0,
+            0.25
+        );
+
+}
+
+
+/* ==========================================================
+   LEAFLET POPUP
+========================================================== */
+
+.student-tracking-map-container
+.leaflet-popup-content-wrapper {
+
+    border-radius: 12px;
+
+    background:
+        #10243e;
+
+    color: #eaf3ff;
+
+    box-shadow:
+        0 12px 35px
+        rgba(
+            0,
+            0,
+            0,
+            0.28
+        );
+
+}
+
+
+.student-tracking-map-container
+.leaflet-popup-tip {
+
+    background:
+        #10243e;
+
+}
+
+
+.student-tracking-map-container
+.leaflet-popup-content {
+
+    margin: 12px 14px;
+
+    color: #dbe8f7;
+
+    font-size: 12px;
+
+    line-height: 1.6;
+
+}
+
+
+.student-tracking-map-container
+.leaflet-popup-content strong {
+
+    color: #ffffff;
+
+    font-size: 13px;
+
+}
+
+
+/* ==========================================================
+   LEAFLET CONTROLS
+========================================================== */
+
+.student-tracking-map-container
+.leaflet-control-zoom a {
+
+    width: 34px;
+
+    height: 34px;
+
+    line-height: 34px;
+
+    border: 0;
+
+    background:
+        rgba(
+            11,
+            29,
+            51,
+            0.90
+        );
+
+    color: #d9e9fb;
+
+}
+
+
+.student-tracking-map-container
+.leaflet-control-zoom a:hover {
+
+    background:
+        rgba(
+            24,
+            51,
+            82,
+            0.95
+        );
+
+    color: #ffffff;
+
+}
+
+
+.student-tracking-map-container
+.leaflet-control-zoom {
+
+    overflow: hidden;
+
+    border: 1px solid
+        rgba(
+            255,
+            255,
+            255,
+            0.10
+        ) !important;
+
+    border-radius: 10px;
+
+    box-shadow:
+        0 6px 18px
+        rgba(
+            0,
+            0,
+            0,
+            0.20
+        );
+
+}
+
+
+/* ==========================================================
+   MAP ROUTE LINE
+========================================================== */
+
+.student-tracking-map-container
+.leaflet-overlay-pane
+path {
+
+    stroke-linecap: round;
+
+    stroke-linejoin: round;
+
+}
+
+
+/* ==========================================================
+   MAP MOBILE
+========================================================== */
+
+@media (
+    max-width: 700px
+) {
+
+    .student-tracking-map-section {
+
+        border-radius: 18px;
+
+    }
+
+
+    .student-tracking-map-container {
+
+        min-height: 430px;
+
+    }
+
+
+    .student-tracking-map-container
+    .leaflet-container {
+
+        height: 430px;
+
+    }
+
+
+    .student-tracking-map-overlay {
+
+        right: 12px;
+
+        left: 12px;
+
+        bottom: 12px;
+
+    }
+
+
+    .student-tracking-map-overlay > div {
+
+        flex: 1;
+
+        min-width: 0;
+
+        padding:
+            11px 12px;
+
+    }
+
+}
+
+
+@media (
+    max-width: 430px
+) {
+
+    .student-tracking-map-container {
+
+        min-height: 380px;
+
+    }
+
+
+    .student-tracking-map-container
+    .leaflet-container {
+
+        height: 380px;
+
+    }
+
+
+    .student-tracking-map-overlay span {
+
+        font-size: 8px;
+
+    }
+
+
+    .student-tracking-map-overlay strong {
+
+        font-size: 12px;
+
+    }
+
+}
+/* ==========================================================
+   TRACK VIEW
+========================================================== */
+
+.student-tracking-track-section {
+
+    width: 100%;
+
+}
+
+
+.student-track-card {
+
+    position: relative;
+
+    overflow: hidden;
+
+    padding: 26px;
+
+    border: 1px solid
+        rgba(
+            132,
+            174,
+            230,
+            0.13
+        );
+
+    border-radius: 22px;
+
+    background:
+        linear-gradient(
+            145deg,
+            rgba(
+                18,
+                39,
+                68,
+                0.78
+            ),
+            rgba(
+                8,
+                22,
+                42,
+                0.88
+            )
+        );
+
+    box-shadow:
+        0 18px 50px
+        rgba(
+            0,
+            0,
+            0,
+            0.18
+        );
+
+}
+
+
+/* ==========================================================
+   TRACK CARD HEADER
+========================================================== */
+
+.student-track-card-header {
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    gap: 20px;
+
+    padding-bottom: 22px;
+
+    border-bottom: 1px solid
+        rgba(
+            132,
+            174,
+            230,
+            0.09
+        );
+
+}
+
+
+.student-track-card-header h3 {
+
+    margin: 0;
+
+    color: #edf5ff;
+
+    font-size: 21px;
+
+    font-weight: 700;
+
+    line-height: 1.3;
+
+}
+
+
+/* ==========================================================
+   ROUTE TIMELINE
+========================================================== */
+
+.student-route-timeline {
+
+    position: relative;
+
+    padding: 30px 8px 10px;
+
+}
+
+
+/* ==========================================================
+   VERTICAL TRACK LINE
+========================================================== */
+
+.student-route-line {
+
+    position: absolute;
+
+    top: 48px;
+
+    bottom: 45px;
+
+    left: 28px;
+
+    width: 2px;
+
+    background:
+        linear-gradient(
+            to bottom,
+            rgba(
+                82,
+                224,
+                255,
+                0.70
+            ) 0%,
+            rgba(
+                82,
+                224,
+                255,
+                0.25
+            ) 48%,
+            rgba(
+                132,
+                174,
+                230,
+                0.10
+            ) 100%
+        );
+
+}
+
+
+/* ==========================================================
+   INDIVIDUAL STOP
+========================================================== */
+
+.student-route-stop {
+
+    position: relative;
+
+    display: flex;
+
+    align-items: flex-start;
+
+    gap: 22px;
+
+    min-height: 98px;
+
+}
+
+
+.student-route-stop:last-child {
+
+    min-height: 70px;
+
+}
+
+
+/* ==========================================================
+   STOP MARKER
+========================================================== */
+
+.student-route-stop-marker {
+
+    position: relative;
+
+    z-index: 2;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    flex: 0 0 42px;
+
+    width: 42px;
+
+    height: 42px;
+
+    border: 2px solid
+        rgba(
+            132,
+            174,
+            230,
+            0.22
+        );
+
+    border-radius: 50%;
+
+    background:
+        #102844;
+
+    color: #7890af;
+
+    font-size: 12px;
+
+    box-shadow:
+        0 4px 14px
+        rgba(
+            0,
+            0,
+            0,
+            0.18
+        );
+
+}
+
+
+/* ==========================================================
+   PASSED STOP
+========================================================== */
+
+.student-route-stop-passed
+.student-route-stop-marker {
+
+    border-color:
+        rgba(
+            72,
+            225,
+            147,
+            0.55
+        );
+
+    background:
+        rgba(
+            52,
+            188,
+            118,
+            0.15
+        );
+
+    color: #68e8a1;
+
+}
+
+
+.student-route-stop-passed
+.student-route-stop-content {
+
+    opacity: 0.68;
+
+}
+
+
+/* ==========================================================
+   CURRENT STOP
+========================================================== */
+
+.student-route-stop-current
+.student-route-stop-marker {
+
+    width: 48px;
+
+    height: 48px;
+
+    flex-basis: 48px;
+
+    margin-left: -3px;
+
+    border-color:
+        #ffffff;
+
+    background:
+        linear-gradient(
+            135deg,
+            #2fcaff,
+            #675cff
+        );
+
+    color: #ffffff;
+
+    box-shadow:
+        0 0 0 7px
+        rgba(
+            77,
+            203,
+            255,
+            0.10
+        ),
+        0 8px 24px
+        rgba(
+            60,
+            167,
+            255,
+            0.30
+        );
+
+}
+
+
+.student-route-stop-current
+.student-route-stop-content {
+
+    transform:
+        translateY(-2px);
+
+}
+
+
+/* ==========================================================
+   CURRENT STOP PULSE
+========================================================== */
+
+.student-route-stop-current
+.student-route-stop-marker::before {
+
+    content: "";
+
+    position: absolute;
+
+    inset: -8px;
+
+    border: 2px solid
+        rgba(
+            74,
+            210,
+            255,
+            0.28
+        );
+
+    border-radius: 50%;
+
+    animation:
+        studentTrackPulse
+        1.8s ease-out infinite;
+
+}
+
+
+@keyframes studentTrackPulse {
+
+    0% {
+
+        transform:
+            scale(0.75);
+
+        opacity: 0.85;
+
+    }
+
+    70% {
+
+        transform:
+            scale(1.2);
+
+        opacity: 0;
+
+    }
+
+    100% {
+
+        transform:
+            scale(1.2);
+
+        opacity: 0;
+
+    }
+
+}
+
+
+/* ==========================================================
+   NEXT STOP
+========================================================== */
+
+.student-route-stop-next
+.student-route-stop-marker {
+
+    border-color:
+        rgba(
+            82,
+            220,
+            255,
+            0.45
+        );
+
+    background:
+        rgba(
+            61,
+            179,
+            225,
+            0.10
+        );
+
+    color: #62ddff;
+
+}
+
+
+.student-route-stop-next
+.student-route-stop-content {
+
+    transform:
+        translateY(-1px);
+
+}
+
+
+/* ==========================================================
+   UPCOMING STOP
+========================================================== */
+
+.student-route-stop-upcoming
+.student-route-stop-marker {
+
+    background:
+        rgba(
+            18,
+            40,
+            67,
+            0.90
+        );
+
+    color: #6f85a2;
+
+}
+
+
+/* ==========================================================
+   STOP CONTENT
+========================================================== */
+
+.student-route-stop-content {
+
+    flex: 1;
+
+    min-width: 0;
+
+    padding-top: 2px;
+
+}
+
+
+.student-route-stop-heading {
+
+    display: flex;
+
+    align-items: flex-start;
+
+    justify-content: space-between;
+
+    gap: 18px;
+
+}
+
+
+.student-route-stop-heading h4 {
+
+    margin: 4px 0 0;
+
+    color: #eaf3ff;
+
+    font-size: 16px;
+
+    font-weight: 700;
+
+    line-height: 1.35;
+
+}
+
+
+.student-route-stop-sequence {
+
+    display: block;
+
+    color: #6f85a3;
+
+    font-size: 9px;
+
+    font-weight: 750;
+
+    letter-spacing: 1px;
+
+}
+
+
+.student-route-stop-status {
+
+    flex-shrink: 0;
+
+    margin-top: 4px;
+
+    padding: 5px 9px;
+
+    border: 1px solid
+        rgba(
+            132,
+            174,
+            230,
+            0.10
+        );
+
+    border-radius: 999px;
+
+    color: #8297b4;
+
+    font-size: 9px;
+
+    font-weight: 750;
+
+    letter-spacing: 0.6px;
+
+    text-transform: uppercase;
+
+}
+
+
+.student-route-stop-current
+.student-route-stop-status {
+
+    border-color:
+        rgba(
+            78,
+            214,
+            255,
+            0.20
+        );
+
+    background:
+        rgba(
+            73,
+            202,
+            255,
+            0.08
+        );
+
+    color: #64dcff;
+
+}
+
+
+.student-route-stop-next
+.student-route-stop-status {
+
+    border-color:
+        rgba(
+            74,
+            211,
+            255,
+            0.16
+        );
+
+    background:
+        rgba(
+            74,
+            211,
+            255,
+            0.06
+        );
+
+    color: #62d9ff;
+
+}
+
+
+.student-route-stop-passed
+.student-route-stop-status {
+
+    border-color:
+        rgba(
+            74,
+            222,
+            139,
+            0.15
+        );
+
+    background:
+        rgba(
+            74,
+            222,
+            139,
+            0.06
+        );
+
+    color: #67db9b;
+
+}
+
+
+/* ==========================================================
+   STOP DETAILS
+========================================================== */
+
+.student-route-stop-details {
+
+    display: flex;
+
+    flex-wrap: wrap;
+
+    gap: 16px;
+
+    margin-top: 9px;
+
+}
+
+
+.student-route-stop-details span {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    gap: 6px;
+
+    color: #7085a2;
+
+    font-size: 11px;
+
+}
+
+
+.student-route-stop-details i {
+
+    color: #627b9d;
+
+    font-size: 10px;
+
+}
+
+
+/* ==========================================================
+   EMPTY ROUTE STATE
+========================================================== */
+
+.student-route-empty {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 16px;
+
+    min-height: 180px;
+
+    padding: 20px;
+
+}
+
+
+.student-route-empty-icon {
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    flex: 0 0 54px;
+
+    width: 54px;
+
+    height: 54px;
+
+    border-radius: 16px;
+
+    background:
+        rgba(
+            73,
+            192,
+            255,
+            0.10
+        );
+
+    color: #63dfff;
+
+    font-size: 19px;
+
+}
+
+
+.student-route-empty h4 {
+
+    margin: 0;
+
+    color: #eaf3ff;
+
+    font-size: 16px;
+
+}
+
+
+.student-route-empty p {
+
+    margin: 6px 0 0;
+
+    color: #8195b1;
+
+    font-size: 12px;
+
+}
+
+
+/* ==========================================================
+   ROUTE LOADING
+========================================================== */
+
+.student-route-loading {
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    flex-direction: column;
+
+    min-height: 220px;
+
+    gap: 13px;
+
+}
+
+
+.student-route-loading p {
+
+    margin: 0;
+
+    color: #8195b1;
+
+    font-size: 12px;
+
+}
+
+
+/* ==========================================================
+   TRACKING FOOTER
+========================================================== */
+
+.student-tracking-footer {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 13px;
+
+    margin-top: 16px;
+
+}
+
+
+.student-refresh-button {
+
+    display: inline-flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    gap: 8px;
+
+    min-height: 40px;
+
+    padding: 0 15px;
+
+    border: 1px solid
+        rgba(
+            132,
+            174,
+            230,
+            0.14
+        );
+
+    border-radius: 11px;
+
+    background:
+        rgba(
+            17,
+            37,
+            63,
+            0.75
+        );
+
+    color: #b9cae0;
+
+    font-family: inherit;
+
+    font-size: 11px;
+
+    font-weight: 700;
+
+    cursor: pointer;
+
+    transition:
+        background 180ms ease,
+        color 180ms ease,
+        border-color 180ms ease,
+        transform 180ms ease;
+
+}
+
+
+.student-refresh-button:hover {
+
+    border-color:
+        rgba(
+            86,
+            211,
+            255,
+            0.24
+        );
+
+    background:
+        rgba(
+            27,
+            55,
+            87,
+            0.85
+        );
+
+    color: #edf6ff;
+
+}
+
+
+.student-refresh-button:active {
+
+    transform:
+        scale(0.98);
+
+}
+
+
+.student-refresh-button:disabled {
+
+    opacity: 0.55;
+
+    cursor: not-allowed;
+
+}
+
+
+.student-tracking-refresh-note {
+
+    color: #667d9c;
+
+    font-size: 11px;
+
+}
+
+
+/* ==========================================================
+   TRACK VIEW MOBILE
+========================================================== */
+
+@media (
+    max-width: 700px
+) {
+
+    .student-track-card {
+
+        padding: 20px;
+
+        border-radius: 18px;
+
+    }
+
+
+    .student-track-card-header {
+
+        align-items: flex-start;
+
+        flex-direction: column;
+
+        gap: 14px;
+
+    }
+
+
+    .student-route-timeline {
+
+        padding:
+            26px 0 8px;
+
+    }
+
+
+    .student-route-line {
+
+        left: 23px;
+
+    }
+
+
+    .student-route-stop {
+
+        gap: 16px;
+
+        min-height: 100px;
+
+    }
+
+
+    .student-route-stop-marker {
+
+        flex-basis: 38px;
+
+        width: 38px;
+
+        height: 38px;
+
+    }
+
+
+    .student-route-stop-current
+    .student-route-stop-marker {
+
+        flex-basis: 44px;
+
+        width: 44px;
+
+        height: 44px;
+
+        margin-left: -3px;
+
+    }
+
+
+    .student-route-stop-heading {
+
+        flex-direction: column;
+
+        gap: 7px;
+
+    }
+
+
+    .student-route-stop-status {
+
+        align-self: flex-start;
+
+    }
+
+
+    .student-route-stop-heading h4 {
+
+        font-size: 14px;
+
+    }
+
+
+    .student-tracking-footer {
+
+        align-items: flex-start;
+
+        flex-direction: column;
+
+    }
+
+}
+
+
+/* ==========================================================
+   REDUCED MOTION
+========================================================== */
+
+@media (
+    prefers-reduced-motion: reduce
+) {
+
+    .student-route-stop-current
+    .student-route-stop-marker::before {
+
+        animation: none;
+
+    }
+
+
+    .student-map-bus-marker-inner::before {
+
+        animation: none;
+
+    }
+
+}
+/* ==========================================================
+   TRACKING MESSAGE / STATE
+========================================================== */
+
+.student-tracking-message {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 18px;
+
+    min-height: 120px;
+
+    margin-bottom: 14px;
+
+    padding: 22px 24px;
+
+    border: 1px solid
+        rgba(
+            132,
+            174,
+            230,
+            0.11
+        );
+
+    border-radius: 18px;
+
+    background:
+        rgba(
+            11,
+            28,
+            50,
+            0.68
+        );
+
+}
+
+
+/* ==========================================================
+   MESSAGE ICON
+========================================================== */
+
+.student-tracking-message-icon {
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    flex: 0 0 52px;
+
+    width: 52px;
+
+    height: 52px;
+
+    border-radius: 15px;
+
+    background:
+        rgba(
+            74,
+            190,
+            255,
+            0.10
+        );
+
+    color: #62ddff;
+
+    font-size: 19px;
+
+}
+
+
+/* ==========================================================
+   MESSAGE TEXT
+========================================================== */
+
+.student-tracking-message > div:last-child {
+
+    min-width: 0;
+
+}
+
+
+.student-tracking-message span {
+
+    display: block;
+
+    margin-bottom: 5px;
+
+    color: #62ddff;
+
+    font-size: 9px;
+
+    font-weight: 750;
+
+    letter-spacing: 1.3px;
+
+    text-transform: uppercase;
+
+}
+
+
+.student-tracking-message h3 {
+
+    margin: 0;
+
+    color: #edf5ff;
+
+    font-size: 17px;
+
+    font-weight: 700;
+
+    line-height: 1.35;
+
+}
+
+
+.student-tracking-message p {
+
+    margin: 5px 0 0;
+
+    color: #879bb7;
+
+    font-size: 12px;
+
+    line-height: 1.55;
+
+}
+
+
+/* ==========================================================
+   WAITING STATE
+========================================================== */
+
+.student-tracking-message.waiting {
+
+    border-color:
+        rgba(
+            255,
+            188,
+            73,
+            0.14
+        );
+
+    background:
+        linear-gradient(
+            145deg,
+            rgba(
+                52,
+                40,
+                20,
+                0.40
+            ),
+            rgba(
+                21,
+                28,
+                42,
+                0.70
+            )
+        );
+
+}
+
+
+.student-tracking-message.waiting
+.student-tracking-message-icon {
+
+    background:
+        rgba(
+            255,
+            185,
+            70,
+            0.10
+        );
+
+    color: #ffc15d;
+
+}
+
+
+.student-tracking-message.waiting
+span {
+
+    color: #ffc15d;
+
+}
+
+
+/* ==========================================================
+   ERROR STATE
+========================================================== */
+
+.student-tracking-message.error {
+
+    border-color:
+        rgba(
+            255,
+            101,
+            116,
+            0.18
+        );
+
+    background:
+        linear-gradient(
+            145deg,
+            rgba(
+                63,
+                27,
+                37,
+                0.48
+            ),
+            rgba(
+                24,
+                27,
+                42,
+                0.72
+            )
+        );
+
+}
+
+
+.student-tracking-message.error
+.student-tracking-message-icon {
+
+    background:
+        rgba(
+            255,
+            91,
+            108,
+            0.10
+        );
+
+    color: #ff8290;
+
+}
+
+
+.student-tracking-message.error
+span {
+
+    color: #ff8793;
+
+}
+
+
+/* ==========================================================
+   LOADING STATE
+========================================================== */
+
+.student-loading-spinner {
+
+    width: 30px;
+
+    height: 30px;
+
+    border: 3px solid
+        rgba(
+            100,
+            190,
+            255,
+            0.15
+        );
+
+    border-top-color:
+        #62ddff;
+
+    border-radius: 50%;
+
+    animation:
+        studentTrackingSpinner
+        850ms linear infinite;
+
+}
+
+
+.student-tracking-message
+.student-loading-spinner {
+
+    flex: 0 0 30px;
+
+}
+
+
+@keyframes studentTrackingSpinner {
+
+    from {
+
+        transform:
+            rotate(0deg);
+
+    }
+
+    to {
+
+        transform:
+            rotate(360deg);
+
+    }
+
+}
+
+
+/* ==========================================================
+   MAP LOADING SPINNER
+========================================================== */
+
+.student-tracking-map-loading
+.student-loading-spinner {
+
+    width: 34px;
+
+    height: 34px;
+
+}
+
+
+/* ==========================================================
+   HIDDEN PANELS
+========================================================== */
+
+.student-tracking-map-section[hidden],
+.student-tracking-track-section[hidden] {
+
+    display: none !important;
+
+}
+
+
+/* ==========================================================
+   DISABLED / UNAVAILABLE MAP
+========================================================== */
+
+.student-tracking-map-section
+.leaflet-container {
+
+    font-family: inherit;
+
+}
+
+
+/* ==========================================================
+   TRACKING DATA STALE INDICATOR
+========================================================== */
+
+.student-tracking-stale {
+
+    border-color:
+        rgba(
+            255,
+            190,
+            70,
+            0.18
+        );
+
+    color: #ffc56a;
+
+}
+
+
+/* ==========================================================
+   FOOTER NOTE
+========================================================== */
+
+.student-tracking-refresh-note {
+
+    line-height: 1.5;
+
+}
+
+
+/* ==========================================================
+   TABLET STATE LAYOUT
+========================================================== */
+
+@media (
+    max-width: 900px
+) {
+
+    .student-tracking-header {
+
+        gap: 16px;
+
+    }
+
+
+    .student-tracking-header h2 {
+
+        font-size: 32px;
+
+    }
+
+
+    .student-tracking-map-container,
+    .student-tracking-map-container
+    .leaflet-container {
+
+        min-height: 480px;
+
+        height: 480px;
+
+    }
+
+}
+
+
+/* ==========================================================
+   MOBILE STATE LAYOUT
+========================================================== */
+
+@media (
+    max-width: 700px
+) {
+
+    .student-tracking-message {
+
+        align-items: flex-start;
+
+        gap: 14px;
+
+        padding: 18px;
+
+    }
+
+
+    .student-tracking-message-icon {
+
+        flex-basis: 44px;
+
+        width: 44px;
+
+        height: 44px;
+
+        border-radius: 13px;
+
+        font-size: 16px;
+
+    }
+
+
+    .student-tracking-message h3 {
+
+        font-size: 15px;
+
+    }
+
+
+    .student-tracking-message p {
+
+        font-size: 11px;
+
+    }
+
+
+    .student-tracking-refresh-note {
+
+        font-size: 10px;
+
+    }
+
+}
+
+
+/* ==========================================================
+   SMALL MOBILE
+========================================================== */
+
+@media (
+    max-width: 460px
+) {
+
+    .student-tracking-header h2 {
+
+        font-size: 28px;
+
+    }
+
+
+    .student-tracking-header
+    p:not(
+        .student-section-eyebrow
+    ) {
+
+        font-size: 12px;
+
+    }
+
+
+    .student-tracking-message {
+
+        flex-direction: column;
+
+    }
+
+
+    .student-tracking-map-overlay {
+
+        flex-direction: column;
+
+        align-items: stretch;
+
+        width: calc(
+            100% - 24px
+        );
+
+    }
+
+
+    .student-tracking-map-overlay > div {
+
+        width: 100%;
+
+        box-sizing: border-box;
+
+    }
+
+
+    .student-tracking-map-overlay > div + div {
+
+        border-top: 1px solid
+            rgba(
+                255,
+                255,
+                255,
+                0.08
+            );
+
+        border-left: 0;
+
+    }
+
+}
+
+
+/* ==========================================================
+   REDUCED MOTION
+========================================================== */
+
+@media (
+    prefers-reduced-motion: reduce
+) {
+
+    .student-loading-spinner {
+
+        animation: none;
+
+    }
+
+}

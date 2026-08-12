@@ -130,6 +130,12 @@ class User(Base):
         uselist=False,
     )
 
+    student = relationship(
+        "Student",
+        back_populates="user",
+        uselist=False,
+    )
+
 class Bus(Base):
     """
     Stores information about every school bus.
@@ -223,6 +229,7 @@ class Bus(Base):
         back_populates="bus",
         uselist=False,
     )
+
 class Driver(Base):
     """
     Driver profile.
@@ -326,7 +333,104 @@ class Driver(Base):
         onupdate=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
+# ==========================================================
+# STUDENT MODEL
+# ==========================================================
 
+class Student(Base):
+    """
+    Student profile.
+
+    Login credentials and general personal information are
+    stored in the Users table.
+
+    This table stores student-specific transport information.
+    """
+
+    __tablename__ = "students"
+
+    # ======================================================
+    # PRIMARY KEY
+    # ======================================================
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    # ======================================================
+    # LINKED USER ACCOUNT
+    # ======================================================
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+
+    # ======================================================
+    # STUDENT INFORMATION
+    # ======================================================
+
+    student_code: Mapped[str] = mapped_column(
+        String(30),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+
+    # ======================================================
+    # TRANSPORT ASSIGNMENT
+    # ======================================================
+
+    bus_id: Mapped[int | None] = mapped_column(
+        ForeignKey("buses.id"),
+        nullable=True,
+    )
+
+    stop_id: Mapped[int | None] = mapped_column(
+        ForeignKey("stops.id"),
+        nullable=True,
+    )
+
+    # ======================================================
+    # RELATIONSHIPS
+    # ======================================================
+
+    user = relationship(
+        "User",
+        back_populates="student",
+        lazy="joined",
+    )
+
+    bus = relationship(
+        "Bus",
+        lazy="joined",
+    )
+
+    stop = relationship(
+        "Stop",
+        lazy="joined",
+    )
+
+    # ======================================================
+    # AUDIT
+    # ======================================================
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
 # ==========================================================
 # ROUTE MODEL
 # ==========================================================
