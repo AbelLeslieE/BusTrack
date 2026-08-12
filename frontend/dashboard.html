@@ -66,9 +66,34 @@
         let moduleName;
 
 
-        switch (profile.role) {
+        // ==========================================================
+        // ROLE-BASED MODULE SELECTION
+        // ==========================================================
 
-            case "Administrator":
+        // Normalize the role returned by the backend.
+        //
+        // Backend currently uses:
+        //   admin
+        //   driver
+        //   student
+        //
+        // This also accepts the older frontend names:
+        //   Administrator
+        //   Driver
+        //   Student
+
+        const role = String(profile.role || "")
+            .trim()
+            .toLowerCase();
+
+        switch (role) {
+
+            // ------------------------------------------------------
+            // ADMINISTRATOR
+            // ------------------------------------------------------
+
+            case "admin":
+            case "administrator":
 
                 moduleName =
                     window.location.hash.slice(1) ||
@@ -77,7 +102,11 @@
                 break;
 
 
-            case "Driver":
+            // ------------------------------------------------------
+            // DRIVER
+            // ------------------------------------------------------
+
+            case "driver":
 
                 if (!window.location.hash) {
 
@@ -92,7 +121,11 @@
                 break;
 
 
-            case "Student":
+            // ------------------------------------------------------
+            // STUDENT
+            // ------------------------------------------------------
+
+            case "student":
 
                 if (!window.location.hash) {
 
@@ -107,6 +140,10 @@
                 break;
 
 
+            // ------------------------------------------------------
+            // UNKNOWN ROLE
+            // ------------------------------------------------------
+
             default:
 
                 console.error(
@@ -119,7 +156,6 @@
                 );
 
         }
-
 
         loadModule(moduleName);
 
