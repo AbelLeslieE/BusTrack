@@ -49,6 +49,44 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def initialize_database() -> None:
-    """Create defined tables for local development and first-time setup."""
+    """
+    Create the database schema.
 
-    Base.metadata.create_all(bind=engine)
+    RESET_DATABASE=true performs a one-time destructive reset.
+    Remove the environment variable immediately after the reset.
+    """
+
+    reset_database = (
+        os.getenv("RESET_DATABASE", "false").lower() == "true"
+    )
+
+    # ======================================================
+    # TEMPORARY DATABASE RESET
+    # ======================================================
+
+    if reset_database:
+
+        print("==================================================")
+        print("WARNING: RESET_DATABASE=true")
+        print("Dropping existing database tables...")
+        print("==================================================")
+
+        Base.metadata.drop_all(
+            bind=engine
+        )
+
+        print(
+            "Existing database tables removed."
+        )
+
+    # ======================================================
+    # CREATE CURRENT DATABASE SCHEMA
+    # ======================================================
+
+    Base.metadata.create_all(
+        bind=engine
+    )
+
+    print(
+        "Database schema initialized successfully."
+    )
