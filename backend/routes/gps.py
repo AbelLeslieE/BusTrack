@@ -24,7 +24,6 @@ from backend.services.tracking_engine import (
     calculate_speed_kmh,
     validate_speed,
     calculate_stop_distance,
-    detect_geofence_transition,
     is_inside_stop_radius,
 )
 from backend.auth import get_current_user
@@ -797,108 +796,7 @@ def update_location(
         .all()
     )
 
-    # ======================================================
-    # CHECK GEOFENCE TRANSITIONS
-    # ======================================================
 
-    geofence_events = []
-
-    if route_stops:
-
-        for route_stop in route_stops:
-
-            stop = route_stop.stop
-
-            if stop is None:
-
-                continue
-
-            # --------------------------------------------------
-            # Current distance
-            # --------------------------------------------------
-
-            current_distance = (
-                calculate_stop_distance(
-                    request.latitude,
-                    request.longitude,
-                    stop,
-                )
-            )
-
-            # --------------------------------------------------
-            # Previous distance
-            # --------------------------------------------------
-
-            previous_distance = None
-
-            if previous_location is not None:
-
-                previous_distance = (
-                    calculate_stop_distance(
-                        previous_location.latitude,
-                        previous_location.longitude,
-                        stop,
-                    )
-                )
-
-            # --------------------------------------------------
-            # Detect ARRIVED / DEPARTED
-            # --------------------------------------------------
-
-            transition = (
-                detect_geofence_transition(
-
-                    previous_distance_meters =
-                        previous_distance,
-
-                    current_distance_meters =
-                        current_distance,
-
-                    stop =
-                        stop,
-                )
-            )
-
-            if transition:
-
-                geofence_events.append({
-
-                    "event":
-                        transition,
-
-                    "route_stop_id":
-                        route_stop.id,
-
-                    "stop_id":
-                        stop.id,
-
-                    "stop_code":
-                        stop.stop_code,
-
-                    "stop_name":
-                        stop.stop_name,
-
-                    "sequence":
-                        route_stop.sequence,
-
-                    "distance_meters":
-                        round(
-                            current_distance,
-                            2,
-                        )
-                        if current_distance
-                        is not None
-                        else None,
-
-                    "radius_meters":
-                        float(
-                            stop.radius
-                        )
-                        if stop.radius
-                        is not None
-                        else 50.0,
-
-                })
 
             
     # ======================================================
@@ -970,6 +868,8 @@ def update_location(
 
     db.commit()
 
+
+
     # ======================================================
     # RESPONSE
     # ======================================================
@@ -1003,11 +903,9 @@ def update_location(
         "accuracy":
             request.accuracy,
 
-        "geofence_events":
-            geofence_events,
-
         "timestamp":
             current_timestamp,
+
         "current_route_stop_id":
             trip.current_route_stop_id,
 
@@ -1023,7 +921,6 @@ def update_location(
         "stop_progression_event":
             stop_progression_event,
     }
-
 
 # ==========================================================
 # STOP TRIP
