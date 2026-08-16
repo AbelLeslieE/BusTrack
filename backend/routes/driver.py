@@ -14,6 +14,7 @@ from backend.schemas import (
     DriverUpdate,
     DriverResponse,
 )
+from backend.security import require_management
 
 router = APIRouter(
     prefix="/api/drivers",
@@ -22,7 +23,10 @@ router = APIRouter(
 
 
 @router.get("/", response_model=list[DriverResponse])
-def get_drivers(db: Session = Depends(get_db)):
+def get_drivers(
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
+):
     """Return all drivers."""
     return db.query(Driver).order_by(Driver.driver_code).all()
 
@@ -34,6 +38,7 @@ def get_drivers(db: Session = Depends(get_db)):
 def get_driver(
     driver_id: int,
     db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
 ):
     """Return a single driver."""
 
@@ -57,6 +62,7 @@ def update_driver(
     driver_id: int,
     driver: DriverUpdate,
     db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
 ):
     """Update a driver."""
 
@@ -129,6 +135,7 @@ def update_driver(
 def delete_driver(
     driver_id: int,
     db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
 ):
     """Delete a driver."""
 

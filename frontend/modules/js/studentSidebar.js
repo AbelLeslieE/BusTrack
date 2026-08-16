@@ -1,3 +1,5 @@
+import { logoutSession } from "/static/common/auth.js";
+
 /* ==========================================================
    BUSTRACK
    STUDENT SIDEBAR
@@ -102,7 +104,7 @@ export function createStudentSidebar(
 
     sidebar.setAttribute(
         "aria-label",
-        "Student navigation"
+        "User navigation"
     );
 
 
@@ -133,7 +135,7 @@ export function createStudentSidebar(
                     </span>
 
                     <span class="brand-subtitle">
-                        Student Portal
+                        User Portal
                     </span>
 
                 </div>
@@ -340,9 +342,7 @@ export function createStudentSidebar(
 
                 event.preventDefault();
 
-                localStorage.clear();
-
-                window.location.href = "/";
+                void logoutSession();
 
                 return;
 

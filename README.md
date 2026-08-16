@@ -4,7 +4,7 @@
 
 ## Overview
 
-Bus Tracker is a modular, future-ready foundation for a school or fleet bus tracking application. This repository currently contains only the project scaffold and documented placeholders; no business logic, data models, or API endpoints have been implemented.
+Bus Tracker is a FastAPI and vanilla-JavaScript fleet-management application for school transport operations. It includes authenticated management, route/bus/driver assignments, student transport assignments, and live trip tracking.
 
 ## Technology stack
 
@@ -30,9 +30,28 @@ Before signing in for the first time, create an administrator without placing a 
 python database/init_database.py --username your-admin-name
 ```
 
-The setup command securely prompts for a 12–72 character password and stores only its bcrypt hash with a unique salt. The login page exchanges valid credentials for a short-lived JWT, and the dashboard verifies that token before it loads.
+The setup command securely prompts for a 12–72 character password and stores only its bcrypt hash with a unique salt. The login page receives a short-lived JWT in an HttpOnly, SameSite session cookie; the JSON bearer token remains available temporarily for legacy clients. The dashboard verifies the session before it loads, and logout clears the browser cookie.
 
-For production, set `APP_ENV=production`, `DATABASE_URL` to PostgreSQL, and a long random `JWT_SECRET_KEY`. See `.env.example`; never commit a real secret.
+To rotate an existing administrator password (including an older development account), run:
+
+```powershell
+python database/init_database.py --username admin --reset-password
+```
+
+If the development SQLite database is deleted, the server will recreate its tables and print the recovery command instead of inventing a known password. Use `admin` as the username or choose another username, then enter a new password at the secure prompt. For a production deployment, set `BOOTSTRAP_ADMIN_PASSWORD` in the server's secret store before the first start; the application will create the configured administrator once and will not print the password.
+
+For production, set `APP_ENV=production`, `DATABASE_URL` to PostgreSQL, and a random `JWT_SECRET_KEY` of at least 32 characters. Configure `BOOTSTRAP_ADMIN_PASSWORD` only through the hosting provider's secret store if a first administrator must be created at startup. See `.env.example`; never commit a real secret or use a default password.
+
+## Security baseline
+
+- Management and identity APIs require server-side JWT authentication and role checks.
+- Browser sessions use an HttpOnly, SameSite cookie with a dedicated logout endpoint; bearer headers remain supported during the frontend migration.
+- Driver trip actions are restricted to the authenticated driver's own profile and trip.
+- Student APIs are restricted to the authenticated student or management staff.
+- Request-size limits, per-client API/login/upload rate limits, security headers, HSTS in production, and an enforced browser Content Security Policy are applied by `backend/security.py`.
+- Administrative deletion is limited to authenticated administrators. There is intentionally no remote database-wipe endpoint; account removal/revocation is auditable and scoped to an individual account.
+- Driver safety feedback is stored in the notifications table and is visible to management with acknowledge, resolve, reopen, and refresh workflows.
+- Production startup fails closed if the JWT signing secret is missing or too short. Use a reverse proxy/WAF for distributed rate limiting, TLS termination, backups, and intrusion monitoring.
 
 ## Folder guide
 

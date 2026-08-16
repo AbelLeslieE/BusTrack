@@ -583,6 +583,25 @@ export async function stopTrip() {
     }
 
 }
+
+export async function sendDriverFeedback(feedbackType, message = "") {
+    const token = localStorage.getItem("bus_tracker_access_token");
+    const headers = { "Content-Type": "application/json" };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const response = await fetch("/api/notifications/feedback", {
+        method: "POST",
+        headers,
+        credentials: "same-origin",
+        body: JSON.stringify({
+            feedback_type: feedbackType,
+            message: message.trim() || null,
+        }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.detail || "Unable to send feedback.");
+    return data;
+}
+
 /* ==========================================================
    REQUEST LOCATION PERMISSION
 ========================================================== */

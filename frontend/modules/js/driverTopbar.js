@@ -4,6 +4,8 @@
  * Uses the shared topbar.css.
  */
 
+import { escapeHtml } from "/static/common/security.js";
+
 export function createDriverTopbar(toggleSidebar) {
 
     const profile =
@@ -83,7 +85,7 @@ export function createDriverTopbar(toggleSidebar) {
 
                     <strong>
 
-                        ${profile.full_name || "Driver"}
+                        ${escapeHtml(profile.full_name || "Driver")}
 
                     </strong>
 

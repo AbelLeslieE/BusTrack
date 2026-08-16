@@ -1,3 +1,5 @@
+import { logoutSession } from "/static/common/auth.js";
+
 /**
  * Shared SPA sidebar navigation.
  * TODO: Add permission-aware navigation when user roles are implemented.
@@ -254,9 +256,7 @@ export function createSidebar(activeRoute, onNavigate) {
 
                 event.preventDefault();
 
-                localStorage.clear();
-
-                window.location.href = "/";
+                void logoutSession();
 
                 return;
 

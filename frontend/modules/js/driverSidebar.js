@@ -1,3 +1,5 @@
+import { logoutSession } from "/static/common/auth.js";
+
 /**
  * Driver sidebar.
  * Uses the shared sidebar.css styles.
@@ -130,9 +132,7 @@ export function createDriverSidebar(activeRoute, onNavigate) {
 
             event.preventDefault();
 
-            localStorage.clear();
-
-            window.location.href = "/";
+            void logoutSession();
 
             return;
 

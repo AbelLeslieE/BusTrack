@@ -4,6 +4,7 @@
 ============================================================================= */
 
 import { Modal } from "../../common/modal.js";
+import { escapeHtml } from "../../common/security.js";
 
 import {
     createDriverForm,
@@ -736,7 +737,7 @@ function renderTableRows() {
                         <div class="table-avatar">
 
                             ${driver.user.full_name
-                                ? driver.user.full_name.charAt(0).toUpperCase()
+                                ? escapeHtml(driver.user.full_name.charAt(0).toUpperCase())
                                 : "D"}
 
                         </div>
@@ -745,13 +746,13 @@ function renderTableRows() {
 
                             <div class="table-title">
 
-                                ${driver.user.full_name}
+                                ${escapeHtml(driver.user.full_name)}
 
                             </div>
 
                             <div class="table-subtitle">
 
-                                ${driver.driver_code}
+                                ${escapeHtml(driver.driver_code)}
 
                             </div>
 
@@ -763,13 +764,13 @@ function renderTableRows() {
 
                 <td>
 
-                    ${driver.user?.phone || "-"}
+                    ${escapeHtml(driver.user?.phone || "-")}
 
                 </td>
 
                 <td>
 
-                    ${driver.license_number}
+                    ${escapeHtml(driver.license_number)}
 
                 </td>
 
@@ -783,7 +784,7 @@ function renderTableRows() {
 
                     <span class="status-badge ${getStatusClass(driver.status)}">
 
-                        ${driver.status}
+                        ${escapeHtml(driver.status)}
 
                     </span>
 
@@ -1385,11 +1386,11 @@ async function openDriverViewModal(driverId) {
             subtitle: "Driver profile",
             content: `
                 <div class="detail-list">
-                    <p><strong>Driver code:</strong> ${driver.driver_code || "—"}</p>
-                    <p><strong>License:</strong> ${driver.license_number || "—"}</p>
-                    <p><strong>License expiry:</strong> ${driver.license_expiry || "—"}</p>
-                    <p><strong>Phone:</strong> ${driver.user?.phone || "—"}</p>
-                    <p><strong>Status:</strong> ${driver.status || "—"}</p>
+                    <p><strong>Driver code:</strong> ${escapeHtml(driver.driver_code || "—")}</p>
+                    <p><strong>License:</strong> ${escapeHtml(driver.license_number || "—")}</p>
+                    <p><strong>License expiry:</strong> ${escapeHtml(driver.license_expiry || "—")}</p>
+                    <p><strong>Phone:</strong> ${escapeHtml(driver.user?.phone || "—")}</p>
+                    <p><strong>Status:</strong> ${escapeHtml(driver.status || "—")}</p>
                 </div>`,
         });
 

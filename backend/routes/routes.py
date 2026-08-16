@@ -21,6 +21,7 @@ from backend.schemas import (
     RouteUpdate,
     RouteResponse,
 )
+from backend.security import require_management
 # ==========================================================
 # BUILD ROUTE RESPONSE
 # ==========================================================
@@ -101,6 +102,7 @@ router = APIRouter(
 def create_route(
     route: RouteCreate,
     db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
 ):
 
     existing = (
@@ -138,6 +140,7 @@ def create_route(
 )
 def get_routes(
     db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
 ):
 
     routes = (
@@ -167,6 +170,7 @@ def get_routes(
 def get_route(
     route_id: int,
     db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
 ):
 
     route = db.get(Route, route_id)
@@ -199,6 +203,7 @@ def update_route(
     route_id: int,
     updated: RouteUpdate,
     db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
 ):
 
     route = db.get(Route, route_id)
@@ -228,6 +233,7 @@ def update_route(
 def delete_route(
     route_id: int,
     db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
 ):
 
     route = db.get(Route, route_id)
@@ -268,6 +274,7 @@ def delete_route(
 @router.get("/statistics")
 def route_statistics(
     db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
 ):
 
     total = db.query(Route).count()

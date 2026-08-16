@@ -26,7 +26,7 @@ from backend.services.tracking_engine import (
     calculate_stop_distance,
     is_inside_stop_radius,
 )
-from backend.auth import get_current_user
+from backend.security import require_driver, require_management
 
 from backend.models import (
     User,
@@ -475,7 +475,7 @@ def update_route_stop_progression(
 def start_trip(
 
     current_user: User = Depends(
-        get_current_user
+        require_driver
     ),
 
     db: Session = Depends(
@@ -607,7 +607,7 @@ def update_location(
     request: LocationUpdateRequest,
 
     current_user: User = Depends(
-        get_current_user
+        require_driver
     ),
 
     db: Session = Depends(
@@ -931,9 +931,8 @@ def stop_trip(
 
     request: TripStopRequest,
 
-    db: Session = Depends(
-        get_db
-    ),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_driver),
 
 ):
 
@@ -945,6 +944,11 @@ def stop_trip(
         db.query(LiveTrip)
         .filter(
             LiveTrip.id == request.trip_id,
+            LiveTrip.driver_id == (
+                db.query(Driver.id)
+                .filter(Driver.user_id == current_user.id)
+                .scalar_subquery()
+            ),
             LiveTrip.ended_at.is_(None),
         )
         .first()
@@ -984,6 +988,7 @@ def stop_trip(
 @router.get("/live")
 def get_live_tracking(
     db: Session = Depends(get_db),
+    _current_user: User = Depends(require_management),
 ):
 
     # ------------------------------------------------------
@@ -1254,7 +1259,7 @@ def get_live_tracking(
 def get_current_trip(
 
     current_user: User = Depends(
-        get_current_user
+        require_driver
     ),
 
     db: Session = Depends(

@@ -4,6 +4,7 @@
 ========================================================================== */
 
 import { createDropdown } from "/static/common/dropdown.js";
+import { escapeHtml } from "/static/common/security.js";
 /* ==========================================================================
    ROUTE BUILDER STATE
 ========================================================================== */
@@ -1374,7 +1375,7 @@ function renderSelectedStops() {
 
                         <div class="route-stop-title">
 
-                            ${stop.stop_name}
+                            ${escapeHtml(stop.stop_name)}
 
                         </div>
 

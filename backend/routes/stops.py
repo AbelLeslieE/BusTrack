@@ -31,6 +31,7 @@ from backend.models import (
     Stop,
     RouteStop,
 )
+from backend.security import require_management
 # ==========================================================
 # ROUTER
 # ==========================================================
@@ -45,7 +46,8 @@ router = APIRouter(
 
 @router.get("")
 def get_stops(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
 ):
     """
     Returns the master list of all transport stops.
@@ -96,7 +98,8 @@ def get_stops(
 @router.get("/export")
 def export_stops(
 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
 
 ):
     """
@@ -187,7 +190,8 @@ def get_stop(
 
     stop_id: int,
 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
 
 ):
     """
@@ -242,7 +246,8 @@ def create_stop(
 
     stop_data: dict,
 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
 
 ):
     """
@@ -363,7 +368,8 @@ def update_stop(
 
     stop_data: dict,
 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
 
 ):
     """
@@ -500,7 +506,8 @@ async def import_stops(
 
     file: UploadFile = File(...),
 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
 
 ):
     """
@@ -666,7 +673,8 @@ def delete_stop(
 
     stop_id: int,
 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
 
 ):
     """

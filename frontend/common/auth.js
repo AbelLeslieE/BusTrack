@@ -1,27 +1,108 @@
-/**
- * Browser JWT session handling and login-form behavior.
- * TODO: Move tokens to secure HTTP-only cookies when a production frontend origin is configured.
- */
+/** Browser session handling and login-form behavior. */
+
+import { canonicalRole, ROLE_ADMIN, ROLE_DRIVER, ROLE_USER } from "/static/common/roles.js";
 
 const TOKEN_KEY = "bus_tracker_access_token";
 const PROFILE_KEY = "bus_tracker_profile";
+const EXPIRY_KEY = "bus_tracker_session_expires_at";
+let authenticatedFetchInstalled = false;
+let sessionExpiryTimer = null;
 
 export function getAccessToken() {
   return localStorage.getItem(TOKEN_KEY);
 }
 
 export function clearSession() {
+  if (sessionExpiryTimer) window.clearTimeout(sessionExpiryTimer);
+  sessionExpiryTimer = null;
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(PROFILE_KEY);
+  localStorage.removeItem(EXPIRY_KEY);
+}
+
+function tokenExpiry(token) {
+  const storedExpiry = Date.parse(localStorage.getItem(EXPIRY_KEY) || "");
+  if (Number.isFinite(storedExpiry)) return storedExpiry;
+  try {
+    let encodedPayload = String(token || "").split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    encodedPayload += "=".repeat((4 - (encodedPayload.length % 4)) % 4);
+    const payload = JSON.parse(atob(encodedPayload));
+    return Number(payload.exp) * 1000;
+  } catch {
+    return NaN;
+  }
+}
+
+export function scheduleSessionExpiry(token = getAccessToken()) {
+  if (sessionExpiryTimer) window.clearTimeout(sessionExpiryTimer);
+  const expiresAt = tokenExpiry(token);
+  if (!Number.isFinite(expiresAt)) return;
+  const remaining = expiresAt - Date.now();
+  const expire = () => {
+    clearSession();
+    if (window.location.pathname !== "/") window.location.replace("/");
+  };
+  if (remaining <= 0) {
+    expire();
+    return;
+  }
+  sessionExpiryTimer = window.setTimeout(expire, remaining + 250);
+}
+
+export async function logoutSession() {
+  try {
+    await fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "same-origin",
+    });
+  } finally {
+    clearSession();
+    window.location.replace("/");
+  }
+}
+
+/**
+ * Add the current bearer token to every same-origin API request.  A single
+ * wrapper keeps older modules that call fetch directly from accidentally
+ * bypassing the session when the backend enforces authorization.
+ */
+export function installAuthenticatedFetch() {
+  if (authenticatedFetchInstalled) return;
+  authenticatedFetchInstalled = true;
+
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = async (input, options = {}) => {
+    const requestUrl = typeof input === "string" ? input : input?.url;
+    const url = new URL(requestUrl || window.location.href, window.location.origin);
+    const isApiRequest = url.origin === window.location.origin && url.pathname.startsWith("/api/");
+    const isLoginRequest = url.pathname === "/api/auth/login";
+
+    if (isApiRequest && !isLoginRequest) {
+      const headers = new Headers(
+        options.headers || (typeof Request !== "undefined" && input instanceof Request ? input.headers : undefined),
+      );
+      if (!headers.has("Authorization")) {
+        const token = getAccessToken();
+        if (token) headers.set("Authorization", `Bearer ${token}`);
+      }
+      options = { ...options, headers, credentials: options.credentials || "same-origin" };
+    }
+
+    const response = await originalFetch(input, options);
+    if (isApiRequest && !isLoginRequest && response.status === 401) {
+      clearSession();
+      if (window.location.pathname !== "/" && !window.location.pathname.endsWith("/login.html")) {
+        window.location.replace("/");
+      }
+    }
+    return response;
+  };
 }
 
 export async function requireAuthenticatedSession() {
   const token = getAccessToken();
-  if (!token) {
-    window.location.replace("/");
-    return null;
-  }
-  const response = await fetch("/api/auth/me", { headers: { Authorization: `Bearer ${token}` } });
+  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+  const response = await fetch("/api/auth/me", { headers, credentials: "same-origin" });
   if (!response.ok) {
     clearSession();
     window.location.replace("/");
@@ -29,6 +110,8 @@ export async function requireAuthenticatedSession() {
   }
   const profile = await response.json();
   localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  scheduleSessionExpiry(token);
+  installAuthenticatedFetch();
   return profile;
 }
 
@@ -58,6 +141,7 @@ form?.addEventListener("submit", async (event) => {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: formData,
+      credentials: "same-origin",
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.access_token) {
@@ -65,6 +149,8 @@ form?.addEventListener("submit", async (event) => {
     }
     localStorage.setItem(TOKEN_KEY, data.access_token);
     localStorage.setItem(PROFILE_KEY, JSON.stringify(data.user));
+    if (data.expires_at) localStorage.setItem(EXPIRY_KEY, data.expires_at);
+    scheduleSessionExpiry(data.access_token);
 
     // ------------------------------------------------
     // Normalize user role
@@ -79,10 +165,7 @@ form?.addEventListener("submit", async (event) => {
     // handles all of them consistently.
     // ------------------------------------------------
 
-    const normalizedRole =
-        String(data.user.role || "")
-            .trim()
-            .toLowerCase();
+    const normalizedRole = canonicalRole(data.user.role);
 
 
     // ------------------------------------------------
@@ -91,8 +174,7 @@ form?.addEventListener("submit", async (event) => {
 
     switch (normalizedRole) {
 
-        case "admin":
-        case "administrator":
+        case ROLE_ADMIN:
 
             window.location.assign(
                 "/dashboard"
@@ -101,7 +183,7 @@ form?.addEventListener("submit", async (event) => {
             break;
 
 
-        case "driver":
+        case ROLE_DRIVER:
 
             window.location.assign(
                 "/dashboard#driverDashboard"
@@ -110,7 +192,7 @@ form?.addEventListener("submit", async (event) => {
             break;
 
 
-        case "student":
+        case ROLE_USER:
 
             window.location.assign(
                 "/dashboard#studentDashboard"

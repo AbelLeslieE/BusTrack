@@ -4,6 +4,7 @@ TODO: Register business-area routers after each fleet workflow is defined.
 """
 
 from contextlib import asynccontextmanager
+import os
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -25,17 +26,30 @@ from backend.routes.users import router as users_router
 from backend.routes.gps import router as gps_router
 from backend.routes.student import router as student_router
 from backend.routes.assignments import router as assignments_router
+from backend.routes.notifications import router as notifications_router
+from backend.security import RequestSecurityMiddleware
+from backend.utils.jwt_handler import validate_security_configuration
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = PROJECT_DIR / "frontend"
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    validate_security_configuration()
     initialize_database()
     create_default_admin()
     yield
 
 
-app = FastAPI(title="Bus Tracker API", version="0.1.0", lifespan=lifespan)
+is_production = os.getenv("APP_ENV", "development").strip().casefold() == "production"
+app = FastAPI(
+    title="Bus Tracker API",
+    version="0.1.0",
+    lifespan=lifespan,
+    docs_url=None if is_production else "/docs",
+    redoc_url=None if is_production else "/redoc",
+    openapi_url=None if is_production else "/openapi.json",
+)
+app.add_middleware(RequestSecurityMiddleware)
 app.include_router(authentication_router)
 app.include_router(bus_router)
 app.include_router(driver_router)
@@ -47,6 +61,7 @@ app.include_router(users_router)
 app.include_router(student_router)
 app.include_router(gps_router)
 app.include_router(assignments_router)
+app.include_router(notifications_router)
 
 
 

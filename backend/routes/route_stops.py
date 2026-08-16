@@ -30,6 +30,7 @@ from backend.schemas import (
     RouteStopResponse,
     RouteStopReorder,
 ) 
+from backend.security import require_management
 # ==========================================================
 # ROUTER
 # ==========================================================
@@ -156,7 +157,8 @@ def get_route_stops(
 
     route_id: int,
 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
 
 ):
     """
@@ -236,6 +238,7 @@ def add_stop_to_route(
     stop_data: RouteStopCreate,
 
     db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
 
 ):
     """
@@ -385,7 +388,8 @@ def update_stop_sequence(
 
     data: dict,
 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
 
 ):
     """
@@ -462,7 +466,8 @@ def update_stop_sequence(
 @router.delete("/route/{route_id}")
 def clear_route_stops(
     route_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
 ):
 
     db.query(RouteStop).filter(
@@ -483,7 +488,8 @@ def remove_stop_from_route(
 
     route_stop_id: int,
 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
 
 ):
     """

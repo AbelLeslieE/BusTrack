@@ -4,6 +4,7 @@ Create the default administrator account.
 Safe to run multiple times.
 """
 
+import os
 from sqlalchemy import select
 
 from backend.auth import create_user
@@ -11,12 +12,15 @@ from backend.database import SessionLocal
 from backend.models import User
 
 
-DEFAULT_USERNAME = "admin"
-DEFAULT_PASSWORD = "Admin@123"
+DEFAULT_USERNAME = (os.getenv("BOOTSTRAP_ADMIN_USERNAME") or "admin").strip().casefold()
 
 
 def create_default_admin() -> None:
     """Create the default administrator if it does not already exist."""
+
+    password = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "").strip()
+    if password and not 12 <= len(password) <= 72:
+        raise RuntimeError("BOOTSTRAP_ADMIN_PASSWORD must contain 12-72 characters.")
 
     database_session = SessionLocal()
 
@@ -26,21 +30,22 @@ def create_default_admin() -> None:
         )
 
         if existing_admin:
-            print("Default administrator already exists.")
+            return
+
+        if not password:
+            print(
+                "No administrator account exists. Run "
+                "'python database/init_database.py --username admin' "
+                "to create one interactively."
+            )
             return
 
         create_user(
             database_session=database_session,
             username=DEFAULT_USERNAME,
-            password=DEFAULT_PASSWORD,
-            role="admin",
+            password=password,
+            role="Admin",
         )
-
-        print("=" * 45)
-        print("Default administrator created")
-        print(f"Username : {DEFAULT_USERNAME}")
-        print(f"Password : {DEFAULT_PASSWORD}")
-        print("=" * 45)
 
     finally:
         database_session.close()

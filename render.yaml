@@ -20,6 +20,21 @@ services:
           name: bustrack-db
           property: connectionString
 
+      - key: APP_ENV
+        value: production
+
+      - key: JWT_ALGORITHM
+        value: HS256
+
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: 30
+
+      - key: JWT_SECRET_KEY
+        sync: false
+
+      - key: BOOTSTRAP_ADMIN_PASSWORD
+        sync: false
+
 databases:
   - name: bustrack-db
     plan: free

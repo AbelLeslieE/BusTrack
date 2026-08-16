@@ -1,4 +1,5 @@
 from datetime import datetime, date, time
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -43,6 +44,7 @@ class TokenResponse(BaseModel):
 
     access_token: str
     token_type: str = "bearer"
+    expires_at: datetime
     user: UserResponse
 # ==========================================================
 # USER SCHEMAS
@@ -592,3 +594,23 @@ class StopImport(BaseModel):
     scheduled_time: str | None = None
 
     bus_name: str | None = None
+
+
+class NotificationFeedbackCreate(BaseModel):
+    """Driver feedback raised from the live-trip controls."""
+
+    feedback_type: Literal[
+        "traffic",
+        "breakdown",
+        "accident",
+        "medical",
+        "delay",
+        "other",
+    ]
+    message: str | None = Field(default=None, max_length=500)
+
+
+class NotificationStatusUpdate(BaseModel):
+    """Management workflow state for an operational notification."""
+
+    status: Literal["Open", "Acknowledged", "Resolved"]

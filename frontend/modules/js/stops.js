@@ -6,6 +6,7 @@
 import * as StopsAPI from "./stopsApi.js";
 import { createDropdown } from "/static/common/dropdown.js";
 import { Modal } from "/static/common/modal.js";
+import { escapeHtml } from "/static/common/security.js";
 /* ==========================================================================
    MODULE STATE
 ========================================================================== */
@@ -686,17 +687,17 @@ function renderRows(root, stops){
 
         <tr>
 
-            <td><span class="stop-code">${stop.stop_code}</span></td>
+            <td><span class="stop-code">${escapeHtml(stop.stop_code)}</span></td>
 
-            <td>${stop.stop_name}</td>
+            <td>${escapeHtml(stop.stop_name)}</td>
 
-            <td>${stop.latitude ?? '<span class="muted-text">Not Set</span>'}</td>
+            <td>${stop.latitude == null ? '<span class="muted-text">Not Set</span>' : escapeHtml(stop.latitude)}</td>
 
-            <td>${stop.longitude ?? '<span class="muted-text">Not Set</span>'}</td>
+            <td>${stop.longitude == null ? '<span class="muted-text">Not Set</span>' : escapeHtml(stop.longitude)}</td>
 
-            <td>${stop.radius} m</td>
+            <td>${escapeHtml(stop.radius)} m</td>
 
-            <td>${stop.status}</td>
+            <td>${escapeHtml(stop.status)}</td>
 
             <td class="action-cell">
 
@@ -2854,7 +2855,7 @@ function openEditStopModal(root, stop){
                     <input
                         id="stop_code"
                         class="modal-input"
-                        value="${stop.stop_code ?? ""}"
+                        value="${escapeHtml(stop.stop_code ?? "")}"
                         required
                     >
 
@@ -2876,7 +2877,7 @@ function openEditStopModal(root, stop){
                     <input
                         id="stop_name"
                         class="modal-input"
-                        value="${stop.stop_name ?? ""}"
+                        value="${escapeHtml(stop.stop_name ?? "")}"
                         required
                     >
 
@@ -2944,7 +2945,7 @@ function openEditStopModal(root, stop){
                         class="coordinate-value"
                     >
 
-                        ${stop.latitude ?? "Not selected"}
+                        ${escapeHtml(stop.latitude ?? "Not selected")}
 
                     </strong>
 
@@ -2964,7 +2965,7 @@ function openEditStopModal(root, stop){
                         class="coordinate-value"
                     >
 
-                        ${stop.longitude ?? "Not selected"}
+                        ${escapeHtml(stop.longitude ?? "Not selected")}
 
                     </strong>
 
@@ -2976,13 +2977,13 @@ function openEditStopModal(root, stop){
             <input
                 id="latitude"
                 type="hidden"
-                value="${stop.latitude ?? ""}"
+                value="${escapeHtml(stop.latitude ?? "")}"
             >
 
             <input
                 id="longitude"
                 type="hidden"
-                value="${stop.longitude ?? ""}"
+                value="${escapeHtml(stop.longitude ?? "")}"
             >
 
         </section>
@@ -3015,7 +3016,7 @@ function openEditStopModal(root, stop){
                         min="10"
                         max="2000"
                         step="5"
-                        value="${stop.radius ?? 50}"
+                        value="${escapeHtml(stop.radius ?? 50)}"
                         required
                     >
 

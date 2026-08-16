@@ -4,6 +4,7 @@
 ============================================================================= */
 
 import { Modal } from "../../common/modal.js";
+import { escapeHtml } from "../../common/security.js";
 
 import {
     createUserForm,
@@ -37,17 +38,11 @@ const USER_STATUS = {
 
 const USER_ROLES = {
 
-    ADMINISTRATOR: "Administrator",
+    ADMIN: "Admin",
 
     DRIVER: "Driver",
 
-    STUDENT: "Student",
-
-    TRANSPORT_MANAGER: "Transport Manager",
-
-    DISPATCHER: "Dispatcher",
-
-    TECHNICIAN: "Technician"
+    USER: "User"
 
 };
 
@@ -298,7 +293,7 @@ function calculateStatistics() {
 
     state.statistics.administrators =
         state.users.filter(
-            user => user.role === USER_ROLES.ADMINISTRATOR
+            user => user.role === USER_ROLES.ADMIN
         ).length;
 
     state.statistics.drivers =
@@ -308,7 +303,7 @@ function calculateStatistics() {
 
     state.statistics.students =
         state.users.filter(
-            user => user.role === USER_ROLES.STUDENT
+            user => user.role === USER_ROLES.USER
         ).length;
 
 }
@@ -503,7 +498,7 @@ function renderStatistics() {
 
                     <span class="stat-title">
 
-                        Administrators
+                        Admins
 
                     </span>
 
@@ -518,7 +513,7 @@ function renderStatistics() {
 
                     <span class="stat-description">
 
-                        System Administrators
+                        Full system access
 
                     </span>
 
@@ -749,23 +744,23 @@ function renderTableRows() {
 
                     <div class="table-avatar">
 
-                        ${(user.full_name || "U")
+                        ${escapeHtml((user.full_name || "U")
                             .trim()
                             .charAt(0)
-                            .toUpperCase()}
+                            .toUpperCase())}
                     </div>
 
                     <div>
 
                         <div class="table-title">
 
-                            ${user.full_name}
+                        ${escapeHtml(user.full_name)}
 
                         </div>
 
                         <div class="table-subtitle">
 
-                            ${user.username}
+                            ${escapeHtml(user.username)}
 
                         </div>
 
@@ -777,19 +772,19 @@ function renderTableRows() {
 
             <td>
 
-                ${user.email || "-"}
+                ${escapeHtml(user.email || "-")}
 
             </td>
 
             <td>
 
-                ${user.phone || "-"}
+                ${escapeHtml(user.phone || "-")}
 
             </td>
 
             <td>
 
-                ${user.role}
+                ${escapeHtml(user.role)}
 
             </td>
 
@@ -797,7 +792,7 @@ function renderTableRows() {
 
                 <span class="status-badge ${getStatusClass(user.status)}">
 
-                    ${user.status}
+                    ${escapeHtml(user.status)}
 
                 </span>
 
@@ -1114,20 +1109,7 @@ async function openEditUserModal(userId) {
 
         ...user,
 
-        role:
-            user.role === "admin"
-                ? "Administrator"
-            : user.role === "driver"
-                ? "Driver"
-            : user.role === "student"
-                ? "Student"
-            : user.role === "transport_manager"
-                ? "Transport Manager"
-            : user.role === "dispatcher"
-                ? "Dispatcher"
-            : user.role === "technician"
-                ? "Technician"
-            : user.role
+        role: user.role
 
 };
 
@@ -1613,7 +1595,7 @@ async function openUserViewModal(userId) {
     try {
 
         const user = await getUser(userId);
-        const assignment = user.role === "Student"
+        const assignment = user.role === "User"
             ? (user.route_id ? `Route ID: ${user.route_id}` : "No route assigned")
             : user.role === "Driver"
                 ? "Assignments are managed in Assignments."
@@ -1625,12 +1607,12 @@ async function openUserViewModal(userId) {
             subtitle: "User account details",
             content: `
                 <div class="detail-list">
-                    <p><strong>Username:</strong> ${user.username}</p>
-                    <p><strong>Email:</strong> ${user.email || "—"}</p>
-                    <p><strong>Phone:</strong> ${user.phone || "—"}</p>
-                    <p><strong>Role:</strong> ${user.role}</p>
-                    <p><strong>Status:</strong> ${user.status}</p>
-                    <p><strong>Transport:</strong> ${assignment}</p>
+                    <p><strong>Username:</strong> ${escapeHtml(user.username)}</p>
+                    <p><strong>Email:</strong> ${escapeHtml(user.email || "—")}</p>
+                    <p><strong>Phone:</strong> ${escapeHtml(user.phone || "—")}</p>
+                    <p><strong>Role:</strong> ${escapeHtml(user.role)}</p>
+                    <p><strong>Status:</strong> ${escapeHtml(user.status)}</p>
+                    <p><strong>Transport:</strong> ${escapeHtml(assignment)}</p>
                 </div>`,
         });
     } catch (error) {

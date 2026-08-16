@@ -492,7 +492,7 @@ async function initializeDropdowns(wrapper, user) {
 
             value:
                 user.role ||
-                "Administrator",
+                "Admin",
 
             placeholder:
                 "Select Role",
@@ -500,9 +500,9 @@ async function initializeDropdowns(wrapper, user) {
             items: [
 
                 {
-                    value: "Administrator",
+                    value: "Admin",
 
-                    label: "Administrator"
+                    label: "Admin"
                 },
 
                 {
@@ -512,30 +512,9 @@ async function initializeDropdowns(wrapper, user) {
                 },
 
                 {
-                    value: "Student",
+                    value: "User",
 
-                    label: "Student"
-                },
-
-                {
-                    value: "Transport Manager",
-
-                    label:
-                        "Transport Manager (Coming Soon)"
-                },
-
-                {
-                    value: "Dispatcher",
-
-                    label:
-                        "Dispatcher (Coming Soon)"
-                },
-
-                {
-                    value: "Technician",
-
-                    label:
-                        "Technician (Coming Soon)"
+                    label: "User"
                 }
 
             ]
@@ -606,7 +585,7 @@ async function initializeDropdowns(wrapper, user) {
             id: "student_route_id",
 
             value:
-                user.role === "Student"
+                user.role === "User"
                     ? user.route_id ?? ""
                     : "",
 
@@ -831,7 +810,7 @@ async function initializeDropdowns(wrapper, user) {
         if (studentSection) {
 
             studentSection.style.display =
-                role === "Student"
+                role === "User"
                     ? ""
                     : "none";
 
@@ -1069,7 +1048,7 @@ export function getUserFormData() {
 
         student_code:
 
-            role === "Student"
+            role === "User"
 
                 ? document
                     .querySelector("#student_code")
@@ -1163,7 +1142,7 @@ export function validateUserForm() {
     ---------------------------------------------------------- */
 
     if (
-        data.role === "Student" &&
+        data.role === "User" &&
         !data.student_code
     ) {
 

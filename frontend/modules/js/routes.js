@@ -4,6 +4,7 @@
 ========================================================================== */
 
 import { Modal } from "../../common/modal.js";
+import { escapeHtml } from "../../common/security.js";
 import { openRouteViewModal } from "../../common/routeViewModal.js";
 import {
     createRouteForm,
@@ -839,7 +840,7 @@ function renderTableRows() {
 
                 <strong>
 
-                    ${route.route_code}
+                    ${escapeHtml(route.route_code)}
 
                 </strong>
 
@@ -873,7 +874,7 @@ function renderTableRows() {
 
                 <span class="status-badge ${getStatusClass(route.status)}">
 
-                    ${route.status}
+                    ${escapeHtml(route.status)}
 
                 </span>
 
@@ -1552,13 +1553,13 @@ function getBusName(busId) {
 
             <div class="table-bus-title">
 
-                ${bus.bus_number}
+                ${escapeHtml(bus.bus_number)}
 
             </div>
 
             <div class="table-bus-sub">
 
-                ${bus.registration_number}
+                ${escapeHtml(bus.registration_number)}
 
             </div>
 
@@ -1604,13 +1605,13 @@ function getDriverName(driverId) {
 
             <div class="table-driver-title">
 
-                ${driver.user?.full_name ?? "Unknown"}
+                ${escapeHtml(driver.user?.full_name ?? "Unknown")}
 
             </div>
 
             <div class="table-driver-sub">
 
-                ${driver.driver_code}
+                ${escapeHtml(driver.driver_code)}
 
             </div>
 
@@ -1664,7 +1665,7 @@ function formatValue(value) {
 
     }
 
-    return value;
+    return escapeHtml(value);
 
 }
 /* =============================================================================

@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import Bus, Route, Stop
+from backend.security import require_management
 
 router = APIRouter(
 
@@ -29,7 +30,8 @@ router = APIRouter(
 
 @router.post("/preview")
 async def preview_routes(
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    _current_user = Depends(require_management),
 ):
     """
     Reads the Excel file and returns a preview
@@ -198,7 +200,8 @@ async def preview_routes(
 @router.post("/import")
 async def import_routes(
     file: UploadFile = File(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
 ):
     """
     Upload a Route Excel file.

@@ -4,6 +4,7 @@
  */
 
 import { createLoader } from "./loader.js";
+import { canonicalRole, ROLE_ADMIN, ROLE_DRIVER, ROLE_USER } from "./roles.js";
 
 import {
     createSidebar,
@@ -202,12 +203,11 @@ const profile =
    ROLE DETECTION
 ========================================================== */
 
-const isDriver =
-    profile.role === "Driver";
-
-
-const isStudent =
-    profile.role === "Student";
+const activeRole = canonicalRole(profile.role);
+const isAdmin = activeRole === ROLE_ADMIN;
+const isDriver = activeRole === ROLE_DRIVER;
+// User accounts use the existing student transport-profile tables and views.
+const isStudent = activeRole === ROLE_USER;
 
 
 /* ==========================================================
@@ -219,7 +219,9 @@ const modules =
         ? driverModules
         : isStudent
             ? studentModules
-            : adminModules;
+            : isAdmin
+                ? adminModules
+                : {};
 function titleCase(value) {
   return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }

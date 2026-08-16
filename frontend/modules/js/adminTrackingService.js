@@ -5,6 +5,8 @@
    ADMIN LIVE TRACKING SERVICE
 ========================================================== */
 
+import { escapeHtml } from "/static/common/security.js";
+
 /* ==========================================================
    ADMIN LIVE TRACKING STATE
 ========================================================== */
@@ -1795,31 +1797,31 @@ function updateFleet(trips) {
                 <div class="fleet-popup">
 
                     <strong>
-                        ${busLabel}
+                        ${escapeHtml(busLabel)}
                     </strong>
 
                     <br>
 
-                    ${driverLabel}
+                    ${escapeHtml(driverLabel)}
 
                     <br>
 
-                    ${routeLabel}
+                    ${escapeHtml(routeLabel)}
 
                     <br>
 
                     Speed :
-                    ${speedLabel}
+                    ${escapeHtml(speedLabel)}
 
                     <br>
 
                     Accuracy :
-                    ${accuracyLabel}
+                    ${escapeHtml(accuracyLabel)}
 
                     <br>
 
                     Updated :
-                    ${updateLabel}
+                    ${escapeHtml(updateLabel)}
 
                 </div>
 
@@ -1856,13 +1858,13 @@ function updateFleet(trips) {
 
                 <strong>
 
-                    ${busLabel}
+                    ${escapeHtml(busLabel)}
 
                 </strong>
 
                 <span class="trip-status">
 
-                    🟢 ${trip.status ?? "Running"}
+                    🟢 ${escapeHtml(trip.status ?? "Running")}
 
                 </span>
 
@@ -1877,7 +1879,7 @@ function updateFleet(trips) {
 
                     <strong>
 
-                        ${driverLabel}
+                        ${escapeHtml(driverLabel)}
 
                     </strong>
 
@@ -1890,7 +1892,7 @@ function updateFleet(trips) {
 
                     <strong>
 
-                        ${routeLabel}
+                        ${escapeHtml(routeLabel)}
 
                     </strong>
 
@@ -1903,7 +1905,7 @@ function updateFleet(trips) {
 
                     <strong>
 
-                        ${speedLabel}
+                        ${escapeHtml(speedLabel)}
 
                     </strong>
 
@@ -1916,7 +1918,7 @@ function updateFleet(trips) {
 
                     <strong>
 
-                        ${accuracyLabel}
+                        ${escapeHtml(accuracyLabel)}
 
                     </strong>
 
@@ -1929,7 +1931,7 @@ function updateFleet(trips) {
 
                     <strong>
 
-                        ${updateLabel}
+                        ${escapeHtml(updateLabel)}
 
                     </strong>
 

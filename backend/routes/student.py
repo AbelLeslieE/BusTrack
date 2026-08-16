@@ -12,8 +12,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from backend.auth import get_current_user
 from backend.database import get_db
+from backend.security import require_management, require_user
 from backend.models import (
     Student,
     User,
@@ -78,7 +78,10 @@ def _student_directory_item(student: Student, db: Session) -> dict:
 
 
 @router.get("/directory")
-def get_student_directory(db: Session = Depends(get_db)):
+def get_student_directory(
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_management),
+):
     """Return every student and their current route, bus, and stop."""
     students = db.query(Student).order_by(Student.student_code).all()
     return [_student_directory_item(student, db) for student in students]
@@ -89,6 +92,7 @@ def update_student_assignment(
     student_id: int,
     assignment: StudentAssignmentUpdate,
     db: Session = Depends(get_db),
+    _current_user: User = Depends(require_management),
 ):
     """Assign a student's route and boarding stop from the Students workspace."""
     student = db.get(Student, student_id)
@@ -133,7 +137,7 @@ def update_student_assignment(
 def get_current_student(
     current_user: Annotated[
         User,
-        Depends(get_current_user),
+        Depends(require_user),
     ],
     db: Session = Depends(get_db),
 ):
@@ -145,20 +149,7 @@ def get_current_student(
     """
 
     # ------------------------------------------------------
-    # Make sure this account is actually a Student account.
-    # ------------------------------------------------------
-
-    if (
-        str(current_user.role).strip().lower()
-        != "student"
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Student access required.",
-        )
-
-    # ------------------------------------------------------
-    # Find the student profile belonging to this user.
+    # Find the student transport profile belonging to this User account.
     # ------------------------------------------------------
 
     student = (
@@ -268,7 +259,7 @@ def get_current_student(
 def get_student_live_tracking(
     current_user: Annotated[
         User,
-        Depends(get_current_user),
+        Depends(require_user),
     ],
     db: Session = Depends(get_db),
 ):

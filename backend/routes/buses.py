@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import Bus, Driver, Route, Student
 from backend.schemas import BusCreate, BusUpdate, BusResponse
+from backend.security import require_management
 
 # ======================================================
 # BUILD BUS RESPONSE
@@ -66,7 +67,10 @@ router = APIRouter(
 
 
 @router.get("/", response_model=list[BusResponse])
-def get_buses(db: Session = Depends(get_db)):
+def get_buses(
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
+):
 
     buses = db.query(Bus).order_by(Bus.bus_number).all()
 
@@ -86,6 +90,7 @@ def get_buses(db: Session = Depends(get_db)):
 def create_bus(
     bus: BusCreate,
     db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
 ):
     """Create a new bus."""
 
@@ -138,6 +143,7 @@ def create_bus(
 def get_bus(
     bus_id: int,
     db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
 ):
     """Return a single bus."""
 
@@ -157,6 +163,7 @@ def update_bus(
     bus_id: int,
     bus: BusUpdate,
     db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
 ):
     """Update a bus."""
 
@@ -222,6 +229,7 @@ def update_bus(
 def delete_bus(
     bus_id: int,
     db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
 ):
     """Delete a bus."""
 

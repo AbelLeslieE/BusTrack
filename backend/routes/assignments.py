@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import Bus, Driver, Route, Student
 from backend.schemas import RouteAssignmentUpdate
+from backend.security import require_management
 
 
 router = APIRouter(prefix="/api/assignments", tags=["Assignments"])
@@ -36,7 +37,10 @@ def _route_data(route: Route, db: Session) -> dict:
 
 
 @router.get("")
-def get_assignments(db: Session = Depends(get_db)):
+def get_assignments(
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
+):
     """Return every route with its current assignment and available resources."""
     routes = db.query(Route).order_by(Route.route_name).all()
     buses = db.query(Bus).order_by(Bus.bus_number).all()
@@ -65,6 +69,7 @@ def save_route_assignment(
     route_id: int,
     assignment: RouteAssignmentUpdate,
     db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
 ):
     """Assign one bus and one driver to a route, keeping legacy mirrors in sync."""
     route = db.get(Route, route_id)

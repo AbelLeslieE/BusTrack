@@ -12,6 +12,8 @@ import {
 
     loadCurrentTrip,
 
+    sendDriverFeedback,
+
     cleanupTracking
 
 } from "./trackingService.js";
@@ -222,6 +224,26 @@ export function render() {
 
                 </div>
 
+                <div class="tracking-card glass-panel driver-feedback-card">
+                    <div class="feedback-heading">
+                        <div>
+                            <p class="tracking-title">SAFETY FEEDBACK</p>
+                            <h3>Report an issue</h3>
+                        </div>
+                        <span id="feedbackStatus" class="feedback-status" role="status"></span>
+                    </div>
+                    <p class="feedback-help">Use a button to alert the admin team. Active trip, bus, and route details are attached automatically when available.</p>
+                    <textarea id="feedbackMessage" maxlength="500" rows="2" placeholder="Optional details for the transport team"></textarea>
+                    <div class="feedback-actions" role="group" aria-label="Report an operational issue">
+                        <button type="button" class="feedback-button feedback-high" data-feedback-type="traffic">Traffic</button>
+                        <button type="button" class="feedback-button feedback-critical" data-feedback-type="breakdown">Bus breakdown</button>
+                        <button type="button" class="feedback-button feedback-critical" data-feedback-type="accident">Accident</button>
+                        <button type="button" class="feedback-button feedback-critical" data-feedback-type="medical">Medical</button>
+                        <button type="button" class="feedback-button feedback-medium" data-feedback-type="delay">Delay</button>
+                        <button type="button" class="feedback-button feedback-medium" data-feedback-type="other">Other</button>
+                    </div>
+                </div>
+
             </div>
 
 
@@ -278,6 +300,28 @@ export function render() {
         if (stopButton) {
             stopButton.addEventListener("click", stopTrip);
         }
+
+        const feedbackStatus = document.getElementById("feedbackStatus");
+        const feedbackMessage = document.getElementById("feedbackMessage");
+        page.querySelectorAll("[data-feedback-type]").forEach(button => {
+            button.addEventListener("click", async () => {
+                const feedbackType = button.dataset.feedbackType;
+                button.disabled = true;
+                if (feedbackStatus) feedbackStatus.textContent = "Sending…";
+                try {
+                    await sendDriverFeedback(feedbackType, feedbackMessage?.value || "");
+                    if (feedbackStatus) feedbackStatus.textContent = "Sent to management";
+                    if (feedbackMessage) feedbackMessage.value = "";
+                } catch (error) {
+                    if (feedbackStatus) feedbackStatus.textContent = error.message;
+                } finally {
+                    button.disabled = false;
+                    window.setTimeout(() => {
+                        if (feedbackStatus) feedbackStatus.textContent = "";
+                    }, 5000);
+                }
+            });
+        });
 
     }, 100);
 

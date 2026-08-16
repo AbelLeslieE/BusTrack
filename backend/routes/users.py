@@ -4,13 +4,15 @@ User Management API.
 Handles CRUD operations for BusTrack users.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.auth import (
     normalize_username,
     get_password_hash,
 )
+from backend.security import require_admin
+from backend.roles import ROLE_ADMIN, ROLE_DRIVER, ROLE_USER, is_admin_role
 from backend.database import get_db
 from backend.models import (
     User,
@@ -42,12 +44,9 @@ router = APIRouter(
 # ==========================================================
 
 ALLOWED_ROLES = {
-    "Administrator",
-    "Driver",
-    "Student",
-    "Transport Manager",
-    "Dispatcher",
-    "Technician",
+    ROLE_ADMIN,
+    ROLE_DRIVER,
+    ROLE_USER,
 }
 
 ALLOWED_STATUS = {
@@ -99,21 +98,16 @@ def build_user_response(user: User, db: Session) -> dict:
     status_code=status.HTTP_201_CREATED,
 )
 async def create_user(
-    request: Request,
     user: UserCreate,
     db: Session = Depends(get_db),
+    _current_user: User = Depends(require_admin),
 ):
     """
     Create a BusTrack user.
 
     Driver accounts automatically receive a Driver profile.
-    Student accounts automatically receive a Student profile.
+    User accounts automatically receive a Student transport profile.
     """
-
-    print("\n========== USER CREATE ==========")
-    print(await request.json())
-    print("=================================\n")
-
 
     # ======================================================
     # VALIDATE ROLE
@@ -172,7 +166,7 @@ async def create_user(
     # DRIVER-SPECIFIC VALIDATION
     # ======================================================
 
-    if user.role == "Driver":
+    if user.role == ROLE_DRIVER:
 
         # --------------------------------------------------
         # License number is required for drivers
@@ -268,7 +262,7 @@ async def create_user(
         # CREATE DRIVER PROFILE
         # ==================================================
 
-        if new_user.role == "Driver":
+        if new_user.role == ROLE_DRIVER:
 
             # ----------------------------------------------
             # Validate driver code
@@ -355,7 +349,7 @@ async def create_user(
         # CREATE STUDENT PROFILE
         # ==================================================
 
-        if new_user.role == "Student":
+        if new_user.role == ROLE_USER:
 
             # ----------------------------------------------
             # Student code is required
@@ -437,6 +431,7 @@ async def create_user(
 )
 def get_users(
     db: Session = Depends(get_db),
+    _current_user: User = Depends(require_admin),
 ):
 
     return (
@@ -459,6 +454,7 @@ def get_users(
 def get_user(
     user_id: int,
     db: Session = Depends(get_db),
+    _current_user: User = Depends(require_admin),
 ):
 
     user = db.get(
@@ -488,6 +484,7 @@ def update_user(
     user_id: int,
     updated_user: UserUpdate,
     db: Session = Depends(get_db),
+    _current_user: User = Depends(require_admin),
 ):
 
     user = db.get(
@@ -501,6 +498,17 @@ def update_user(
             status_code=404,
             detail="User not found.",
         )
+
+    if (
+        is_admin_role(user.role)
+        and (updated_user.role != ROLE_ADMIN or updated_user.status != "Active")
+    ):
+        active_admins = db.query(User).filter(
+            User.status == "Active",
+            User.role == ROLE_ADMIN,
+        ).count()
+        if active_admins <= 1:
+            raise HTTPException(status_code=409, detail="At least one active administrator must remain.")
 
 
     # ======================================================
@@ -547,7 +555,7 @@ def update_user(
 
     user.status = updated_user.status
 
-    if updated_user.role == "Driver":
+    if updated_user.role == ROLE_DRIVER:
         driver = user.driver
         if driver is None:
             raise HTTPException(status_code=400, detail="This user has no driver profile.")
@@ -570,7 +578,7 @@ def update_user(
         driver.license_expiry = updated_user.license_expiry
         driver.address = updated_user.address
 
-    if updated_user.role == "Student":
+    if updated_user.role == ROLE_USER:
         student = user.student
         if student is None:
             raise HTTPException(status_code=400, detail="This user has no student profile.")
@@ -601,6 +609,7 @@ def update_user(
 def delete_user(
     user_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
 ):
 
     user = db.get(
@@ -615,6 +624,16 @@ def delete_user(
             detail="User not found.",
         )
 
+
+    if user.id == current_user.id:
+        raise HTTPException(status_code=400, detail="Use account status management instead of deleting your own account.")
+    if is_admin_role(user.role):
+        active_admins = db.query(User).filter(
+            User.status == "Active",
+            User.role == ROLE_ADMIN,
+        ).count()
+        if active_admins <= 1:
+            raise HTTPException(status_code=409, detail="The last active administrator cannot be deleted.")
 
     # ======================================================
     # DELETE DRIVER PROFILE
@@ -632,6 +651,7 @@ def delete_user(
         db.query(Route).filter(Route.driver_id == driver.id).update(
             {Route.driver_id: None}, synchronize_session=False
         )
+
         db.query(Bus).filter(Bus.driver_id == driver.id).update(
             {Bus.driver_id: None}, synchronize_session=False
         )

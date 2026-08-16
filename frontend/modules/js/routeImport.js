@@ -11,6 +11,7 @@
 ========================================================================== */
 console.log("ROUTE IMPORT JS LOADED");
 import { Modal } from "/static/common/modal.js";
+import { escapeHtml } from "/static/common/security.js";
 
 /* ==========================================================================
    API
@@ -323,7 +324,7 @@ async function previewExcel(event){
 
             <div class="preview-error">
 
-                ${error.message}
+                ${escapeHtml(error.message)}
 
             </div>
 
@@ -449,7 +450,7 @@ function renderRouteCard(route){
 
                     <h3>
 
-                        ${route.route_name}
+                        ${escapeHtml(route.route_name)}
 
                     </h3>
 
@@ -475,7 +476,7 @@ function renderRouteCard(route){
 
                     <strong>
 
-                        ${route.bus_number || "Not Assigned"}
+                        ${escapeHtml(route.bus_number || "Not Assigned")}
 
                     </strong>
 
@@ -491,7 +492,7 @@ function renderRouteCard(route){
 
                     <strong>
 
-                        ${route.driver_name || "Not Assigned"}
+                        ${escapeHtml(route.driver_name || "Not Assigned")}
 
                     </strong>
 
@@ -507,7 +508,7 @@ function renderRouteCard(route){
 
                     <strong>
 
-                        ${route.total_stops}
+                        ${escapeHtml(route.total_stops)}
 
                     </strong>
 

@@ -89,7 +89,7 @@ class User(Base):
 
     role: Mapped[str] = mapped_column(
         String(32),
-        default="Administrator",
+        default="Admin",
         nullable=False,
     )
 
@@ -101,6 +101,17 @@ class User(Base):
         String(20),
         default="Active",
         nullable=False,
+    )
+
+    failed_login_attempts: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
+    locked_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
     )
 
     # ======================================================
@@ -699,6 +710,51 @@ class RouteStop(Base):
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+
+# ==========================================================
+# OPERATIONS NOTIFICATION MODEL
+# ==========================================================
+
+class FleetNotification(Base):
+    """Persistent operational feedback raised by a driver for management."""
+
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    feedback_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(120), nullable=False)
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    severity: Mapped[str] = mapped_column(String(20), default="Medium", nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="Open", nullable=False, index=True)
+
+    driver_id: Mapped[int | None] = mapped_column(
+        ForeignKey("drivers.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    bus_id: Mapped[int | None] = mapped_column(
+        ForeignKey("buses.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    route_id: Mapped[int | None] = mapped_column(
+        ForeignKey("routes.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    trip_id: Mapped[int | None] = mapped_column(
+        ForeignKey("live_trips.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    acknowledged_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    acknowledged_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

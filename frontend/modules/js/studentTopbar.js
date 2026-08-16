@@ -54,7 +54,7 @@ export function createStudentTopbar(toggleSidebar) {
             <div>
 
                 <p class="section-kicker">
-                    Student portal
+                    User portal
                 </p>
 
                 <h1 id="student-topbar-title">
@@ -131,13 +131,13 @@ export function createStudentTopbar(toggleSidebar) {
                     <strong
                         id="student-topbar-name">
 
-                        Student
+                        User
 
                     </strong>
 
 
                     <small>
-                        Student
+                        User
                     </small>
 
                 </span>
@@ -263,7 +263,7 @@ function populateStudentProfile(topbar) {
     const name =
         profile.full_name ||
         profile.username ||
-        "Student";
+        "User";
 
 
     /* ======================================================

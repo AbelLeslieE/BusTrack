@@ -3,6 +3,8 @@
    STUDENT DASHBOARD
    ========================================================== */
 
+import { escapeHtml } from "/static/common/security.js";
+
 
 
 
@@ -525,7 +527,7 @@ export function render() {
                 </h3>
 
                 <p>
-                    Once transport administration assigns
+                    Once an admin assigns
                     a bus and route to your account, your
                     live location, next stop and estimated
                     arrival time will appear automatically.
@@ -910,10 +912,10 @@ function updateStudentStopMap(
     stopMarker.bindPopup(
         `
             <strong>
-                ${stop.stop_name || "Assigned Stop"}
+                ${escapeHtml(stop.stop_name || "Assigned Stop")}
             </strong>
             <br>
-            ${stop.stop_code || ""}
+            ${escapeHtml(stop.stop_code || "")}
         `
     );
 
@@ -1062,10 +1064,9 @@ function updateStudentAssignmentStatus(
 
     if (busStatus) {
 
-        busStatus.textContent =
-            bus.status
-                ? `Bus status: ${bus.status}`
-                : "Bus assigned";
+        busStatus.textContent = bus.status
+            ? `Bus status: ${bus.status}`
+            : "Bus assigned";
 
     }
 

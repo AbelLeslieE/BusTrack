@@ -10,6 +10,8 @@ from pathlib import Path
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
+from backend.roles import LEGACY_ROLE_MAPPINGS
+
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 DEFAULT_SQLITE_URL = (
@@ -102,6 +104,33 @@ def initialize_database() -> None:
                         "ALTER TABLE students "
                         "ADD COLUMN route_id INTEGER REFERENCES routes(id)"
                     )
+                )
+
+    if "users" in inspector.get_table_names():
+        user_columns = {
+            column["name"] for column in inspector.get_columns("users")
+        }
+        with engine.begin() as connection:
+            if "failed_login_attempts" not in user_columns:
+                connection.execute(text(
+                    "ALTER TABLE users "
+                    "ADD COLUMN failed_login_attempts INTEGER NOT NULL DEFAULT 0"
+                ))
+            if "locked_until" not in user_columns:
+                connection.execute(text(
+                    "ALTER TABLE users ADD COLUMN locked_until TIMESTAMP NULL"
+                ))
+
+        # Consolidate the historic role names into the three supported roles.
+        # This is idempotent and keeps existing Student profile records intact.
+        with engine.begin() as connection:
+            for legacy_role, canonical in LEGACY_ROLE_MAPPINGS.items():
+                connection.execute(
+                    text(
+                        "UPDATE users SET role = :canonical "
+                        "WHERE lower(trim(role)) = :legacy_role"
+                    ),
+                    {"canonical": canonical, "legacy_role": legacy_role},
                 )
 
     print(
