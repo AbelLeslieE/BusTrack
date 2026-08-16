@@ -304,17 +304,16 @@ function createShell(initialRoute) {
 
     };
 
+  const isMobileDrawer = () =>
+        window.matchMedia("(max-width: 900px)").matches;
+
   const navigate = (route) => {
 
         // ==========================================================
         // CLOSE SIDEBAR ON MOBILE / TABLET
         // ==========================================================
 
-        if (window.innerWidth <= 1200) {
-
-            closeSidebar();
-
-        }
+        closeSidebar();
 
         // ==========================================================
         // NAVIGATE TO REQUESTED MODULE
@@ -336,15 +335,7 @@ function createShell(initialRoute) {
         // Ensures the drawer stays closed after the current browser
         // event cycle has completed.
 
-        if (window.innerWidth <= 1200) {
-
-            requestAnimationFrame(() => {
-
-                closeSidebar();
-
-            });
-
-        }
+        requestAnimationFrame(closeSidebar);
 
     };
 
@@ -372,7 +363,7 @@ function createShell(initialRoute) {
   const toggleSidebar = () => {
 
         // Only open the drawer on smaller screens
-        if (window.innerWidth <= 1200) {
+        if (isMobileDrawer()) {
 
             appShell.classList.toggle("sidebar-open");
 
@@ -399,7 +390,12 @@ function createShell(initialRoute) {
   sidebarBackdrop.type = "button";
   sidebarBackdrop.className = "sidebar-backdrop";
   sidebarBackdrop.setAttribute("aria-label", "Close navigation");
-  sidebarBackdrop.addEventListener("click", closeSidebar);
+    sidebarBackdrop.addEventListener("click", closeSidebar);
+  window.addEventListener("resize", () => {
+
+        if (!isMobileDrawer()) closeSidebar();
+
+    });
 
   const content = document.createElement("main");
   content.className = "page-content";

@@ -369,7 +369,7 @@
    Tablet / Mobile
 -------------------------- */
 
-@media (max-width:1200px){
+@media (max-width:900px){
 
     .app-shell{
 
@@ -409,39 +409,12 @@
 
     }
 
-    .sidebar{
-
-        position:absolute;
-
-        left:0;
-
-        top:0;
-
-        width:320px;
-
-        height:100%;
-
-        z-index:100;
-
-        transform:translateX(-100%);
-
-    }
-
-    .app-shell.sidebar-open .sidebar{
-
-        transform:translateX(0);
-
-    }
-
-    .app-workspace{
-
-        transform:translateX(0);
-
-    }
-
+    /* The drawer itself is fixed by sidebar.css. Keep page content stationary
+       so closing the drawer cannot leave the workspace shifted on mobile. */
+    .app-workspace,
     .app-shell.sidebar-open .app-workspace{
 
-        transform:translateX(320px);
+        transform:none;
 
     }
 

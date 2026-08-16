@@ -369,7 +369,7 @@
 
 .mobile-menu{
 
-    display:flex;
+    display:none;
 
     align-items:center;
 
@@ -418,6 +418,12 @@
 }
 
 @media(max-width:900px){
+
+    .mobile-menu{
+
+        display:flex;
+
+    }
 
     .search-box{
 

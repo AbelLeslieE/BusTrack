@@ -423,7 +423,7 @@
     box-shadow:
         0 8px 20px rgba(79,209,255,.08);
 }
-@media (max-width:1200px){
+@media (max-width:900px){
 
     .nav-item:hover{
 
@@ -650,7 +650,7 @@
    MOBILE SIDEBAR
 ========================================================== */
 
-@media (max-width:1200px){
+@media (max-width:900px){
 
     /* ======================================================
        SIDEBAR DRAWER
@@ -796,50 +796,6 @@
         height:40px;
 
         flex-shrink:0;
-
-    }
-
-}
-/* ==========================================================
-   MOBILE SIDEBAR OVERLAY
-========================================================== */
-
-@media (max-width:1200px){
-
-    .app-shell::before{
-
-        content:"";
-
-        position:fixed;
-
-        inset:0;
-
-        z-index:900;
-
-        background:
-            rgba(2,8,23,.64);
-
-        backdrop-filter:
-            blur(4px);
-
-        -webkit-backdrop-filter:
-            blur(4px);
-
-        opacity:0;
-
-        pointer-events:none;
-
-        transition:
-            opacity .32s ease;
-
-    }
-
-
-    .app-shell.sidebar-open::before{
-
-        opacity:1;
-
-        pointer-events:auto;
 
     }
 
