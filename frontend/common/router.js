@@ -390,7 +390,29 @@ function createShell(initialRoute) {
   sidebarBackdrop.type = "button";
   sidebarBackdrop.className = "sidebar-backdrop";
   sidebarBackdrop.setAttribute("aria-label", "Close navigation");
-    sidebarBackdrop.addEventListener("click", closeSidebar);
+  sidebarBackdrop.addEventListener("click", closeSidebar);
+
+  // Capture phase makes close actions reliable on touch browsers even when a
+  // nested icon or link has its own click handler.
+  appShell.addEventListener("click", event => {
+
+        const target = event.target instanceof Element
+            ? event.target
+            : event.target?.parentElement;
+
+        if (!target) return;
+
+        if (
+            target.closest(".sidebar-backdrop") ||
+            target.closest(".sidebar-close") ||
+            target.closest(".sidebar [data-route]")
+        ) {
+
+            closeSidebar();
+
+        }
+
+    }, true);
   window.addEventListener("resize", () => {
 
         if (!isMobileDrawer()) closeSidebar();
@@ -559,11 +581,9 @@ export async function loadModule(requestedRoute) {
 
     shell.content.replaceChildren(view);
 
-    if (window.innerWidth <= 1200) {
-
-        shell.appShell.classList.remove("sidebar-open");
-
-    }
+    // A route change must never leave the mobile drawer over the new page.
+    // Removing this class is harmless on desktop, where it has no visual role.
+    shell.appShell.classList.remove("sidebar-open");
   } catch (error) {
     console.error("========== MODULE ERROR ==========");
     console.error(error);

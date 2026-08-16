@@ -44,23 +44,33 @@ export function createDriverSidebar(activeRoute, onNavigate) {
     sidebar.className = "sidebar glass-panel";
 
     sidebar.innerHTML = `
-        <a class="brand" href="#driverDashboard">
+        <div class="sidebar-mobile-header">
+            <a class="brand" href="#driverDashboard">
 
-            <span class="brand-mark">🚌</span>
+                <span class="brand-mark">🚌</span>
 
-            <div class="brand-text">
+                <div class="brand-text">
 
-                <span class="brand-title">
-                    BusTrack
-                </span>
+                    <span class="brand-title">
+                        BusTrack
+                    </span>
 
-                <span class="brand-subtitle">
-                    Driver Portal
-                </span>
+                    <span class="brand-subtitle">
+                        Driver Portal
+                    </span>
 
-            </div>
+                </div>
 
-        </a>
+            </a>
+
+            <button
+                type="button"
+                class="sidebar-close"
+                aria-label="Close navigation"
+                title="Close navigation">
+                <span aria-hidden="true">×</span>
+            </button>
+        </div>
 
         <nav class="sidebar-nav">
 
@@ -99,6 +109,16 @@ export function createDriverSidebar(activeRoute, onNavigate) {
     `;
 
     sidebar.addEventListener("click", (event) => {
+
+        const closeButton = event.target.closest(".sidebar-close");
+
+        if (closeButton) {
+
+            document.querySelector(".app-shell")?.classList.remove("sidebar-open");
+
+            return;
+
+        }
 
         // ==========================================================
         // LOGOUT

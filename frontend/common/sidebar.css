@@ -660,31 +660,39 @@
 
         position:fixed;
 
-        top:16px;
+        top:max(12px, env(safe-area-inset-top));
 
-        left:16px;
+        left:12px;
 
-        bottom:16px;
+        bottom:max(12px, env(safe-area-inset-bottom));
 
         width:
             min(
                 320px,
-                calc(100vw - 32px)
+                calc(100vw - 24px)
             );
 
         height:auto;
 
         max-height:
-            calc(100dvh - 32px);
+            calc(100dvh - 24px);
 
-        z-index:1000;
+        z-index:9999;
 
         padding:22px;
 
         transform:
-            translateX(
-                calc(-100% - 32px)
-            );
+            translate3d(calc(-100% - 24px),0,0);
+
+        opacity:0;
+
+        visibility:hidden;
+
+        pointer-events:none;
+
+        -webkit-overflow-scrolling:touch;
+
+        overscroll-behavior:contain;
 
         transition:
             transform .32s
@@ -693,7 +701,9 @@
                 0,
                 .2,
                 1
-            );
+            ),
+            opacity .2s ease,
+            visibility 0s linear .32s;
 
     }
 
@@ -704,8 +714,15 @@
 
     .app-shell.sidebar-open .sidebar{
 
-        transform:
-            translateX(0);
+        transform:translate3d(0,0,0);
+
+        opacity:1;
+
+        visibility:visible;
+
+        pointer-events:auto;
+
+        transition-delay:0s;
 
     }
 
