@@ -17,9 +17,7 @@ from backend.models import (
     Driver,
     Bus,
     Student,
-    Stop,
     Route,
-    RouteStop,
 )
 from backend.schemas import (
     UserCreate,
@@ -57,6 +55,38 @@ ALLOWED_STATUS = {
     "Inactive",
     "Locked",
 }
+
+
+def build_user_response(user: User, db: Session) -> dict:
+    """Return a user plus the profile fields needed by the edit screen."""
+    result = {
+        "id": user.id, "username": user.username, "full_name": user.full_name,
+        "email": user.email, "phone": user.phone, "role": user.role,
+        "status": user.status, "last_login": user.last_login,
+        "created_at": user.created_at, "updated_at": user.updated_at,
+    }
+    if user.driver:
+        result.update({
+            "driver_code": user.driver.driver_code,
+            "license_number": user.driver.license_number,
+            "license_expiry": user.driver.license_expiry,
+            "address": user.driver.address,
+            "bus_id": user.driver.bus_id,
+        })
+    if user.student:
+        # route_id is authoritative. The fallback keeps records created before
+        # the central Assignment workspace readable until they are next saved.
+        route = user.student.route or (
+            db.query(Route).filter(Route.bus_id == user.student.bus_id).first()
+            if user.student.bus_id else None
+        )
+        result.update({
+            "student_code": user.student.student_code,
+            "route_id": route.id if route else None,
+            "bus_id": user.student.bus_id,
+            "stop_id": user.student.stop_id,
+        })
+    return result
 
 
 # ==========================================================
@@ -313,7 +343,7 @@ async def create_user(
 
                 address=user.address,
 
-                bus_id=user.bus_id,
+                bus_id=None,
 
                 status="Available",
             )
@@ -360,126 +390,8 @@ async def create_user(
                 )
 
 
-            # ----------------------------------------------
-            # Validate assigned bus
-            # ----------------------------------------------
-
-            assigned_bus = None
-
-            if user.bus_id is not None:
-
-                assigned_bus = (
-                    db.query(Bus)
-                    .filter(
-                        Bus.id == user.bus_id
-                    )
-                    .first()
-                )
-
-                if assigned_bus is None:
-
-                    raise HTTPException(
-                        status_code=400,
-                        detail="Assigned bus not found.",
-                    )
-
-
-            # ----------------------------------------------
-            # Validate assigned boarding stop
-            # ----------------------------------------------
-
-            if user.stop_id is not None:
-
-                # A boarding stop cannot be assigned
-                # without an assigned bus.
-
-                if assigned_bus is None:
-
-                    raise HTTPException(
-                        status_code=400,
-                        detail=(
-                            "A bus must be assigned "
-                            "before selecting a boarding stop."
-                        ),
-                    )
-
-
-                # ------------------------------------------
-                # Check that the stop exists
-                # ------------------------------------------
-
-                assigned_stop = (
-                    db.query(Stop)
-                    .filter(
-                        Stop.id == user.stop_id
-                    )
-                    .first()
-                )
-
-                if assigned_stop is None:
-
-                    raise HTTPException(
-                        status_code=400,
-                        detail="Boarding stop not found.",
-                    )
-
-
-                # ------------------------------------------
-                # Find the route assigned to the bus
-                # ------------------------------------------
-
-                assigned_route = (
-                    db.query(Route)
-                    .filter(
-                        Route.bus_id
-                        == assigned_bus.id
-                    )
-                    .first()
-                )
-
-                if assigned_route is None:
-
-                    raise HTTPException(
-                        status_code=400,
-                        detail=(
-                            "The selected bus "
-                            "has no route assigned."
-                        ),
-                    )
-
-
-                # ------------------------------------------
-                # Verify that the stop belongs
-                # to the selected bus route
-                # ------------------------------------------
-
-                route_stop = (
-                    db.query(RouteStop)
-                    .filter(
-                        RouteStop.route_id
-                        == assigned_route.id,
-
-                        RouteStop.stop_id
-                        == assigned_stop.id,
-                    )
-                    .first()
-                )
-
-                if route_stop is None:
-
-                    raise HTTPException(
-                        status_code=400,
-                        detail=(
-                            "The selected boarding stop "
-                            "does not belong to the "
-                            "selected bus route."
-                        ),
-                    )
-
-
-            # ----------------------------------------------
-            # Create Student profile
-            # ----------------------------------------------
+            # Student transport assignment belongs exclusively to the
+            # Students workspace. A newly created student starts unassigned.
 
             student = Student(
 
@@ -487,9 +399,11 @@ async def create_user(
 
                 student_code=user.student_code,
 
-                bus_id=user.bus_id,
+                route_id=None,
 
-                stop_id=user.stop_id,
+                bus_id=None,
+
+                stop_id=None,
 
             )
 
@@ -511,7 +425,7 @@ async def create_user(
         raise
 
 
-    return new_user
+    return build_user_response(new_user, db)
 
 # ==========================================================
 # GET ALL USERS
@@ -559,7 +473,7 @@ def get_user(
             detail="User not found.",
         )
 
-    return user
+    return build_user_response(user, db)
 
 
 # ==========================================================
@@ -633,6 +547,36 @@ def update_user(
 
     user.status = updated_user.status
 
+    if updated_user.role == "Driver":
+        driver = user.driver
+        if driver is None:
+            raise HTTPException(status_code=400, detail="This user has no driver profile.")
+        if not updated_user.driver_code or not updated_user.license_number or not updated_user.license_expiry:
+            raise HTTPException(status_code=400, detail="Driver code, license number, and license expiry are required.")
+        duplicate_driver_code = db.query(Driver).filter(
+            Driver.driver_code == updated_user.driver_code,
+            Driver.id != driver.id,
+        ).first()
+        if duplicate_driver_code:
+            raise HTTPException(status_code=400, detail="Driver code already exists.")
+        duplicate_license = db.query(Driver).filter(
+            Driver.license_number == updated_user.license_number,
+            Driver.id != driver.id,
+        ).first()
+        if duplicate_license:
+            raise HTTPException(status_code=400, detail="License number already exists.")
+        driver.driver_code = updated_user.driver_code
+        driver.license_number = updated_user.license_number
+        driver.license_expiry = updated_user.license_expiry
+        driver.address = updated_user.address
+
+    if updated_user.role == "Student":
+        student = user.student
+        if student is None:
+            raise HTTPException(status_code=400, detail="This user has no student profile.")
+        if updated_user.student_code:
+            student.student_code = updated_user.student_code
+
 
     # ======================================================
     # SAVE
@@ -643,7 +587,7 @@ def update_user(
     db.refresh(user)
 
 
-    return user
+    return build_user_response(user, db)
 
 
 # ==========================================================
@@ -685,7 +629,13 @@ def delete_user(
     )
 
     if driver:
-
+        db.query(Route).filter(Route.driver_id == driver.id).update(
+            {Route.driver_id: None}, synchronize_session=False
+        )
+        db.query(Bus).filter(Bus.driver_id == driver.id).update(
+            {Bus.driver_id: None}, synchronize_session=False
+        )
+        driver.bus_id = None
         db.delete(driver)
 
 

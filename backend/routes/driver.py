@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.models import Driver, Bus
+from backend.models import Driver, Bus, Route
 from backend.schemas import (
 
     DriverUpdate,
@@ -115,7 +115,8 @@ def update_driver(
                 detail="Assigned bus does not exist.",
             )
 
-    for key, value in driver.model_dump().items():
+    # Bus assignment is managed centrally in the Assignments workspace.
+    for key, value in driver.model_dump(exclude={"bus_id"}).items():
         setattr(existing, key, value)
 
     db.commit()
@@ -143,6 +144,15 @@ def delete_driver(
             detail="Driver not found.",
         )
 
+    # Remove the driver's central assignment before deleting the profile.
+    db.query(Route).filter(Route.driver_id == driver.id).update(
+        {Route.driver_id: None}, synchronize_session=False
+    )
+    db.query(Bus).filter(Bus.driver_id == driver.id).update(
+        {Bus.driver_id: None}, synchronize_session=False
+    )
+    driver.bus_id = None
+    db.flush()
     db.delete(driver)
     db.commit()
 

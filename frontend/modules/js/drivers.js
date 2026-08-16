@@ -794,6 +794,16 @@ function renderTableRows() {
                     <div class="table-actions">
 
                         <button
+                            class="table-action-btn view-driver"
+                            data-id="${driver.id}"
+                            title="View Driver"
+                        >
+
+                            👁
+
+                        </button>
+
+                        <button
                             class="table-action-btn edit-driver"
                             data-id="${driver.id}"
                             title="Edit Driver"
@@ -1022,8 +1032,6 @@ async function openEditDriverModal(driverId) {
 
     const form = createDriverForm(driver);
 
-    await populateBusDropdown(form);
-
     Modal.form({
 
         eyebrow: "DRIVER MANAGEMENT",
@@ -1162,41 +1170,6 @@ function confirmDeleteDriver(driverId) {
 }
 
 
-/**
- * ============================================================================
- * Populate Bus Dropdown
- * ============================================================================
- */
-
-async function populateBusDropdown(form) {
-
-    if (!state.buses.length) {
-
-        await loadBuses();
-
-    }
-
-    const dropdown = form.querySelector("#bus_id");
-
-    if (!dropdown) {
-
-        return;
-
-    }
-
-    dropdown.setItems(
-
-        state.buses.map(bus => ({
-
-            value: bus.id,
-
-            label: bus.bus_number
-
-        }))
-
-    );
-
-}
 /* =============================================================================
    EVENTS & INITIALIZATION
 ============================================================================= */
@@ -1348,6 +1321,14 @@ function bindToolbarEvents() {
 function bindTableEvents() {
 
     document
+        .querySelectorAll(".view-driver")
+        .forEach(button => {
+            button.addEventListener("click", () => {
+                openDriverViewModal(Number(button.dataset.id));
+            });
+        });
+
+    document
 
         .querySelectorAll(".edit-driver")
 
@@ -1383,6 +1364,40 @@ function bindTableEvents() {
 
         });
 
+}
+
+async function openDriverViewModal(driverId) {
+
+    try {
+
+        const response = await fetch(`${API.DRIVERS}${driverId}`);
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || "Failed to load driver details.");
+        }
+
+        const driver = await response.json();
+
+        Modal.alert({
+            eyebrow: "DRIVER MANAGEMENT",
+            title: driver.user?.full_name || driver.driver_code,
+            subtitle: "Driver profile",
+            content: `
+                <div class="detail-list">
+                    <p><strong>Driver code:</strong> ${driver.driver_code || "—"}</p>
+                    <p><strong>License:</strong> ${driver.license_number || "—"}</p>
+                    <p><strong>License expiry:</strong> ${driver.license_expiry || "—"}</p>
+                    <p><strong>Phone:</strong> ${driver.user?.phone || "—"}</p>
+                    <p><strong>Status:</strong> ${driver.status || "—"}</p>
+                </div>`,
+        });
+
+    } catch (error) {
+
+        Modal.error({ title: "Unable to Load Driver", subtitle: error.message });
+
+    }
 }
 
 

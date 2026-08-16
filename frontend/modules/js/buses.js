@@ -825,6 +825,20 @@ function renderTableRows() {
 
                     <button
 
+                        class="icon-btn view-btn"
+
+                        data-id="${bus.id}"
+
+                        title="View Bus"
+
+                    >
+
+                        👁
+
+                    </button>
+
+                    <button
+
                         class="icon-btn edit-btn"
 
                         data-id="${bus.id}"
@@ -1118,6 +1132,16 @@ function bindTableEvents(root) {
 
     tableBody.addEventListener("click", async (event) => {
 
+        const viewButton = event.target.closest(".view-btn");
+
+        if (viewButton) {
+
+            await openBusViewModal(Number(viewButton.dataset.id));
+
+            return;
+
+        }
+
         const editButton = event.target.closest(".edit-btn");
 
         if (editButton) {
@@ -1216,6 +1240,41 @@ function bindTableEvents(root) {
 
     });
 
+}
+
+async function openBusViewModal(busId) {
+
+    try {
+
+        const response = await fetch(`${API.BUSES}${busId}`);
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.detail || "Failed to load bus details.");
+        }
+
+        const bus = await response.json();
+
+        Modal.alert({
+            eyebrow: "FLEET MANAGEMENT",
+            title: bus.bus_number,
+            subtitle: "Bus details",
+            content: `
+                <div class="detail-list">
+                    <p><strong>Registration:</strong> ${formatValue(bus.registration_number)}</p>
+                    <p><strong>Capacity:</strong> ${formatValue(bus.capacity)}</p>
+                    <p><strong>Vehicle:</strong> ${formatValue(bus.manufacturer)} ${formatValue(bus.model)} (${formatValue(bus.year)})</p>
+                    <p><strong>Fuel:</strong> ${formatValue(bus.fuel_type)}</p>
+                    <p><strong>Status:</strong> ${formatValue(bus.status)}</p>
+                    <p><strong>GPS Device:</strong> ${formatValue(bus.device_id)}</p>
+                </div>`,
+        });
+
+    } catch (error) {
+
+        Modal.error({ title: "Unable to Load Bus", subtitle: error.message });
+
+    }
 }
 /* =============================================================================
    HELPER FUNCTIONS
@@ -1537,12 +1596,6 @@ function getBusFormData() {
 
         capacity:
             Number(document.querySelector("#capacity").value),
-
-        driver_id:
-            document.querySelector("#driver_id").getValue() || null,
-
-        route:
-            document.querySelector("#route").getValue() || null,
 
         device_id:
             document.querySelector("#device_id").value || null,

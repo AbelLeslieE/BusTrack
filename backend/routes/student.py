@@ -18,6 +18,7 @@ from backend.models import (
     Student,
     User,
     Route,
+    Driver,
     RouteStop,
     Stop,
 )
@@ -30,12 +31,98 @@ from backend.routes.models_tracking import (
 from backend.services.tracking_engine import (
     determine_route_progress,
 )
+from backend.schemas import StudentAssignmentUpdate
 
 
 router = APIRouter(
     prefix="/api/students",
     tags=["Students"],
 )
+
+
+def _student_directory_item(student: Student, db: Session) -> dict:
+    """Build the admin-facing student assignment record."""
+    route = student.route or (
+        db.query(Route).filter(Route.bus_id == student.bus_id).first()
+        if student.bus_id else None
+    )
+    bus = student.bus
+    stop = student.stop
+    return {
+        "id": student.id,
+        "user_id": student.user_id,
+        "student_code": student.student_code,
+        "full_name": student.user.full_name if student.user else "Unknown student",
+        "username": student.user.username if student.user else None,
+        "email": student.user.email if student.user else None,
+        "phone": student.user.phone if student.user else None,
+        "status": student.user.status if student.user else "Inactive",
+        "route": (
+            {
+                "id": route.id,
+                "route_code": route.route_code,
+                "route_name": route.route_name,
+                "status": route.status,
+            }
+            if route else None
+        ),
+        "bus": (
+            {"id": bus.id, "bus_number": bus.bus_number, "status": bus.status}
+            if bus else None
+        ),
+        "stop": (
+            {"id": stop.id, "stop_code": stop.stop_code, "stop_name": stop.stop_name}
+            if stop else None
+        ),
+    }
+
+
+@router.get("/directory")
+def get_student_directory(db: Session = Depends(get_db)):
+    """Return every student and their current route, bus, and stop."""
+    students = db.query(Student).order_by(Student.student_code).all()
+    return [_student_directory_item(student, db) for student in students]
+
+
+@router.put("/{student_id:int}/assignment")
+def update_student_assignment(
+    student_id: int,
+    assignment: StudentAssignmentUpdate,
+    db: Session = Depends(get_db),
+):
+    """Assign a student's route and boarding stop from the Students workspace."""
+    student = db.get(Student, student_id)
+    if student is None:
+        raise HTTPException(status_code=404, detail="Student not found.")
+
+    route = db.get(Route, assignment.route_id) if assignment.route_id else None
+    if assignment.route_id and route is None:
+        raise HTTPException(status_code=400, detail="Selected route was not found.")
+    if route and route.bus_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Assign a bus to this route before assigning students to it.",
+        )
+
+    if assignment.stop_id is not None:
+        if route is None:
+            raise HTTPException(status_code=400, detail="Choose a route before selecting a boarding stop.")
+        valid_stop = db.query(RouteStop).filter(
+            RouteStop.route_id == route.id,
+            RouteStop.stop_id == assignment.stop_id,
+        ).first()
+        if valid_stop is None:
+            raise HTTPException(
+                status_code=400,
+                detail="The selected boarding stop does not belong to the selected route.",
+            )
+
+    student.route_id = route.id if route else None
+    student.bus_id = route.bus_id if route else None
+    student.stop_id = assignment.stop_id if route else None
+    db.commit()
+    db.refresh(student)
+    return _student_directory_item(student, db)
 
 
 # ==========================================================
@@ -96,22 +183,13 @@ def get_current_student(
     stop = student.stop
 
     # ------------------------------------------------------
-    # Find the actual Route record assigned to this bus.
-    #
-    # Bus.route is currently a temporary string field.
-    # The authoritative bus → route assignment is stored
-    # in routes.bus_id.
-    # ------------------------------------------------------
-
-    route = (
-        db.query(Route)
-        .filter(
-            Route.bus_id == bus.id
-        )
-        .first()
-        if bus
-        else None
+    # The student's selected route is authoritative. The fallback supports
+    # profiles created before route_id was added to student assignments.
+    route = student.route or (
+        db.query(Route).filter(Route.bus_id == bus.id).first()
+        if bus else None
     )
+    driver = db.get(Driver, route.driver_id) if route and route.driver_id else None
 
     return {
         "id": student.id,
@@ -149,6 +227,12 @@ def get_current_student(
                         "status": route.status,
                     }
                     if route
+                    else None
+                ),
+
+                "driver_name": (
+                    driver.user.full_name
+                    if driver and driver.user
                     else None
                 ),
 
@@ -274,16 +358,12 @@ def get_student_live_tracking(
     # ======================================================
     # 3. FIND AUTHORITATIVE ROUTE
     #
-    # routes.bus_id is the authoritative Bus → Route
-    # relationship.
+    # The student's selected route is authoritative. The fallback supports
+    # older student profiles that predate student.route_id.
     # ======================================================
 
-    route = (
-        db.query(Route)
-        .filter(
-            Route.bus_id == bus.id
-        )
-        .first()
+    route = student.route or (
+        db.query(Route).filter(Route.bus_id == bus.id).first()
     )
 
     if route is None:

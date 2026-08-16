@@ -4,9 +4,6 @@
 ========================================================================== */
 import { createDropdown } from "/static/common/dropdown.js";
 
-import { getDrivers } from "./driversApi.js";
-
-import { getRoutes } from "./routesApi.js";
 /* ==========================================================================
    CREATE FORM
 ========================================================================== */
@@ -20,8 +17,6 @@ export async function createBusForm(bus = {}) {
     wrapper.innerHTML = `
 
         ${renderBusInformation(bus)}
-
-        ${renderAssignment(bus)}
 
         ${renderTracking(bus)}
 
@@ -118,56 +113,6 @@ function renderBusInformation(bus){
                     placeholder:"50",
                     required:true
                 })}
-
-            </div>
-
-        </section>
-
-    `;
-
-}
-
-/* ==========================================================================
-   ASSIGNMENT
-========================================================================== */
-
-function renderAssignment(bus){
-
-    return `
-
-        <section class="modal-section">
-
-            <h3 class="modal-section-title">
-
-                Assignment
-
-            </h3>
-
-            <div class="modal-grid">
-
-                <div class="modal-group">
-
-                    <label class="modal-label">
-
-                        Driver
-
-                    </label>
-
-                    <div id="driver_container"></div>
-
-                </div>
-
-                <div class="modal-group">
-
-                    <label class="modal-label">
-
-                        Route
-
-                    </label>
-
-                    <div id="route_container"></div>
-
-                </div>
 
             </div>
 
@@ -324,10 +269,6 @@ function createTextarea({
 ========================================================================== */
 
 async function initializeDropdowns(wrapper, bus){
-    const drivers = await getDrivers();
-
-    const routes = await getRoutes();
-
     wrapper.querySelector("#fuel_type_container")
         .appendChild(
             createDropdown({
@@ -355,55 +296,4 @@ async function initializeDropdowns(wrapper, bus){
                 ]
             })
         );
-    /* ==========================================================
-    DRIVER DROPDOWN
-    ========================================================== */
-
-    const driverItems = drivers.map(driver => ({
-
-        value: driver.id,
-
-        label: `${driver.user?.full_name ?? "Unknown"} • ${driver.driver_code}`
-
-    }));
-
-    console.log("Drivers API:", drivers);
-    console.log("Driver Items:", driverItems);
-
-    wrapper.querySelector("#driver_container")
-        .appendChild(
-
-            createDropdown({
-
-                id: "driver_id",
-
-                value: bus.driver_id || "",
-
-                placeholder: "Select Driver",
-
-                items: driverItems
-
-            })
-
-        );
-wrapper.querySelector("#route_container")
-.appendChild(
-    createDropdown({
-
-        id: "route",
-
-        value: bus.route || "",
-
-        placeholder: "Select Route",
-
-        items: routes.map(route => ({
-
-            value: route.route_name,
-
-            label: `${route.route_code} • ${route.route_name}`
-
-        }))
-
-    })
-);
 }

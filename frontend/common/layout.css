@@ -45,6 +45,12 @@
 
 }
 
+.sidebar-backdrop{
+
+    display:none;
+
+}
+
 /* ==========================================================
    WORKSPACE
 ========================================================== */
@@ -370,6 +376,36 @@
         grid-template-columns:1fr;
 
         overflow:hidden;
+
+    }
+
+    .sidebar-backdrop{
+
+        position:fixed;
+
+        inset:0;
+
+        z-index:99;
+
+        border:0;
+
+        background:rgba(1,7,18,.62);
+
+        opacity:0;
+
+        pointer-events:none;
+
+        transition:opacity .25s ease;
+
+    }
+
+    .app-shell.sidebar-open .sidebar-backdrop{
+
+        display:block;
+
+        opacity:1;
+
+        pointer-events:auto;
 
     }
 

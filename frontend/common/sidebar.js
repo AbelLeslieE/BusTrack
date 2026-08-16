@@ -8,6 +8,7 @@ const primaryItems = [
   ["live_tracking", "Live tracking", "◎"],
   ["buses", "Buses", "▣"],
   ["routes", "Routes", "⌁"],
+  ["assignments", "Assignments", "⇄"],
   ["stops", "Stops", "⌖"],
 ];
 
@@ -82,10 +83,7 @@ export function createSidebar(activeRoute, onNavigate) {
                 aria-label="Close navigation"
                 title="Close navigation">
 
-                <i
-                    data-lucide="x"
-                    aria-hidden="true">
-                </i>
+                <span aria-hidden="true">×</span>
 
             </button>
 

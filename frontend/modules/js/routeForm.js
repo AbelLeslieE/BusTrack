@@ -30,8 +30,8 @@ let routeStopMarkers = [];
 
 export function createRouteForm(
     route = {},
-    buses = [],
-    drivers = []
+    _buses = [],
+    _drivers = []
 ) {
 
     const wrapper = document.createElement("div");
@@ -41,8 +41,6 @@ export function createRouteForm(
     wrapper.innerHTML = `
 
         ${renderRouteInformation(route)}
-
-        ${renderAssignment(route)}
 
         ${renderSchedule(route)}
 
@@ -54,9 +52,7 @@ export function createRouteForm(
 
     initializeDropdowns(
         wrapper,
-        route,
-        buses,
-        drivers
+        route
     );
 
 
@@ -114,55 +110,6 @@ function renderRouteInformation(route){
                     placeholder:"Angamaly Route",
                     required:true
                 })}
-
-            </div>
-
-        </section>
-
-    `;
-
-}
-/* ==========================================================================
-   ASSIGNMENT
-========================================================================== */
-
-function renderAssignment(){
-
-    return `
-
-        <section class="modal-section">
-
-            <h3 class="modal-section-title">
-
-                Assignment
-
-            </h3>
-
-            <div class="modal-grid">
-
-                <div class="modal-group">
-
-                    <label class="modal-label">
-
-                        Assigned Bus
-
-                    </label>
-
-                    <div id="bus_container"></div>
-
-                </div>
-
-                <div class="modal-group">
-
-                    <label class="modal-label">
-
-                        Assigned Driver
-
-                    </label>
-
-                    <div id="driver_container"></div>
-
-                </div>
 
             </div>
 
@@ -293,66 +240,8 @@ function createInput({
 
 function initializeDropdowns(
     wrapper,
-    route,
-    buses,
-    drivers
+    route
 ){
-
-    /* ==========================================================
-       BUS
-    ========================================================== */
-
-    const busDropdown = createDropdown({
-
-        id: "bus_id",
-
-        value: route.bus_id ?? "",
-
-        placeholder: "Select Bus",
-
-        items: buses.map(bus => ({
-
-            label: bus.bus_number,
-
-            value: bus.id
-
-        }))
-
-    });
-
-    wrapper
-        .querySelector("#bus_container")
-        .appendChild(busDropdown);
-
-
-    /* ==========================================================
-       DRIVER
-    ========================================================== */
-
-    const driverDropdown = createDropdown({
-
-        id: "driver_id",
-
-        value: route.driver_id ?? "",
-
-        placeholder: "Select Driver",
-
-        items: drivers.map(driver => ({
-
-            value: driver.id,
-
-            label: `${driver.user?.full_name ?? "Unknown"} • ${driver.driver_code}`
-
-        }))
-
-    });
-    console.log("Drivers passed to routeForm:", drivers);   
-
-    wrapper
-        .querySelector("#driver_container")
-        .appendChild(driverDropdown);
-
-
     /* ==========================================================
        STATUS
     ========================================================== */

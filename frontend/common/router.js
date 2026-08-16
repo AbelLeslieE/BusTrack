@@ -61,6 +61,11 @@ const adminModules = {
         load: () => import("../modules/js/routes.js")
     },
 
+    assignments: {
+        title: "Assignments",
+        load: () => import("../modules/js/assignments.js")
+    },
+
     stops: {
         title: "Stops",
         load: () => import("../modules/js/stops.js")
@@ -293,6 +298,12 @@ function createShell(initialRoute) {
     const appShell = document.createElement("div");
 
     appShell.className = "app-shell";
+  const closeSidebar = () => {
+
+        appShell.classList.remove("sidebar-open");
+
+    };
+
   const navigate = (route) => {
 
         // ==========================================================
@@ -301,7 +312,7 @@ function createShell(initialRoute) {
 
         if (window.innerWidth <= 1200) {
 
-            appShell.classList.remove("sidebar-open");
+            closeSidebar();
 
         }
 
@@ -329,7 +340,7 @@ function createShell(initialRoute) {
 
             requestAnimationFrame(() => {
 
-                appShell.classList.remove("sidebar-open");
+                closeSidebar();
 
             });
 
@@ -384,6 +395,12 @@ function createShell(initialRoute) {
                 : createTopbar(
                     toggleSidebar
                 );
+  const sidebarBackdrop = document.createElement("button");
+  sidebarBackdrop.type = "button";
+  sidebarBackdrop.className = "sidebar-backdrop";
+  sidebarBackdrop.setAttribute("aria-label", "Close navigation");
+  sidebarBackdrop.addEventListener("click", closeSidebar);
+
   const content = document.createElement("main");
   content.className = "page-content";
   content.id = "page-content";
@@ -403,6 +420,7 @@ function createShell(initialRoute) {
     workspace.append(topbar, content);
 
     appShell.append(
+        sidebarBackdrop,
         sidebar,
         workspace
     );

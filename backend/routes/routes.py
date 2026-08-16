@@ -14,6 +14,7 @@ from backend.models import (
     RouteStop,
     Bus,
     Driver,
+    Student,
 )
 from backend.schemas import (
     RouteCreate,
@@ -160,7 +161,7 @@ def get_routes(
 # ==========================================================
 
 @router.get(
-    "/{route_id}",
+    "/{route_id:int}",
     response_model=RouteResponse,
 )
 def get_route(
@@ -191,7 +192,7 @@ def get_route(
 # ==========================================================
 
 @router.put(
-    "/{route_id}",
+    "/{route_id:int}",
     response_model=RouteResponse,
 )
 def update_route(
@@ -208,9 +209,10 @@ def update_route(
             detail="Route not found.",
         )
 
+    # Assignments have their own workflow. Editing route details must never
+    # accidentally clear the bus or driver selected there.
     for key, value in updated.model_dump().items():
         setattr(route, key, value)
-
     db.commit()
     db.refresh(route)
 
@@ -222,7 +224,7 @@ def update_route(
 # DELETE ROUTE
 # ==========================================================
 
-@router.delete("/{route_id}")
+@router.delete("/{route_id:int}")
 def delete_route(
     route_id: int,
     db: Session = Depends(get_db),
@@ -235,6 +237,23 @@ def delete_route(
             status_code=404,
             detail="Route not found.",
         )
+
+    bus = db.get(Bus, route.bus_id) if route.bus_id else None
+    driver = db.get(Driver, route.driver_id) if route.driver_id else None
+
+    # A deleted route must not leave a bus, driver, or student appearing assigned.
+    if bus:
+        db.query(Student).filter(Student.bus_id == bus.id).update(
+            {Student.route_id: None, Student.bus_id: None, Student.stop_id: None}, synchronize_session=False
+        )
+    db.query(Student).filter(Student.route_id == route.id).update(
+        {Student.route_id: None, Student.bus_id: None, Student.stop_id: None}, synchronize_session=False
+    )
+    if bus:
+        bus.driver_id = None
+        bus.route = None
+    if driver:
+        driver.bus_id = None
 
     db.delete(route)
     db.commit()

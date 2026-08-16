@@ -7,7 +7,7 @@ from collections.abc import Generator
 import os
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 
@@ -86,6 +86,23 @@ def initialize_database() -> None:
     Base.metadata.create_all(
         bind=engine
     )
+
+    # This project currently has no migration framework. Keep existing local
+    # deployments compatible with the student route assignment introduced by
+    # the central Assignment workspace.
+    inspector = inspect(engine)
+    if "students" in inspector.get_table_names():
+        student_columns = {
+            column["name"] for column in inspector.get_columns("students")
+        }
+        if "route_id" not in student_columns:
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "ALTER TABLE students "
+                        "ADD COLUMN route_id INTEGER REFERENCES routes(id)"
+                    )
+                )
 
     print(
         "Database schema initialized successfully."

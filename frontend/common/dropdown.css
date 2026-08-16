@@ -339,3 +339,19 @@
     background:rgba(79,209,255,.45);
 
 }
+
+/* Open menus are moved to document.body by dropdown.js, allowing them to
+   render above cards and application containers that use overflow:hidden. */
+.dropdown-menu.dropdown-menu--open{
+
+    position:fixed;
+
+    z-index:10000;
+
+    opacity:1;
+
+    visibility:visible;
+
+    transform:translateY(0) scale(1);
+
+}

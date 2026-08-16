@@ -1689,16 +1689,6 @@ async function saveRoute(root) {
         route_name:
             form.querySelector("#route_name")?.value.trim(),
 
-        bus_id:
-            Number(
-                form.querySelector("#bus_id")?.getValue()
-            ) || null,
-
-        driver_id:
-            Number(
-                form.querySelector("#driver_id")?.getValue()
-            ) || null,
-
         departure_time:
             form.querySelector("#departure_time")?.value || null,
 

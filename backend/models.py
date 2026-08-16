@@ -385,6 +385,15 @@ class Student(Base):
     # TRANSPORT ASSIGNMENT
     # ======================================================
 
+    # A student's chosen route is the authoritative assignment.
+    # bus_id is a denormalized mirror that lets student-facing endpoints load
+    # their bus efficiently and is refreshed by the Assignment workspace.
+    route_id: Mapped[int | None] = mapped_column(
+        ForeignKey("routes.id"),
+        nullable=True,
+        index=True,
+    )
+
     bus_id: Mapped[int | None] = mapped_column(
         ForeignKey("buses.id"),
         nullable=True,
@@ -407,6 +416,11 @@ class Student(Base):
 
     bus = relationship(
         "Bus",
+        lazy="joined",
+    )
+
+    route = relationship(
+        "Route",
         lazy="joined",
     )
 

@@ -25,6 +25,16 @@ class UserResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    # Included for editing role-specific transport information.
+    driver_code: str | None = None
+    license_number: str | None = None
+    license_expiry: date | None = None
+    address: str | None = None
+    student_code: str | None = None
+    route_id: int | None = None
+    bus_id: int | None = None
+    stop_id: int | None = None
+
 
 class TokenResponse(BaseModel):
     """
@@ -76,15 +86,11 @@ class UserCreate(BaseModel):
 
     address: str | None = None
 
-    bus_id: int | None = None
-
-
     # --------------------------------------------------
     # Student-only fields
     # --------------------------------------------------
 
     student_code: str | None = None
-    stop_id: int | None = None
 
 class UserUpdate(BaseModel):
     """
@@ -102,10 +108,13 @@ class UserUpdate(BaseModel):
     status: str
 
     # --------------------------------------------------
-    # Transport assignment
+    # Driver-only fields
     # --------------------------------------------------
 
-    bus_id: int | None = None
+    driver_code: str | None = None
+    license_number: str | None = None
+    license_expiry: date | None = None
+    address: str | None = None
 
     # --------------------------------------------------
     # Student-only fields
@@ -113,6 +122,18 @@ class UserUpdate(BaseModel):
 
     student_code: str | None = None
 
+
+class RouteAssignmentUpdate(BaseModel):
+    """The single workflow for connecting a route, bus, and driver."""
+
+    bus_id: int | None = None
+    driver_id: int | None = None
+
+
+class StudentAssignmentUpdate(BaseModel):
+    """Route and boarding-stop assignment managed only from Students."""
+
+    route_id: int | None = None
     stop_id: int | None = None
 
 
@@ -151,45 +172,94 @@ class AdminBootstrapInput(BaseModel):
     password: str = Field(min_length=12, max_length=72)
 
 
+# ==========================================================
+# BUS SCHEMAS
+# Assignment fields are intentionally NOT accepted here.
+# Bus ↔ Route ↔ Driver relationships are managed only
+# through the Assignment module.
+# ==========================================================
+
 class BusCreate(BaseModel):
-    bus_number: str = Field(min_length=1, max_length=20)
-    registration_number: str = Field(min_length=1, max_length=30)
-    capacity: int = Field(gt=0, le=200)
-    manufacturer: str = Field(min_length=1, max_length=50)
-    model: str = Field(min_length=1, max_length=50)
-    year: int = Field(ge=1990, le=2100)
-    fuel_type: str = Field(min_length=1, max_length=20)
+
+    bus_number: str = Field(
+        min_length=1,
+        max_length=20,
+    )
+
+    registration_number: str = Field(
+        min_length=1,
+        max_length=30,
+    )
+
+    capacity: int = Field(
+        gt=0,
+        le=200,
+    )
+
+    manufacturer: str = Field(
+        min_length=1,
+        max_length=50,
+    )
+
+    model: str = Field(
+        min_length=1,
+        max_length=50,
+    )
+
+    year: int = Field(
+        ge=1990,
+        le=2100,
+    )
+
+    fuel_type: str = Field(
+        min_length=1,
+        max_length=20,
+    )
 
     status: str = "Active"
-
-    driver_id: int | None = None
-
-    route: str | None = Field(
-        default=None,
-        max_length=100,
-    )
 
     device_id: str | None = Field(
         default=None,
         max_length=100,
     )
 class BusUpdate(BaseModel):
-    bus_number: str = Field(min_length=1, max_length=20)
-    registration_number: str = Field(min_length=1, max_length=30)
-    capacity: int = Field(gt=0, le=200)
-    manufacturer: str = Field(min_length=1, max_length=50)
-    model: str = Field(min_length=1, max_length=50)
-    year: int = Field(ge=1990, le=2100)
-    fuel_type: str = Field(min_length=1, max_length=20)
+
+    bus_number: str = Field(
+        min_length=1,
+        max_length=20,
+    )
+
+    registration_number: str = Field(
+        min_length=1,
+        max_length=30,
+    )
+
+    capacity: int = Field(
+        gt=0,
+        le=200,
+    )
+
+    manufacturer: str = Field(
+        min_length=1,
+        max_length=50,
+    )
+
+    model: str = Field(
+        min_length=1,
+        max_length=50,
+    )
+
+    year: int = Field(
+        ge=1990,
+        le=2100,
+    )
+
+    fuel_type: str = Field(
+        min_length=1,
+        max_length=20,
+    )
 
     status: str
-
-    driver_id: int | None = None
-
-    route: str | None = Field(
-        default=None,
-        max_length=100,
-    )
 
     device_id: str | None = Field(
         default=None,
@@ -227,6 +297,10 @@ class BusResponse(BaseModel):
 class DriverUpdate(BaseModel):
     """
     Request body used when updating a driver profile.
+
+    Bus assignment is intentionally excluded.
+    Driver ↔ Bus relationships are managed only
+    through the Assignment module.
     """
 
     driver_code: str
@@ -238,8 +312,6 @@ class DriverUpdate(BaseModel):
     address: str | None = None
 
     status: str
-
-    bus_id: int | None = None
 class DriverUserResponse(BaseModel):
     """
     User information associated with a driver.
@@ -287,10 +359,12 @@ class DriverResponse(BaseModel):
 # ==========================================================
 # ROUTE SCHEMAS
 # ==========================================================
-
 class RouteCreate(BaseModel):
     """
     Request body used when creating a route.
+
+    Bus and driver assignment are intentionally excluded.
+    Assignments are created only through the Assignment module.
     """
 
     route_code: str = Field(
@@ -302,21 +376,17 @@ class RouteCreate(BaseModel):
         min_length=1,
         max_length=100,
     )
-
-    bus_id: int | None = None
-
-    driver_id: int | None = None
 
     departure_time: time | None = None
 
     arrival_time: time | None = None
 
     status: str = "Active"
-
-
 class RouteUpdate(BaseModel):
     """
-    Request body used when updating a route.
+    Request body used when editing route information.
+
+    Bus and driver assignment are intentionally excluded.
     """
 
     route_code: str = Field(
@@ -329,16 +399,11 @@ class RouteUpdate(BaseModel):
         max_length=100,
     )
 
-    bus_id: int | None = None
-
-    driver_id: int | None = None
-
     departure_time: time | None = None
 
     arrival_time: time | None = None
 
     status: str
-
 
 class RouteResponse(BaseModel):
 

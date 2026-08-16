@@ -18,8 +18,6 @@ export function createDriverForm(driver = {}) {
 
         ${renderDriverInformation(driver)}
 
-        ${renderAssignment(driver)}
-
         ${renderStatus(driver)}
 
     `;
@@ -78,45 +76,6 @@ function renderDriverInformation(driver){
                     value:driver.address || "",
                     placeholder:"Driver Address"
                 })}
-
-            </div>
-
-        </section>
-
-    `;
-
-}
-
-
-/* ==========================================================================
-   ASSIGNMENT
-========================================================================== */
-
-function renderAssignment(driver){
-
-    return `
-
-        <section class="modal-section">
-
-            <h3 class="modal-section-title">
-
-                Assignment
-
-            </h3>
-
-            <div class="modal-grid">
-
-                <div class="modal-group">
-
-                    <label class="modal-label">
-
-                        Assigned Bus
-
-                    </label>
-
-                    <div id="bus_container"></div>
-
-                </div>
 
             </div>
 
@@ -246,20 +205,6 @@ function createTextarea({
 function initializeDropdowns(wrapper, driver){
 
     /* ==========================================================
-       Assigned Bus
-    ========================================================== */
-
-    wrapper.querySelector("#bus_container")
-        .appendChild(
-            createDropdown({
-                id: "bus_id",
-                value: driver.bus_id || "",
-                placeholder: "Select Bus",
-                items: []
-            })
-        );
-
-    /* ==========================================================
        Status
     ========================================================== */
 
@@ -302,9 +247,6 @@ export function getDriverFormData() {
 
         address:
             document.querySelector("#address").value.trim() || null,
-
-        bus_id:
-            document.querySelector("#bus_id").getValue() || null,
 
         status:
             document.querySelector("#status").getValue()

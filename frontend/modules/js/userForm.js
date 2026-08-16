@@ -275,13 +275,7 @@ function renderDriverInformation(user) {
 
                 <div class="modal-group">
 
-                    <label class="modal-label">
-
-                        Assigned Bus
-
-                    </label>
-
-                    <div id="driver_bus_container"></div>
+                    <p class="assignment-help">Driver assignments are managed from the Assignments workspace.</p>
 
                 </div>
 
@@ -332,27 +326,9 @@ function renderStudentInformation(user) {
 
                 })}
 
-                <div class="modal-group">
+                <div class="modal-group modal-group-full">
 
-                    <label class="modal-label">
-
-                        Assigned Bus
-
-                    </label>
-
-                    <div id="student_bus_container"></div>
-
-                </div>
-
-                <div class="modal-group">
-
-                    <label class="modal-label">
-
-                        Boarding Stop
-
-                    </label>
-
-                    <div id="student_stop_container"></div>
+                    <p class="assignment-help">Route and boarding-stop assignments are managed from the Students workspace.</p>
 
                 </div>
 
@@ -470,36 +446,14 @@ function createTextarea({
 async function initializeDropdowns(wrapper, user) {
 
     /* ----------------------------------------------------------
-       Load buses and routes.
-
-       The bus determines the route.
-       The route determines the valid boarding stops.
+       Load routes. A student's bus is determined by the selected route.
     ---------------------------------------------------------- */
 
-    let buses = [];
     let routes = [];
 
     try {
 
-        const [
-            busResponse,
-            routeResponse
-        ] = await Promise.all([
-
-            fetch("/api/buses/"),
-
-            fetch("/api/routes")
-
-        ]);
-
-
-        if (!busResponse.ok) {
-
-            throw new Error(
-                "Failed to load buses."
-            );
-
-        }
+        const routeResponse = await fetch("/api/routes");
 
 
         if (!routeResponse.ok) {
@@ -511,9 +465,6 @@ async function initializeDropdowns(wrapper, user) {
         }
 
 
-        buses =
-            await busResponse.json();
-
         routes =
             await routeResponse.json();
 
@@ -524,8 +475,6 @@ async function initializeDropdowns(wrapper, user) {
             "BusTrack: Failed to load transport data.",
             error
         );
-
-        buses = [];
 
         routes = [];
 
@@ -637,83 +586,46 @@ async function initializeDropdowns(wrapper, user) {
         );
 
 
-    /* ==========================================================
-       DRIVER ASSIGNED BUS
-    ========================================================== */
+    // Route and stop controls deliberately do not exist in the Users form.
+    // The legacy setup below remains inert for old modal markup; current
+    // assignment controls are rendered exclusively by Students.
+    const hasStudentAssignmentControls = Boolean(
+        wrapper.querySelector("#student_route_container")
+    );
 
-    const driverBusDropdown =
-        createDropdown({
-
-            id: "bus_id",
-
-            value:
-                user.role === "Driver"
-                    ? user.bus_id ?? ""
-                    : "",
-
-            placeholder:
-                "Select Bus",
-
-            items:
-                buses.map(
-                    bus => ({
-
-                        value:
-                            bus.id,
-
-                        label:
-                            `${bus.bus_number} • ${bus.status}`
-
-                    })
-                )
-
-        });
-
-
-    wrapper
-        .querySelector("#driver_bus_container")
-        ?.appendChild(
-            driverBusDropdown
-        );
+    if (hasStudentAssignmentControls) {
 
 
     /* ==========================================================
-       STUDENT ASSIGNED BUS
+       STUDENT ASSIGNED ROUTE
     ========================================================== */
 
-    const studentBusDropdown =
+    const studentRouteDropdown =
         createDropdown({
 
-            id: "student_bus_id",
+            id: "student_route_id",
 
             value:
                 user.role === "Student"
-                    ? user.bus_id ?? ""
+                    ? user.route_id ?? ""
                     : "",
 
             placeholder:
-                "Select Bus",
+                "Select Route",
 
             items:
-                buses.map(
-                    bus => ({
-
-                        value:
-                            bus.id,
-
-                        label:
-                            `${bus.bus_number} • ${bus.status}`
-
-                    })
-                )
+                routes.map(route => ({
+                    value: route.id,
+                    label: `${route.route_code} • ${route.route_name}`
+                }))
 
         });
 
 
     wrapper
-        .querySelector("#student_bus_container")
+        .querySelector("#student_route_container")
         ?.appendChild(
-            studentBusDropdown
+            studentRouteDropdown
         );
 
 
@@ -721,7 +633,7 @@ async function initializeDropdowns(wrapper, user) {
        STUDENT BOARDING STOP
        
        Initially empty.
-       It will be populated after a bus is selected.
+       It is populated after a route is selected.
     ========================================================== */
 
     const studentStopDropdown =
@@ -751,7 +663,7 @@ async function initializeDropdowns(wrapper, user) {
     ========================================================== */
 
     async function loadStudentStops(
-        busId,
+        routeId,
         selectedStopId = null
     ) {
 
@@ -762,36 +674,9 @@ async function initializeDropdowns(wrapper, user) {
         studentStopDropdown.setItems([]);
 
 
-        if (!busId) {
+        if (!routeId) {
 
             studentStopDropdown.clear();
-
-            return;
-
-        }
-
-
-        /* ------------------------------------------------------
-           Find the route assigned to this bus.
-           
-           Route.bus_id is the authoritative relationship.
-        ------------------------------------------------------ */
-
-        const route =
-            routes.find(
-                item =>
-                    Number(item.bus_id) ===
-                    Number(busId)
-            );
-
-
-        if (!route) {
-
-            studentStopDropdown.clear();
-
-            console.warn(
-                "BusTrack: Selected bus has no assigned route."
-            );
 
             return;
 
@@ -806,7 +691,7 @@ async function initializeDropdowns(wrapper, user) {
 
             const response =
                 await fetch(
-                    `/api/route-stops/${route.id}`
+                    `/api/route-stops/${routeId}`
                 );
 
 
@@ -875,30 +760,32 @@ async function initializeDropdowns(wrapper, user) {
 
 
     /* ==========================================================
-       STUDENT BUS CHANGE
+       STUDENT ROUTE CHANGE
     ========================================================== */
 
-    studentBusDropdown.addEventListener(
+    studentRouteDropdown.addEventListener(
         "change",
         async () => {
 
-            const selectedBusId =
-                studentBusDropdown.getValue();
+            const selectedRouteId =
+                studentRouteDropdown.getValue();
 
 
             /* --------------------------------------------------
-               Changing the bus invalidates the previous stop.
+               Changing the route invalidates the previous stop.
             -------------------------------------------------- */
 
             studentStopDropdown.clear();
 
 
             await loadStudentStops(
-                selectedBusId
+                selectedRouteId
             );
 
         }
     );
+
+    }
 
 
     /* ==========================================================
@@ -965,27 +852,6 @@ async function initializeDropdowns(wrapper, user) {
 
     toggleRoleInformationSections();
 
-
-    /* ==========================================================
-       RESTORE EXISTING STUDENT ASSIGNMENT
-       
-       This is used when editing a Student.
-    ========================================================== */
-
-    if (
-        user.role === "Student" &&
-        user.bus_id
-    ) {
-
-        await loadStudentStops(
-
-            user.bus_id,
-
-            user.stop_id ?? null
-
-        );
-
-    }
 
 }
 /* ==========================================================================
@@ -1091,19 +957,9 @@ export function getUserFormData() {
        Driver Bus
     ---------------------------------------------------------- */
 
-    const driverBusDropdown =
+    const studentRouteDropdown =
         document.querySelector(
-            "#bus_id"
-        );
-
-
-    /* ----------------------------------------------------------
-       Student Bus
-    ---------------------------------------------------------- */
-
-    const studentBusDropdown =
-        document.querySelector(
-            "#student_bus_id"
+            "#student_route_id"
         );
 
 
@@ -1208,25 +1064,6 @@ export function getUserFormData() {
 
 
         /* ======================================================
-           BUS ASSIGNMENT
-        ====================================================== */
-
-        bus_id:
-
-            role === "Driver"
-
-                ? driverBusDropdown
-                    ?.getValue() || null
-
-                : role === "Student"
-
-                    ? studentBusDropdown
-                        ?.getValue() || null
-
-                    : null,
-
-
-        /* ======================================================
            STUDENT FIELDS
         ====================================================== */
 
@@ -1241,15 +1078,6 @@ export function getUserFormData() {
 
                 : null,
 
-
-        stop_id:
-
-            role === "Student"
-
-                ? studentStopDropdown
-                    ?.getValue() || null
-
-                : null
 
     };
 

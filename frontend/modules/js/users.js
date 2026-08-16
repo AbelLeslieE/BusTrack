@@ -13,6 +13,7 @@ import {
 
 import {
     getUsers,
+    getUser,
     createUser,
     updateUser,
     deleteUser
@@ -807,6 +808,16 @@ function renderTableRows() {
                 <div class="table-actions">
 
                     <button
+                        class="table-action-btn view-user"
+                        data-id="${user.id}"
+                        title="View User"
+                    >
+
+                        👁
+
+                    </button>
+
+                    <button
                         class="table-action-btn edit-user"
                         data-id="${user.id}"
                         title="Edit User"
@@ -1081,12 +1092,22 @@ async function openCreateUserModal() {
 
 async function openEditUserModal(userId) {
 
-    const user = getUserById(userId);
+    let user = getUserById(userId);
 
     if (!user) {
 
         return;
 
+    }
+
+    try {
+        user = await getUser(userId);
+    } catch (error) {
+        Modal.error({
+            title: "Unable to Load User",
+            subtitle: error.message || "The user details could not be loaded.",
+        });
+        return;
     }
 
     const editUser = {
@@ -1193,17 +1214,16 @@ async function saveUser(userId = null) {
             console.log("===============================");
 
             user = {
-
                 full_name: formData.full_name,
-
                 email: formData.email,
-
                 phone: formData.phone,
-
                 role: formData.role,
-
-                status: formData.status
-
+                status: formData.status,
+                driver_code: formData.driver_code,
+                license_number: formData.license_number,
+                license_expiry: formData.license_expiry,
+                address: formData.address,
+                student_code: formData.student_code,
             };
 
             await updateUser(
@@ -1543,6 +1563,14 @@ function bindToolbarEvents() {
 function bindTableEvents() {
 
     elements.page
+        .querySelectorAll(".view-user")
+        .forEach(button => {
+            button.addEventListener("click", () => {
+                openUserViewModal(Number(button.dataset.id));
+            });
+        });
+
+    elements.page
 
         .querySelectorAll(".edit-user")
 
@@ -1578,6 +1606,36 @@ function bindTableEvents() {
 
         });
 
+}
+
+async function openUserViewModal(userId) {
+
+    try {
+
+        const user = await getUser(userId);
+        const assignment = user.role === "Student"
+            ? (user.route_id ? `Route ID: ${user.route_id}` : "No route assigned")
+            : user.role === "Driver"
+                ? "Assignments are managed in Assignments."
+                : "—";
+
+        Modal.alert({
+            eyebrow: "USER MANAGEMENT",
+            title: user.full_name,
+            subtitle: "User account details",
+            content: `
+                <div class="detail-list">
+                    <p><strong>Username:</strong> ${user.username}</p>
+                    <p><strong>Email:</strong> ${user.email || "—"}</p>
+                    <p><strong>Phone:</strong> ${user.phone || "—"}</p>
+                    <p><strong>Role:</strong> ${user.role}</p>
+                    <p><strong>Status:</strong> ${user.status}</p>
+                    <p><strong>Transport:</strong> ${assignment}</p>
+                </div>`,
+        });
+    } catch (error) {
+        Modal.error({ title: "Unable to Load User", subtitle: error.message });
+    }
 }
 
 /**

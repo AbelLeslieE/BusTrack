@@ -26,7 +26,7 @@ def create_default_admin() -> None:
         )
 
         if existing_admin:
-            print("✓ Default administrator already exists.")
+            print("Default administrator already exists.")
             return
 
         create_user(
@@ -37,7 +37,7 @@ def create_default_admin() -> None:
         )
 
         print("=" * 45)
-        print("✓ Default administrator created")
+        print("Default administrator created")
         print(f"Username : {DEFAULT_USERNAME}")
         print(f"Password : {DEFAULT_PASSWORD}")
         print("=" * 45)

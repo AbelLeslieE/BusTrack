@@ -151,10 +151,7 @@ export function createStudentSidebar(
                 aria-label="Close navigation"
                 title="Close navigation">
 
-                <i
-                    data-lucide="x"
-                    aria-hidden="true">
-                </i>
+                <span aria-hidden="true">×</span>
 
             </button>
 

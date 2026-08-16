@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.models import Bus, Driver
+from backend.models import Bus, Driver, Route, Student
 from backend.schemas import BusCreate, BusUpdate, BusResponse
 
 # ======================================================
@@ -122,7 +122,6 @@ def create_bus(
         year=bus.year,
         fuel_type=bus.fuel_type,
         status=bus.status,
-        route=bus.route,
         device_id=bus.device_id,
     )
 
@@ -130,40 +129,6 @@ def create_bus(
     db.flush()
 
     
-    # ------------------------------------------------------
-    # Assign Driver
-    # ------------------------------------------------------
-
-    if bus.driver_id is not None:
-
-        driver = (
-            db.query(Driver)
-            .filter(Driver.id == bus.driver_id)
-            .first()
-        )
-
-        if driver is None:
-            raise HTTPException(
-                status_code=400,
-                detail="Driver not found."
-            )
-
-        # Remove previous assignment if this driver
-        # was already assigned to another bus.
-
-        old_bus = (
-            db.query(Bus)
-            .filter(Bus.driver_id == driver.id)
-            .first()
-        )
-
-        if old_bus:
-
-            old_bus.driver_id = None
-
-        driver.bus_id = new_bus.id
-        new_bus.driver_id = driver.id
-
     db.commit()
     db.refresh(new_bus)
 
@@ -245,73 +210,7 @@ def update_bus(
     existing.year = bus.year
     existing.fuel_type = bus.fuel_type
     existing.status = bus.status
-    existing.route = bus.route
     existing.device_id = bus.device_id
-
-    # ======================================================
-    # Remove current driver assignment
-    # ======================================================
-
-    db.query(Driver).filter(
-        Driver.bus_id == existing.id
-    ).update(
-        {
-            Driver.bus_id: None
-        }
-    )
-
-    # ======================================================
-    # Assign new driver
-    # ======================================================
-
-    # ------------------------------------------------------
-    # Remove old driver's assignment
-    # ------------------------------------------------------
-
-    if existing.driver_id:
-
-        old_driver = (
-            db.query(Driver)
-            .filter(Driver.id == existing.driver_id)
-            .first()
-        )
-
-        if old_driver:
-            old_driver.bus_id = None
-
-    # Clear bus assignment
-    existing.driver_id = None
-
-    # ------------------------------------------------------
-    # Assign new driver
-    # ------------------------------------------------------
-
-    if bus.driver_id is not None:
-
-        driver = (
-            db.query(Driver)
-            .filter(Driver.id == bus.driver_id)
-            .first()
-        )
-
-        if driver is None:
-            raise HTTPException(
-                status_code=400,
-                detail="Driver not found."
-            )
-
-        # Remove this driver from any previous bus
-        previous_bus = (
-            db.query(Bus)
-            .filter(Bus.driver_id == driver.id)
-            .first()
-        )
-
-        if previous_bus:
-            previous_bus.driver_id = None
-
-        driver.bus_id = existing.id
-        existing.driver_id = driver.id
 
     db.commit()
     db.refresh(existing)
@@ -338,23 +237,18 @@ def delete_bus(
             detail="Bus not found."
         )
 
-    # ------------------------------------------
-    # Remove driver assignment
-    # ------------------------------------------
-
-    if bus.driver_id:
-
-        driver = (
-            db.query(Driver)
-            .filter(Driver.id == bus.driver_id)
-            .first()
-        )
-
-        if driver:
-
-            driver.bus_id = None
-
+    # Clear every record that points at this bus before deleting it.
+    db.query(Route).filter(Route.bus_id == bus.id).update(
+        {Route.bus_id: None, Route.driver_id: None}, synchronize_session=False
+    )
+    db.query(Driver).filter(Driver.bus_id == bus.id).update(
+        {Driver.bus_id: None}, synchronize_session=False
+    )
+    db.query(Student).filter(Student.bus_id == bus.id).update(
+        {Student.bus_id: None}, synchronize_session=False
+    )
     bus.driver_id = None
+    bus.route = None
 
     db.delete(bus)
 

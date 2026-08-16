@@ -1,1 +1,518 @@
-/* Students module styles placeholder. TODO: Add module-scoped styles. */
+/* ===================================================================
+   BUS TRACKER
+   STUDENT MANAGEMENT MODULE
+=================================================================== */
+
+/* ==========================================================
+   PAGE
+========================================================== */
+
+.students-page{
+
+    display:flex;
+    flex-direction:column;
+    gap:20px;
+    width:100%;
+    max-width:1400px;
+    margin:0 auto;
+    animation:studentsFadeUp .5s ease;
+
+}
+
+/* ==========================================================
+   SHARED SURFACE
+========================================================== */
+
+.students-page .glass-card{
+
+    border:1px solid rgba(255,255,255,.08);
+    border-radius:24px;
+    background:rgba(12,22,42,.58);
+    backdrop-filter:blur(22px);
+    -webkit-backdrop-filter:blur(22px);
+    box-shadow:
+        0 12px 40px rgba(0,0,0,.35),
+        inset 0 1px 0 rgba(255,255,255,.05);
+    transition:
+        transform .3s ease,
+        border-color .3s ease,
+        box-shadow .3s ease;
+
+}
+
+.students-page .glass-card:hover{
+
+    transform:translateY(-2px);
+    border-color:rgba(79,209,255,.2);
+    box-shadow:
+        0 18px 45px rgba(0,0,0,.45),
+        0 0 30px rgba(79,209,255,.08);
+
+}
+
+/* ==========================================================
+   HERO
+========================================================== */
+
+.students-hero{
+
+    position:relative;
+    isolation:isolate;
+    overflow:hidden;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    min-height:240px;
+    gap:28px;
+    padding:32px 36px;
+    background:
+        linear-gradient(
+            115deg,
+            rgba(8,19,40,.9),
+            rgba(10,34,66,.62)
+        ) !important;
+
+}
+
+.students-hero::before,
+.students-hero::after{
+
+    content:"";
+    position:absolute;
+    z-index:-1;
+    border-radius:50%;
+    pointer-events:none;
+
+}
+
+.students-hero::before{
+
+    top:-150px;
+    right:-150px;
+    width:440px;
+    height:440px;
+    background:radial-gradient(rgba(79,209,255,.2),transparent 70%);
+
+}
+
+.students-hero::after{
+
+    bottom:-220px;
+    left:-160px;
+    width:380px;
+    height:380px;
+    background:radial-gradient(rgba(124,92,255,.16),transparent 70%);
+
+}
+
+.students-hero > div:first-child{
+
+    position:relative;
+    z-index:1;
+    max-width:700px;
+
+}
+
+.students-eyebrow{
+
+    margin:0;
+    color:#4FD1FF;
+    font-size:.74rem;
+    font-weight:700;
+    letter-spacing:4px;
+    text-transform:uppercase;
+
+}
+
+.students-hero h1{
+
+    margin:10px 0 12px;
+    color:#fff;
+    font-size:clamp(2.25rem,4vw,3.25rem);
+    font-weight:800;
+    line-height:1.1;
+
+}
+
+.students-hero p:not(.students-eyebrow){
+
+    max-width:620px;
+    margin:0;
+    color:#B6C2D9;
+    line-height:1.7;
+
+}
+
+.students-summary{
+
+    position:relative;
+    z-index:1;
+    display:grid;
+    min-width:158px;
+    min-height:128px;
+    padding:24px;
+    place-items:center;
+    border:1px solid rgba(79,209,255,.24);
+    border-radius:20px;
+    background:rgba(3,14,30,.34);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.07);
+
+}
+
+.students-summary strong{
+
+    color:#fff;
+    font-size:2.2rem;
+    line-height:1;
+
+}
+
+.students-summary span{
+
+    color:var(--muted);
+    font-size:.8rem;
+    text-align:center;
+
+}
+
+/* ==========================================================
+   DIRECTORY TABLE
+========================================================== */
+
+.students-table-card{
+
+    padding:28px;
+
+}
+
+.students-table-heading{
+
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:20px;
+    margin-bottom:24px;
+
+}
+
+.students-table-heading h2{
+
+    margin:0 0 7px;
+    color:#fff;
+    font-size:1.35rem;
+
+}
+
+.students-table-heading p{
+
+    margin:0;
+    color:var(--muted);
+    line-height:1.55;
+
+}
+
+.students-refresh{
+
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-height:42px;
+    padding:0 15px;
+    border:1px solid rgba(79,209,255,.2);
+    border-radius:12px;
+    color:#DCE7FF;
+    background:rgba(79,209,255,.08);
+    font:inherit;
+    font-weight:600;
+    cursor:pointer;
+    transition:.25s ease;
+
+}
+
+.students-refresh:hover{
+
+    color:#fff;
+    border-color:rgba(79,209,255,.48);
+    background:rgba(79,209,255,.16);
+    transform:translateY(-2px);
+
+}
+
+.students-table-wrap{
+
+    overflow-x:auto;
+    border:1px solid rgba(255,255,255,.06);
+    border-radius:16px;
+
+}
+
+.students-table{
+
+    width:100%;
+    min-width:1050px;
+    border-collapse:collapse;
+    background:rgba(4,13,28,.22);
+
+}
+
+.students-table th,
+.students-table td{
+
+    padding:17px 16px;
+    border-bottom:1px solid rgba(255,255,255,.06);
+    text-align:left;
+    vertical-align:middle;
+
+}
+
+.students-table th{
+
+    color:#8FA3C8;
+    background:rgba(255,255,255,.025);
+    font-size:.72rem;
+    font-weight:700;
+    letter-spacing:1.5px;
+    text-transform:uppercase;
+    white-space:nowrap;
+
+}
+
+.students-table td{
+
+    color:#DCE7FF;
+    font-size:.9rem;
+
+}
+
+.students-table tbody tr{
+
+    transition:background .22s ease;
+
+}
+
+.students-table tbody tr:hover{
+
+    background:rgba(79,209,255,.055);
+
+}
+
+.students-table tbody tr:last-child td{
+
+    border-bottom:0;
+
+}
+
+.students-table td strong{
+
+    color:#fff;
+    font-weight:650;
+
+}
+
+.students-table td small{
+
+    display:block;
+    margin-top:5px;
+    color:var(--muted);
+    font-size:.78rem;
+
+}
+
+.students-unassigned{
+
+    color:#F6C75A;
+    font-weight:600;
+
+}
+
+/* ==========================================================
+   ACTIONS
+========================================================== */
+
+.students-actions{
+
+    display:flex;
+    align-items:center;
+    gap:8px;
+
+}
+
+.students-actions .table-action-btn{
+
+    display:grid;
+    width:38px;
+    height:38px;
+    padding:0;
+    place-items:center;
+    border:1px solid rgba(255,255,255,.1);
+    border-radius:11px;
+    color:#DCE7FF;
+    background:rgba(255,255,255,.05);
+    font-size:1rem;
+    cursor:pointer;
+    transition:.22s ease;
+
+}
+
+.students-actions .table-action-btn:hover{
+
+    border-color:rgba(79,209,255,.48);
+    color:#fff;
+    background:rgba(79,209,255,.16);
+    box-shadow:0 0 18px rgba(79,209,255,.14);
+    transform:translateY(-2px);
+
+}
+
+.students-actions .student-assign{
+
+    color:#BCAEFF;
+    border-color:rgba(124,92,255,.22);
+    background:rgba(124,92,255,.1);
+
+}
+
+.students-actions .student-assign:hover{
+
+    border-color:rgba(124,92,255,.6);
+    background:rgba(124,92,255,.2);
+    box-shadow:0 0 18px rgba(124,92,255,.18);
+
+}
+
+/* ==========================================================
+   EMPTY, LOADING & MODAL
+========================================================== */
+
+.students-empty,
+.students-loading{
+
+    padding:46px 28px;
+    color:var(--muted);
+    text-align:center;
+
+}
+
+.students-loading{
+
+    border:1px solid rgba(255,255,255,.08);
+    border-radius:22px;
+    background:rgba(12,22,42,.58);
+    backdrop-filter:blur(22px);
+
+}
+
+.students-loading h2{
+
+    margin:0 0 8px;
+    color:#fff;
+
+}
+
+.student-assignment-form{
+
+    display:grid;
+    gap:20px;
+
+}
+
+.student-assignment-form .assignment-help{
+
+    margin:0;
+    padding:14px 16px;
+    border:1px solid rgba(79,209,255,.16);
+    border-radius:14px;
+    color:#B6C2D9;
+    line-height:1.6;
+    background:rgba(79,209,255,.055);
+
+}
+
+/* ==========================================================
+   ANIMATION
+========================================================== */
+
+@keyframes studentsFadeUp{
+
+    from{
+
+        opacity:0;
+        transform:translateY(18px);
+
+    }
+
+    to{
+
+        opacity:1;
+        transform:translateY(0);
+
+    }
+
+}
+
+/* ==========================================================
+   RESPONSIVE
+========================================================== */
+
+@media (max-width:900px){
+
+    .students-hero{
+
+        align-items:flex-start;
+        flex-direction:column;
+
+    }
+
+    .students-summary{
+
+        width:100%;
+        min-height:auto;
+        grid-template-columns:auto 1fr;
+        gap:10px;
+        justify-items:start;
+
+    }
+
+    .students-summary span{
+
+        text-align:left;
+
+    }
+
+}
+
+@media (max-width:700px){
+
+    .students-hero{
+
+        min-height:0;
+        padding:26px 24px;
+
+    }
+
+    .students-hero h1{
+
+        font-size:2rem;
+
+    }
+
+    .students-table-card{
+
+        padding:20px;
+
+    }
+
+    .students-table-heading{
+
+        align-items:stretch;
+        flex-direction:column;
+
+    }
+
+    .students-refresh{
+
+        width:100%;
+
+    }
+
+}
