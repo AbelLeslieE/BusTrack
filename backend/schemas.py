@@ -1,7 +1,7 @@
 from datetime import datetime, date, time
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class UserResponse(BaseModel):
@@ -46,6 +46,22 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     expires_at: datetime
     user: UserResponse
+
+
+class AccountProfileUpdate(BaseModel):
+    """Editable identity fields for the authenticated administrator only."""
+
+    full_name: str = Field(min_length=2, max_length=100)
+    username: str = Field(min_length=3, max_length=64, pattern=r"^[A-Za-z0-9_.-]+$")
+    email: EmailStr | None = None
+    phone: str | None = Field(default=None, max_length=20, pattern=r"^[0-9+() .-]*$")
+
+
+class PasswordChangeRequest(BaseModel):
+    """Current-password-verified update for an active account session."""
+
+    current_password: str = Field(min_length=1, max_length=72)
+    new_password: str = Field(min_length=12, max_length=72)
 # ==========================================================
 # USER SCHEMAS
 # ==========================================================

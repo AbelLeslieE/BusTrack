@@ -11,8 +11,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.models import User
-from backend.utils.jwt_handler import get_token_subject
+from backend.models import User, UserSession
+from backend.utils.jwt_handler import get_token_identity
 
 
 password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -119,7 +119,7 @@ def get_current_user(
         raise credentials_error
 
     try:
-        username = get_token_subject(token)
+        username, token_auth_version, session_id = get_token_identity(token)
 
     except JWTError as error:
         raise credentials_error from error
@@ -133,6 +133,9 @@ def get_current_user(
     if user is None:
         raise credentials_error
 
+    if user.auth_version != token_auth_version:
+        raise credentials_error
+
     if user.status != "Active":
         raise credentials_error
 
@@ -142,5 +145,24 @@ def get_current_user(
         locked_until = locked_until.replace(tzinfo=timezone.utc)
     if locked_until and locked_until > now:
         raise credentials_error
+
+    # Tokens issued before session tracking are allowed only until they expire.
+    # Every new login has a session ID and can therefore be kicked remotely.
+    if session_id:
+        session = database_session.scalar(
+            select(UserSession).where(
+                UserSession.session_id == session_id,
+                UserSession.user_id == user.id,
+            )
+        )
+        session_expires_at = session.expires_at if session else None
+        if session_expires_at is not None and session_expires_at.tzinfo is None:
+            session_expires_at = session_expires_at.replace(tzinfo=timezone.utc)
+        if session is None or session.revoked_at is not None or session_expires_at is None or session_expires_at <= now:
+            raise credentials_error
+        # The session heartbeat and ordinary API traffic make active-user data
+        # accurate without trusting values supplied by the browser.
+        session.last_seen_at = now
+        database_session.commit()
 
     return user

@@ -7,6 +7,8 @@ const PROFILE_KEY = "bus_tracker_profile";
 const EXPIRY_KEY = "bus_tracker_session_expires_at";
 let authenticatedFetchInstalled = false;
 let sessionExpiryTimer = null;
+let sessionMonitorTimer = null;
+let sessionCheckInFlight = false;
 
 export function getAccessToken() {
   return localStorage.getItem(TOKEN_KEY);
@@ -15,9 +17,45 @@ export function getAccessToken() {
 export function clearSession() {
   if (sessionExpiryTimer) window.clearTimeout(sessionExpiryTimer);
   sessionExpiryTimer = null;
+  if (sessionMonitorTimer) window.clearInterval(sessionMonitorTimer);
+  sessionMonitorTimer = null;
+  sessionCheckInFlight = false;
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(PROFILE_KEY);
   localStorage.removeItem(EXPIRY_KEY);
+}
+
+/** Store a rotated session returned after an account-security update. */
+export function replaceSession(session) {
+  if (!session?.access_token || !session?.user) {
+    throw new Error("The server did not return a refreshed session.");
+  }
+  localStorage.setItem(TOKEN_KEY, session.access_token);
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(session.user));
+  if (session.expires_at) localStorage.setItem(EXPIRY_KEY, session.expires_at);
+  scheduleSessionExpiry(session.access_token);
+  startSessionMonitor();
+}
+
+/** Keep active devices visible to Admins and honour a remote kick promptly. */
+export function startSessionMonitor() {
+  if (sessionMonitorTimer) window.clearInterval(sessionMonitorTimer);
+  const verify = async () => {
+    if (sessionCheckInFlight || !getAccessToken()) return;
+    sessionCheckInFlight = true;
+    try {
+      const response = await fetch("/api/auth/me", { credentials: "same-origin" });
+      if (!response.ok) {
+        clearSession();
+        if (window.location.pathname !== "/") window.location.replace("/");
+      }
+    } catch {
+      // A short network interruption must not sign a valid user out.
+    } finally {
+      sessionCheckInFlight = false;
+    }
+  };
+  sessionMonitorTimer = window.setInterval(verify, 15_000);
 }
 
 function tokenExpiry(token) {
@@ -112,6 +150,7 @@ export async function requireAuthenticatedSession() {
   localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
   scheduleSessionExpiry(token);
   installAuthenticatedFetch();
+  startSessionMonitor();
   return profile;
 }
 
@@ -147,10 +186,7 @@ form?.addEventListener("submit", async (event) => {
     if (!response.ok || !data.access_token) {
       throw new Error(data.detail || "Unable to sign in.");
     }
-    localStorage.setItem(TOKEN_KEY, data.access_token);
-    localStorage.setItem(PROFILE_KEY, JSON.stringify(data.user));
-    if (data.expires_at) localStorage.setItem(EXPIRY_KEY, data.expires_at);
-    scheduleSessionExpiry(data.access_token);
+    replaceSession(data);
 
     // ------------------------------------------------
     // Normalize user role

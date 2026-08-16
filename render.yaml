@@ -30,7 +30,10 @@ services:
         value: 30
 
       - key: JWT_SECRET_KEY
-        sync: false
+        # Render creates and persists a cryptographically strong 256-bit key
+        # for new Blueprint deployments. Never replace this key after users
+        # have logged in, or their active sessions will be invalidated.
+        generateValue: true
 
       - key: BOOTSTRAP_ADMIN_PASSWORD
         sync: false

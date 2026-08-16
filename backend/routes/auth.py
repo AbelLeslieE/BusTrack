@@ -1,15 +1,17 @@
 """Authentication API routes for secure browser sign-in."""
 
 import os
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 
 from backend.auth import SESSION_COOKIE_NAME, DatabaseSession, authenticate_user, get_current_user
+from backend.models import UserSession
 from backend.schemas import TokenResponse, UserResponse
-from backend.utils.jwt_handler import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token
+from backend.utils.jwt_handler import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, get_token_identity
 
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
@@ -21,6 +23,7 @@ def login(
     form_data: LoginForm,
     database_session: DatabaseSession,
     response: Response,
+    request: Request,
 ) -> TokenResponse:
     """Validate credentials and issue a short-lived JWT bearer token."""
 
@@ -32,7 +35,21 @@ def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    token = create_access_token(user.username, expires_at=expires_at)
+    session = UserSession(
+        session_id=secrets.token_urlsafe(32),
+        user_id=user.id,
+        client_ip=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent", "")[:500] or None,
+        expires_at=expires_at,
+    )
+    database_session.add(session)
+    database_session.commit()
+    token = create_access_token(
+        user.username,
+        expires_at=expires_at,
+        auth_version=user.auth_version,
+        session_id=session.session_id,
+    )
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=token,
@@ -46,8 +63,24 @@ def login(
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-def logout(response: Response) -> None:
-    """Clear the browser session cookie; bearer clients remain backward-compatible."""
+def logout(response: Response, request: Request, database_session: DatabaseSession) -> None:
+    """Revoke the current tracked browser session and clear its cookie."""
+
+    authorization = request.headers.get("authorization", "")
+    token = authorization[7:].strip() if authorization.lower().startswith("bearer ") else request.cookies.get(SESSION_COOKIE_NAME)
+    if token:
+        try:
+            _, _, session_id = get_token_identity(token)
+            if session_id:
+                session = database_session.query(UserSession).filter(UserSession.session_id == session_id).first()
+                if session and session.revoked_at is None:
+                    session.revoked_at = datetime.now(timezone.utc)
+                    session.revoked_reason = "Signed out"
+                    database_session.commit()
+        except Exception:
+            # Logout remains safe and idempotent even when an expired token is
+            # presented by the browser.
+            pass
 
     response.delete_cookie(key=SESSION_COOKIE_NAME, path="/")
 

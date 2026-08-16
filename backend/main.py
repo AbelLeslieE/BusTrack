@@ -27,6 +27,8 @@ from backend.routes.gps import router as gps_router
 from backend.routes.student import router as student_router
 from backend.routes.assignments import router as assignments_router
 from backend.routes.notifications import router as notifications_router
+from backend.routes.settings import router as settings_router
+from backend.routes.active_users import router as active_users_router
 from backend.security import RequestSecurityMiddleware
 from backend.utils.jwt_handler import validate_security_configuration
 
@@ -62,6 +64,8 @@ app.include_router(student_router)
 app.include_router(gps_router)
 app.include_router(assignments_router)
 app.include_router(notifications_router)
+app.include_router(settings_router)
+app.include_router(active_users_router)
 
 
 

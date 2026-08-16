@@ -49,7 +49,12 @@ def validate_security_configuration() -> None:
     _get_secret_key()
 
 
-def create_access_token(subject: str, expires_at: datetime | None = None) -> str:
+def create_access_token(
+    subject: str,
+    expires_at: datetime | None = None,
+    auth_version: int = 1,
+    session_id: str | None = None,
+) -> str:
     """Create a signed, time-limited bearer token for an authenticated user."""
 
     now = datetime.now(timezone.utc)
@@ -61,12 +66,15 @@ def create_access_token(subject: str, expires_at: datetime | None = None) -> str
         "iss": JWT_ISSUER,
         "aud": JWT_AUDIENCE,
         "typ": "access",
+        "ver": auth_version,
     }
+    if session_id:
+        payload["sid"] = session_id
     return jwt.encode(payload, _get_secret_key(), algorithm=JWT_ALGORITHM)
 
 
-def get_token_subject(token: str) -> str:
-    """Return the authenticated username or raise when the token is invalid."""
+def get_token_identity(token: str) -> tuple[str, int, str | None]:
+    """Return the subject, session version, and optional session ID."""
 
     payload = jwt.decode(
         token,
@@ -80,4 +88,16 @@ def get_token_subject(token: str) -> str:
     subject = payload.get("sub")
     if not isinstance(subject, str) or not subject:
         raise JWTError("Token subject is missing.")
-    return subject
+    auth_version = payload.get("ver", 1)
+    if not isinstance(auth_version, int) or auth_version < 1:
+        raise JWTError("Token session version is invalid.")
+    session_id = payload.get("sid")
+    if session_id is not None and (not isinstance(session_id, str) or not session_id):
+        raise JWTError("Token session ID is invalid.")
+    return subject, auth_version, session_id
+
+
+def get_token_subject(token: str) -> str:
+    """Backward-compatible subject helper for callers that do not need versioning."""
+
+    return get_token_identity(token)[0]

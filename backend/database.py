@@ -120,6 +120,11 @@ def initialize_database() -> None:
                 connection.execute(text(
                     "ALTER TABLE users ADD COLUMN locked_until TIMESTAMP NULL"
                 ))
+            if "auth_version" not in user_columns:
+                connection.execute(text(
+                    "ALTER TABLE users "
+                    "ADD COLUMN auth_version INTEGER NOT NULL DEFAULT 1"
+                ))
 
         # Consolidate the historic role names into the three supported roles.
         # This is idempotent and keeps existing Student profile records intact.

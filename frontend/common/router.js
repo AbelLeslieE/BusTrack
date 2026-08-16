@@ -87,6 +87,11 @@ const adminModules = {
         load: () => import("../modules/js/users.js")
     },
 
+    activeUsers: {
+        title: "Active Users",
+        load: () => import("../modules/js/activeUsers.js")
+    },
+
     notifications: {
         title: "Notifications",
         load: () => import("../modules/js/notifications.js")

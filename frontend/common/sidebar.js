@@ -18,6 +18,7 @@ const managementItems = [
   ["drivers", "Drivers", "◒"],
   ["students", "Students", "◉"],
   ["users", "Users", "♙"],
+  ["activeUsers", "Active users", "◉"],
   ["notifications", "Notifications", "♧"],
 ];
 
