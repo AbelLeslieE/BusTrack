@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
+import math
 import re
 import secrets
 from typing import Any
@@ -71,9 +72,10 @@ def _number(value: Any) -> float | None:
     if value is None or isinstance(value, bool):
         return None
     try:
-        return float(value)
+        parsed = float(value)
     except (TypeError, ValueError):
         return None
+    return parsed if math.isfinite(parsed) else None
 
 
 def _boolean(value: Any) -> bool | None:
@@ -156,14 +158,29 @@ def _translate(raw: dict[str, Any], field_paths: dict[str, Any]) -> dict[str, An
     if not external_ids:
         raise ValueError("No vendor device identity was supplied (uniqueId, deviceId, name, or phone).")
 
+    speed_kmh = _number(_read_path(raw, field_paths["speed_kmh"]))
+    course = _number(_read_path(raw, field_paths["course"]))
+    accuracy = _number(_read_path(raw, field_paths["accuracy"]))
+    # Optional telemetry must not turn invalid provider values into misleading
+    # live-tracking values.  The unmodified vendor payload remains available in
+    # the audit history for troubleshooting.
+    if speed_kmh is not None and speed_kmh < 0:
+        speed_kmh = None
+    if course is not None and not 0 <= course <= 360:
+        course = None
+    if accuracy is not None and accuracy < 0:
+        accuracy = None
+
     return {
         "external_ids": external_ids,
         "latitude": latitude,
         "longitude": longitude,
-        "speed_kmh": _number(_read_path(raw, field_paths["speed_kmh"])),
-        "course": _number(_read_path(raw, field_paths["course"])),
+        # No rounding or unit conversion occurs here: the provider's numeric
+        # speed is kept at full precision in the internal km/h field.
+        "speed_kmh": speed_kmh,
+        "course": course,
         "altitude": _number(_read_path(raw, field_paths["altitude"])),
-        "accuracy": _number(_read_path(raw, field_paths["accuracy"])),
+        "accuracy": accuracy,
         "fix_time": _as_utc(_read_path(raw, field_paths["fix_time"]) or _read_path(raw, field_paths["device_time"]) or _read_path(raw, field_paths["server_time"])),
         "status": str(_read_path(raw, field_paths["status"])) if _read_path(raw, field_paths["status"]) is not None else None,
         "ignition": _boolean(_read_path(raw, field_paths["ignition"])),
@@ -428,7 +445,7 @@ def update_translation_config(payload: GPSTranslationConfigUpdate, db: Session =
 
 
 @router.post("/ingest")
-async def ingest_positions(
+def ingest_positions(
     request: Request,
     payload: Any = Body(...),
     x_gps_token: str | None = Header(default=None),

@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from backend.routes.driver import router as driver_router
@@ -54,6 +55,19 @@ app = FastAPI(
     openapi_url=None if is_production else "/openapi.json",
 )
 app.add_middleware(RequestSecurityMiddleware)
+# The GPS receiver is normally service-to-service and does not need browser
+# CORS.  This narrowly permits Postman's hosted workspace to run an authorised
+# Browser Agent test with the required X-GPS-Token header; it does not grant
+# access without a valid provider token.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[],
+    allow_origin_regex=r"https://(?:[a-z0-9-]+\.)*postman\.co",
+    allow_credentials=False,
+    allow_methods=["POST", "OPTIONS"],
+    allow_headers=["Content-Type", "X-GPS-Token"],
+    max_age=600,
+)
 app.include_router(authentication_router)
 app.include_router(bus_router)
 app.include_router(driver_router)
