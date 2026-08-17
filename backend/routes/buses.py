@@ -11,6 +11,12 @@ from backend.database import get_db
 from backend.models import Bus, Driver, Route, Student
 from backend.schemas import BusCreate, BusUpdate, BusResponse
 from backend.security import require_management
+from backend.routes.models_tracking import (
+    BusGPSState,
+    GPSDeviceMapping,
+    GPSIngestToken,
+    ProviderGPSPosition,
+)
 
 # ======================================================
 # BUILD BUS RESPONSE
@@ -257,6 +263,14 @@ def delete_bus(
     )
     bus.driver_id = None
     bus.route = None
+
+    # Provider identities and their history belong to the deleted bus. Clear
+    # them explicitly because the established schema does not use DB-level
+    # cascade rules for bus references.
+    db.query(BusGPSState).filter(BusGPSState.bus_id == bus.id).delete(synchronize_session=False)
+    db.query(ProviderGPSPosition).filter(ProviderGPSPosition.bus_id == bus.id).delete(synchronize_session=False)
+    db.query(GPSDeviceMapping).filter(GPSDeviceMapping.bus_id == bus.id).delete(synchronize_session=False)
+    db.query(GPSIngestToken).filter(GPSIngestToken.bus_id == bus.id).delete(synchronize_session=False)
 
     db.delete(bus)
 

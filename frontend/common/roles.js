@@ -1,8 +1,9 @@
-/** The three supported Bus Tracker account roles. */
+/** The four supported Bus Tracker account roles. */
 
 export const ROLE_ADMIN = "admin";
 export const ROLE_DRIVER = "driver";
 export const ROLE_USER = "user";
+export const ROLE_TECHNICIAN = "technician";
 
 const legacyRoles = {
   admin: ROLE_ADMIN,
@@ -13,7 +14,8 @@ const legacyRoles = {
   student: ROLE_USER,
   user: ROLE_USER,
   dispatcher: ROLE_USER,
-  technician: ROLE_USER,
+  technician: ROLE_TECHNICIAN,
+  developer: ROLE_TECHNICIAN,
 };
 
 export function canonicalRole(value) {

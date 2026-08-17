@@ -323,10 +323,40 @@ function formatLastUpdate(
 }
 
 /* ==========================================================
+   STUDENT-SAFE GPS TELEMETRY
+========================================================== */
+
+function getTelemetry() {
+
+    return state.liveTrip?.telemetry || state.trackingData?.telemetry || {};
+
+}
+
+function trackingSourceLabel() {
+
+    return getTelemetry().source_label || "Waiting for GPS";
+
+}
+
+function vehicleTravelStatus() {
+
+    const telemetry = getTelemetry();
+
+    if (!state.liveTrip) return "Not live";
+    if (!telemetry.is_fresh) return "Last known location";
+    if (telemetry.moving === true) return "Moving";
+    if (telemetry.ignition_on === false) return "Parked";
+    return "Live location";
+
+}
+
+/* ==========================================================
    TRACKING STATUS
 ========================================================== */
 
 function getTrackingStatus() {
+
+    const telemetry = getTelemetry();
 
     if (!state.assignedBus) {
 
@@ -352,6 +382,51 @@ function getTrackingStatus() {
 
             className:
                 "student-tracking-status-warning"
+
+        };
+
+    }
+
+
+    if (!telemetry.is_fresh) {
+
+        return {
+
+            label:
+                "Last known location",
+
+            className:
+                "student-tracking-status-warning"
+
+        };
+
+    }
+
+
+    if (telemetry.moving === true) {
+
+        return {
+
+            label:
+                "Bus moving",
+
+            className:
+                "student-tracking-status-live"
+
+        };
+
+    }
+
+
+    if (telemetry.ignition_on === false) {
+
+        return {
+
+            label:
+                "Bus parked",
+
+            className:
+                "student-tracking-status-neutral"
 
         };
 
@@ -3351,6 +3426,10 @@ function renderTrackingSummary() {
         state.trackingData?.route;
 
 
+    const telemetry =
+        getTelemetry();
+
+
     container.innerHTML = `
 
         <div
@@ -3366,6 +3445,48 @@ function renderTrackingSummary() {
                 ${escapeHTML(
                     bus?.bus_number ||
                     "—"
+                )}
+
+            </strong>
+
+        </div>
+
+
+        <div
+            class="student-tracking-summary-card student-tracking-source-card ${
+                telemetry.source === "vehicle_gps"
+                    ? "is-vehicle"
+                    : ""
+            }"
+        >
+
+            <span>
+                TRACKED BY
+            </span>
+
+            <strong>
+
+                ${escapeHTML(
+                    trackingSourceLabel()
+                )}
+
+            </strong>
+
+        </div>
+
+
+        <div
+            class="student-tracking-summary-card"
+        >
+
+            <span>
+                BUS STATUS
+            </span>
+
+            <strong>
+
+                ${escapeHTML(
+                    vehicleTravelStatus()
                 )}
 
             </strong>
@@ -3888,7 +4009,7 @@ function updateMapOverlay() {
 
         positionElement.textContent =
             state.liveTrip
-                ? "Live"
+                ? `${vehicleTravelStatus()} · ${trackingSourceLabel()}`
                 : "Waiting";
 
     }

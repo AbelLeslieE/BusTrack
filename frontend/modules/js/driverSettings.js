@@ -1,11 +1,3 @@
-export function render() {
+import { renderAccountSettings } from "/static/common/accountSettings.js";
 
-    const page = document.createElement("div");
-
-    page.innerHTML = `
-        <h1>Driver Settings</h1>
-    `;
-
-    return page;
-
-}
+export function render() { return renderAccountSettings("Driver portal"); }

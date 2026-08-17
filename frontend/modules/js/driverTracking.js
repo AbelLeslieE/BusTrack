@@ -14,7 +14,9 @@ import {
 
     sendDriverFeedback,
 
-    cleanupTracking
+    cleanupTracking,
+
+    initializeTrackingSource
 
 } from "./trackingService.js";
 export function render() {
@@ -76,6 +78,20 @@ export function render() {
 
                     <div class="tracking-info">
 
+                        <div class="tracking-source" id="trackingSourceCard">
+                            <div class="tracking-source-heading">
+                                <span class="tracking-source-icon" aria-hidden="true"><i data-lucide="radio-tower"></i></span>
+                                <div>
+                                    <span class="tracking-source-label">PRIMARY LOCATION SOURCE</span>
+                                    <strong id="trackingSourceValue">Checking vehicle GPS…</strong>
+                                </div>
+                                <span id="trackingSourcePill" class="tracking-source-pill">Checking</span>
+                            </div>
+                            <p id="trackingSourceReason">Vehicle GPS is preferred whenever its ignition-on signal is fresh.</p>
+                            <p class="tracking-source-policy"><i data-lucide="shield-check" aria-hidden="true"></i> Phone tracking is kept off while vehicle GPS is active.</p>
+                            <button type="button" id="mobileFallbackBtn" class="mobile-fallback-btn" hidden>Use phone tracking instead</button>
+                        </div>
+
                         <div class="tracking-row">
 
                             <span>Status</span>
@@ -115,6 +131,18 @@ export function render() {
                             <strong id="gpsStatus">
 
                                 Waiting...
+
+                            </strong>
+
+                        </div>
+
+                        <div class="tracking-row tracking-active-source-row">
+
+                            <span>Tracked by</span>
+
+                            <strong id="activeTrackingSource">
+
+                                Checking…
 
                             </strong>
 
@@ -251,11 +279,14 @@ export function render() {
 
             <div class="tracking-map glass-panel">
 
-                <h3>
+                <div class="tracking-map-heading">
+                    <h3>
 
-                    Live Map
+                        Live Map
 
-                </h3>
+                    </h3>
+                    <span id="mapTrackingSource" class="map-tracking-source">Checking source…</span>
+                </div>
 
                 <div id="driverMap">
 
@@ -278,6 +309,8 @@ export function render() {
         console.log("Calling initializeMap()");
 
         initializeMap();
+
+        initializeTrackingSource();
 
         console.log("initializeMap() finished");
 

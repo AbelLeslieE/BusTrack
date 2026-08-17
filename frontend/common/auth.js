@@ -1,6 +1,6 @@
 /** Browser session handling and login-form behavior. */
 
-import { canonicalRole, ROLE_ADMIN, ROLE_DRIVER, ROLE_USER } from "/static/common/roles.js";
+import { canonicalRole, ROLE_ADMIN, ROLE_DRIVER, ROLE_TECHNICIAN, ROLE_USER } from "/static/common/roles.js";
 
 const TOKEN_KEY = "bus_tracker_access_token";
 const PROFILE_KEY = "bus_tracker_profile";
@@ -232,6 +232,14 @@ form?.addEventListener("submit", async (event) => {
 
             window.location.assign(
                 "/dashboard#studentDashboard"
+            );
+
+            break;
+
+        case ROLE_TECHNICIAN:
+
+            window.location.assign(
+                "/dashboard#technicianDashboard"
             );
 
             break;

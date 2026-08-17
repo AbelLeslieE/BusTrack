@@ -4,7 +4,7 @@
  */
 
 import { createLoader } from "./loader.js";
-import { canonicalRole, ROLE_ADMIN, ROLE_DRIVER, ROLE_USER } from "./roles.js";
+import { canonicalRole, ROLE_ADMIN, ROLE_DRIVER, ROLE_TECHNICIAN, ROLE_USER } from "./roles.js";
 
 import {
     createSidebar,
@@ -20,6 +20,11 @@ import {
     createStudentSidebar,
     setStudentSidebarActive
 } from "../modules/js/studentSidebar.js";
+
+import {
+    createTechnicianSidebar,
+    setTechnicianSidebarActive
+} from "../modules/js/technicianSidebar.js";
 
 
 import {
@@ -194,6 +199,13 @@ const studentModules = {
     }
 
 };
+
+const technicianModules = {
+    technicianDashboard: {
+        title: "GPS Integration",
+        load: () => import("../modules/js/technicianDashboard.js")
+    }
+};
 let shell;
 
 const profile =
@@ -213,6 +225,7 @@ const isAdmin = activeRole === ROLE_ADMIN;
 const isDriver = activeRole === ROLE_DRIVER;
 // User accounts use the existing student transport-profile tables and views.
 const isStudent = activeRole === ROLE_USER;
+const isTechnician = activeRole === ROLE_TECHNICIAN;
 
 
 /* ==========================================================
@@ -224,6 +237,8 @@ const modules =
         ? driverModules
         : isStudent
             ? studentModules
+            : isTechnician
+                ? technicianModules
             : isAdmin
                 ? adminModules
                 : {};
@@ -240,6 +255,18 @@ function createFallback(title, message) {
 
 function applyModuleStyles(moduleName) {
 
+    // Some route keys are intentionally shared by the Driver and Student
+    // portals. Use the matching role-specific styles instead of loading the
+    // old generic placeholder stylesheet.
+    const styleModuleName =
+        isDriver && moduleName === "profile"
+            ? "driverProfile"
+            : isStudent && moduleName === "notifications"
+                ? "studentNotifications"
+                : isStudent && moduleName === "profile"
+                    ? "studentProfile"
+                    : moduleName;
+
     // Main page stylesheet
     let pageStyle = document.querySelector("#active-module-styles");
 
@@ -250,7 +277,7 @@ function applyModuleStyles(moduleName) {
         document.head.appendChild(pageStyle);
     }
 
-    pageStyle.href = `/static/modules/css/${moduleName}.css`;
+    pageStyle.href = `/static/modules/css/${styleModuleName}.css`;
 
     // Driver shared styles
     if (isDriver) {
@@ -274,7 +301,8 @@ function createShell(initialRoute) {
   document.body.classList.remove(
         "admin-theme",
         "driver-theme",
-        "student-theme"
+        "student-theme",
+        "technician-theme"
     );
 
 
@@ -290,6 +318,14 @@ function createShell(initialRoute) {
 
         document.body.classList.add(
             "student-theme"
+        );
+
+    }
+
+    else if (isTechnician) {
+
+        document.body.classList.add(
+            "technician-theme"
         );
 
     }
@@ -361,6 +397,13 @@ function createShell(initialRoute) {
                     initialRoute,
                     navigate
                 )
+
+                : isTechnician
+
+                    ? createTechnicianSidebar(
+                        initialRoute,
+                        navigate
+                    )
 
                 : createSidebar(
                     initialRoute,
@@ -493,6 +536,8 @@ export async function loadModule(requestedRoute) {
             ? "driverDashboard"
             : isStudent
                 ? "studentDashboard"
+                : isTechnician
+                    ? "technicianDashboard"
                 : "dashboard";
 
   if (!requestedRoute) {
@@ -556,6 +601,20 @@ export async function loadModule(requestedRoute) {
 
     }
 
+    else if (isTechnician) {
+
+        setTechnicianSidebarActive(
+            shell.sidebar,
+            route
+        );
+
+        setTopbarTitle(
+            shell.topbar,
+            modules[route].title
+        );
+
+    }
+
     else {
 
         setSidebarActive(
@@ -607,6 +666,8 @@ window.addEventListener(
                 ? "driverDashboard"
                 : isStudent
                     ? "studentDashboard"
+                    : isTechnician
+                        ? "technicianDashboard"
                     : "dashboard";
 
 

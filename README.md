@@ -59,6 +59,50 @@ If the first administrator password is lost, set `BOOTSTRAP_ADMIN_RESET_PASSWORD
 - Driver safety feedback is stored in the notifications table and is visible to management with acknowledge, resolve, reopen, and refresh workflows.
 - Production startup fails closed if the JWT signing secret is missing or too short. Use a reverse proxy/WAF for distributed rate limiting, TLS termination, backups, and intrusion monitoring.
 
+## GPS provider webhook integration
+
+BusTrack accepts GPS-company webhooks without changing the existing driver-mobile
+GPS contract. An administrator first maps each external provider device ID to a
+bus, then creates either one service token for the whole fleet or a bus-scoped
+token. Tokens never expire automatically and plaintext values are returned only
+once to the authorised API caller when they are created or rotated. They are
+never returned by the token-list API or persisted in readable form.
+
+1. `POST /api/integrations/gps/devices` with an admin session:
+
+   ```json
+   {"bus_id": 12, "external_device_id": "862567072404952", "display_name": "KL07BN4647"}
+   ```
+
+2. `POST /api/integrations/gps/tokens` with `{"label":"GPS company"}`. Store
+   the returned `token` with the provider. Supplying a `bus_id` makes the token
+   valid for that bus only.
+
+3. Ask the provider to `POST` its native JSON to
+   `https://YOUR-DOMAIN/api/integrations/gps/ingest`, with
+   `X-GPS-Token: <returned token>` and `Content-Type: application/json`.
+   A bare object or an array of position objects is accepted. The custom key is
+   accepted only in this header on this webhook; it is not a browser login,
+   Bearer token, or credential for any read or management API.
+
+The supplied Teltonika payload maps `uniqueId`, `deviceId`, `name`, or `phone`
+to the configured device mapping. The latest internal position is visible to
+administrators at `/api/integrations/gps/status`; its complete vendor payload is
+available per bus at `/api/integrations/gps/status/{bus_id}`. The receiver
+expects the provider's 20-second ignition-on updates and two-minute ignition-off
+heartbeats. Fresh ignition-on vehicle GPS is authoritative; it disables driver
+phone updates until the vehicle stream is stale, off, or invalid.
+
+Administrators can create a **Technician** account from Users. Technician
+accounts have a separate GPS Integration portal; they can rotate or disable
+provider credentials, edit external device-to-bus mappings, and update the
+allowed JSON field paths when a provider changes its payload layout. They do
+not receive general fleet, account, or assignment administration permissions.
+
+See [`docs/mvd-gps-provider-handoff.md`](docs/mvd-gps-provider-handoff.md) for
+the exact handoff contract to send to the GPS provider, including the accepted
+payload forms, expected response codes, and the final live-delivery check.
+
 ## Folder guide
 
 - `backend/` contains the minimal API entry point, future data/auth placeholders, API route placeholders, shared utilities, and backend assets.

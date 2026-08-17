@@ -7,6 +7,7 @@ The currently authenticated user is obtained from the JWT.
 The browser never supplies a student ID for these endpoints.
 """
 
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -26,6 +27,7 @@ from backend.models import (
 from backend.routes.models_tracking import (
     LiveTrip,
     LiveLocation,
+    BusGPSState,
 )
 
 from backend.services.tracking_engine import (
@@ -451,6 +453,80 @@ def get_student_live_tracking(
         )
         .first()
     )
+
+    # A provider position is also a valid live bus position when the driver
+    # has not yet started an in-app trip. This leaves the existing mobile-trip
+    # lifecycle untouched while allowing students to see the vehicle GPS.
+    provider_state = (
+        db.query(BusGPSState)
+        .filter(BusGPSState.bus_id == bus.id)
+        .first()
+    )
+    provider_is_fresh = False
+    if provider_state is not None:
+        received_at = provider_state.received_at
+        if received_at.tzinfo is None:
+            received_at = received_at.replace(tzinfo=timezone.utc)
+        expected_interval = 20 if provider_state.ignition is True else 120
+        provider_is_fresh = (
+            datetime.now(timezone.utc) - received_at
+        ).total_seconds() <= expected_interval * 3
+
+    tracking_available = trip is not None or provider_is_fresh
+    tracking_latitude = (
+        trip.current_latitude if trip is not None
+        else provider_state.latitude if provider_is_fresh else None
+    )
+    tracking_longitude = (
+        trip.current_longitude if trip is not None
+        else provider_state.longitude if provider_is_fresh else None
+    )
+    tracking_source = (
+        trip.current_location_source or "mobile" if trip is not None
+        else "vehicle_gps" if provider_is_fresh else None
+    )
+
+    # Translate provider telemetry into a small student-safe status summary.
+    # Raw vendor diagnostics (device identity, IP, protocol, odometer, power,
+    # and the original payload) remain private to management/technicians.
+    location_timestamp = (
+        trip.last_location_update if trip is not None
+        else provider_state.received_at if provider_is_fresh else None
+    )
+    location_age_seconds = None
+    if location_timestamp is not None:
+        timestamp = (
+            location_timestamp.replace(tzinfo=timezone.utc)
+            if location_timestamp.tzinfo is None
+            else location_timestamp
+        )
+        location_age_seconds = max(0, int((datetime.now(timezone.utc) - timestamp).total_seconds()))
+    active_speed = (
+        trip.current_speed if trip is not None
+        else provider_state.speed_kmh if provider_is_fresh else None
+    )
+    is_moving = (
+        provider_state.motion
+        if tracking_source == "vehicle_gps" and provider_state is not None and provider_state.motion is not None
+        else bool(active_speed is not None and active_speed > 1)
+    )
+    freshness_limit_seconds = (
+        (20 if provider_state.ignition is True else 120) * 3
+        if tracking_source == "vehicle_gps" and provider_state is not None
+        else 60
+    )
+    location_is_fresh = (
+        location_age_seconds is not None
+        and location_age_seconds <= freshness_limit_seconds
+    )
+    telemetry = {
+        "source": tracking_source,
+        "source_label": "Vehicle GPS" if tracking_source == "vehicle_gps" else "Driver mobile" if tracking_source == "mobile" else "Unavailable",
+        "is_fresh": location_is_fresh,
+        "last_seen_seconds": location_age_seconds,
+        "moving": is_moving if tracking_available else None,
+        "ignition_on": provider_state.ignition if tracking_source == "vehicle_gps" and provider_state is not None else None,
+    }
     # ======================================================
     # 5. LOAD ORDERED ROUTE STOPS
     # ======================================================
@@ -550,11 +626,11 @@ def get_student_live_tracking(
     }
 
     if (
-        trip is not None
+        tracking_available
         and
-        trip.current_latitude is not None
+        tracking_latitude is not None
         and
-        trip.current_longitude is not None
+        tracking_longitude is not None
         and
         route_stops
     ):
@@ -577,15 +653,17 @@ def get_student_live_tracking(
             )
             .offset(1)
             .first()
+            if trip is not None
+            else None
         )
 
         route_progress =determine_route_progress(
 
                 latitude =
-                    trip.current_latitude,
+                    tracking_latitude,
 
                 longitude =
-                    trip.current_longitude,
+                    tracking_longitude,
 
                 route_stops =
                     route_stops,
@@ -726,33 +804,41 @@ def get_student_live_tracking(
 
     trip_data = None
 
-    if trip is not None:
+    if tracking_available:
 
         trip_data = {
 
             "id":
-                trip.id,
+                trip.id if trip is not None else None,
 
             "status":
-                trip.status,
+                trip.status if trip is not None else (provider_state.status or "Parked"),
 
             "latitude":
-                trip.current_latitude,
+                tracking_latitude,
 
             "longitude":
-                trip.current_longitude,
+                tracking_longitude,
 
             "speed":
-                trip.current_speed,
+                trip.current_speed if trip is not None else provider_state.speed_kmh,
 
             "accuracy":
-                trip.current_accuracy,
+                trip.current_accuracy if trip is not None else provider_state.accuracy,
 
             "last_location_update":
-                trip.last_location_update,
+                trip.last_location_update if trip is not None else provider_state.received_at,
 
             "started_at":
-                trip.started_at,
+                trip.started_at if trip is not None else provider_state.received_at,
+
+            "location_source":
+                tracking_source,
+
+            "ignition":
+                provider_state.ignition if provider_state is not None else None,
+
+            "telemetry": telemetry,
 
             "current_stop":
                 current_stop_data,
@@ -811,12 +897,12 @@ def get_student_live_tracking(
     return {
 
         "tracking_available":
-            trip is not None,
+            tracking_available,
 
         "reason":
             (
                 None
-                if trip is not None
+                if tracking_available
                 else
                 "The assigned bus is not currently live."
             ),
@@ -900,6 +986,10 @@ def get_student_live_tracking(
 
         "trip":
             trip_data,
+
+        # This is intentionally a derived, student-safe view of the provider
+        # data rather than a copy of the vendor payload.
+        "telemetry": telemetry,
 
         "stops":
             stops,

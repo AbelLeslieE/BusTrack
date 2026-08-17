@@ -1,8 +1,8 @@
-"""Authenticated administrator account settings.
+"""Authenticated account settings.
 
 These endpoints deliberately operate on the account in the validated session;
-the client never supplies a user ID. That prevents an administrator from
-accidentally changing another account while editing their own settings.
+the client never supplies a user ID. That prevents someone from accidentally
+changing another account while editing their own settings.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from backend.auth import SESSION_COOKIE_NAME, get_password_hash, normalize_usern
 from backend.database import get_db
 from backend.models import User, UserSession
 from backend.schemas import AccountProfileUpdate, PasswordChangeRequest, TokenResponse, UserResponse
-from backend.security import require_admin
+from backend.security import require_authenticated
 from backend.utils.jwt_handler import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, get_token_identity
 
 
@@ -97,8 +97,8 @@ def _issue_session(response: Response, request: Request, db: Session, user: User
 
 
 @router.get("/account", response_model=UserResponse)
-def get_account_settings(current_user: User = Depends(require_admin)) -> User:
-    """Return the currently authenticated administrator's account details."""
+def get_account_settings(current_user: User = Depends(require_authenticated)) -> User:
+    """Return the current authenticated account's details."""
 
     return current_user
 
@@ -109,9 +109,9 @@ def update_account_settings(
     response: Response,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_authenticated),
 ) -> TokenResponse:
-    """Update the authenticated administrator's identity details only."""
+    """Update the authenticated account's identity details only."""
 
     full_name = update.full_name.strip()
     if len(full_name) < 2:
@@ -151,9 +151,9 @@ def change_account_password(
     response: Response,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_authenticated),
 ) -> TokenResponse:
-    """Change/reset the current administrator's password after verification."""
+    """Change the authenticated account password after verification."""
 
     if not verify_password(update.current_password, current_user.password_hash):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect.")

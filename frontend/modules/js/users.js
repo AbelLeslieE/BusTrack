@@ -42,7 +42,9 @@ const USER_ROLES = {
 
     DRIVER: "Driver",
 
-    USER: "User"
+    USER: "User",
+
+    TECHNICIAN: "Technician"
 
 };
 
@@ -105,7 +107,9 @@ const state = {
 
         drivers: 0,
 
-        students: 0
+        students: 0,
+
+        technicians: 0
 
     }
 
@@ -304,6 +308,11 @@ function calculateStatistics() {
     state.statistics.students =
         state.users.filter(
             user => user.role === USER_ROLES.USER
+        ).length;
+
+    state.statistics.technicians =
+        state.users.filter(
+            user => user.role === USER_ROLES.TECHNICIAN
         ).length;
 
 }

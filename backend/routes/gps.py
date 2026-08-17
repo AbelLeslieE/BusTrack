@@ -27,6 +27,8 @@ from backend.services.tracking_engine import (
     is_inside_stop_radius,
 )
 from backend.security import require_driver, require_management
+from backend.routes.gps_provider import vehicle_gps_is_authoritative
+from backend.routes.models_tracking import BusGPSState
 
 from backend.models import (
     User,
@@ -583,6 +585,35 @@ def start_trip(
 
     db.refresh(trip)
 
+    # If the mapped vehicle device is already reporting a fresh ignition-on
+    # position, seed the just-created trip immediately. The driver UI can then
+    # switch to vehicle GPS without waiting for the next 20-second provider
+    # delivery; later deliveries continue through the normal provider mirror.
+    vehicle_state = (
+        db.query(BusGPSState)
+        .filter(BusGPSState.bus_id == trip.bus_id)
+        .first()
+    )
+    if vehicle_gps_is_authoritative(vehicle_state):
+        received_at = vehicle_state.received_at
+        db.add(LiveLocation(
+            trip_id=trip.id,
+            latitude=vehicle_state.latitude,
+            longitude=vehicle_state.longitude,
+            speed=vehicle_state.speed_kmh,
+            accuracy=vehicle_state.accuracy,
+            recorded_at=received_at,
+            source="vehicle_gps",
+        ))
+        trip.current_latitude = vehicle_state.latitude
+        trip.current_longitude = vehicle_state.longitude
+        trip.current_speed = vehicle_state.speed_kmh
+        trip.current_accuracy = vehicle_state.accuracy
+        trip.last_location_update = received_at
+        trip.current_location_source = "vehicle_gps"
+        db.commit()
+        db.refresh(trip)
+
     # ------------------------------------------------------
     # Return standard response
     # ------------------------------------------------------
@@ -690,6 +721,24 @@ def update_location(
     current_timestamp = datetime.now(
         timezone.utc
     )
+
+    # A working ignition-on vehicle device is more accurate and cannot be
+    # accidentally overwritten by a driver's phone. Phone tracking remains
+    # available automatically when the provider signal is absent, stale, or
+    # reports ignition off.
+    vehicle_state = (
+        db.query(BusGPSState)
+        .filter(BusGPSState.bus_id == trip.bus_id)
+        .first()
+    )
+    if vehicle_gps_is_authoritative(vehicle_state, current_timestamp):
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "Vehicle GPS is currently active; mobile tracking is disabled.",
+                "tracking_source": "vehicle_gps",
+            },
+        )
 
     # ======================================================
     # FIND PREVIOUS GPS LOCATION
@@ -862,6 +911,7 @@ def update_location(
     trip.current_accuracy = request.accuracy
 
     trip.last_location_update = current_timestamp
+    trip.current_location_source = "mobile"
     # ======================================================
     # SAVE EVERYTHING
     # ======================================================
@@ -1228,6 +1278,9 @@ def get_live_tracking(
 
             "last_location_update":
                 trip.last_location_update,
+
+            "location_source":
+                trip.current_location_source or "mobile",
             # ------------------------------------------------
             # ROUTE STOP PROGRESSION
             # ------------------------------------------------
@@ -1247,6 +1300,60 @@ def get_live_tracking(
             "stop_departed_at":
                 trip.current_stop_departed_at,
 
+        })
+
+    # Provider GPS does not start or stop a driver's trip by itself. Still,
+    # management must be able to see a mapped bus when it reports an off-state
+    # heartbeat or before the driver starts a trip in the app.
+    trip_bus_ids = {trip.bus_id for trip in trips}
+    provider_states = db.query(BusGPSState).all()
+    for provider_state in provider_states:
+        if provider_state.bus_id in trip_bus_ids:
+            continue
+        bus = db.query(Bus).filter(Bus.id == provider_state.bus_id).first()
+        if bus is None:
+            continue
+        route = db.query(Route).filter(Route.bus_id == bus.id).first()
+        driver = db.query(Driver).filter(Driver.id == route.driver_id).first() if route and route.driver_id else None
+        received_at = provider_state.received_at
+        if received_at.tzinfo is None:
+            received_at = received_at.replace(tzinfo=timezone.utc)
+        expected_interval = 20 if provider_state.ignition is True else 120
+        age_seconds = max(0, int((datetime.now(timezone.utc) - received_at).total_seconds()))
+        response.append({
+            "trip_id": None,
+            "status": provider_state.status or ("Running" if provider_state.ignition else "Parked"),
+            "started_at": None,
+            "driver_id": driver.id if driver else None,
+            "driver_name": driver.user.full_name if driver and driver.user else None,
+            "bus_id": bus.id,
+            "bus_number": bus.bus_number,
+            "route_id": route.id if route else None,
+            "route_name": route.route_name if route else None,
+            "route_code": route.route_code if route else None,
+            "latitude": provider_state.latitude,
+            "longitude": provider_state.longitude,
+            "speed": provider_state.speed_kmh,
+            "accuracy": provider_state.accuracy,
+            "last_location_update": provider_state.received_at,
+            "location_source": "vehicle_gps",
+            "provider_gps": {
+                "external_device_id": provider_state.external_device_id,
+                "ignition": provider_state.ignition,
+                "motion": provider_state.motion,
+                "valid": provider_state.valid,
+                "course": provider_state.course,
+                "altitude": provider_state.altitude,
+                "protocol": provider_state.protocol,
+                "expected_interval_seconds": expected_interval,
+                "age_seconds": age_seconds,
+                "is_fresh": age_seconds <= expected_interval * 3,
+            },
+            "current_stop": None,
+            "next_stop": None,
+            "stop_status": None,
+            "stop_arrived_at": None,
+            "stop_departed_at": None,
         })
 
     return response

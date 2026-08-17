@@ -1,6 +1,6 @@
 import { requireAuthenticatedSession } from "/static/common/auth.js";
 import { loadModule } from "/static/common/router.js";
-import { canonicalRole, ROLE_ADMIN, ROLE_DRIVER, ROLE_USER } from "/static/common/roles.js";
+import { canonicalRole, ROLE_ADMIN, ROLE_DRIVER, ROLE_TECHNICIAN, ROLE_USER } from "/static/common/roles.js";
 
 const profile = await requireAuthenticatedSession();
 
@@ -22,6 +22,10 @@ switch (role) {
     case ROLE_USER:
         if (!window.location.hash) window.location.hash = "studentDashboard";
         moduleName = "studentDashboard";
+        break;
+    case ROLE_TECHNICIAN:
+        if (!window.location.hash) window.location.hash = "technicianDashboard";
+        moduleName = "technicianDashboard";
         break;
     default:
         throw new Error(`Unsupported user role: ${profile.role}`);

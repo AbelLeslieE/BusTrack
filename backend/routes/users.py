@@ -12,7 +12,7 @@ from backend.auth import (
     get_password_hash,
 )
 from backend.security import require_admin
-from backend.roles import ROLE_ADMIN, ROLE_DRIVER, ROLE_USER, is_admin_role
+from backend.roles import ROLE_ADMIN, ROLE_DRIVER, ROLE_TECHNICIAN, ROLE_USER, is_admin_role
 from backend.database import get_db
 from backend.models import (
     User,
@@ -46,6 +46,7 @@ router = APIRouter(
 ALLOWED_ROLES = {
     ROLE_ADMIN,
     ROLE_DRIVER,
+    ROLE_TECHNICIAN,
     ROLE_USER,
 }
 

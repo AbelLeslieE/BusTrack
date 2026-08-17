@@ -515,6 +515,12 @@ async function initializeDropdowns(wrapper, user) {
                     value: "User",
 
                     label: "User"
+                },
+
+                {
+                    value: "Technician",
+
+                    label: "Technician"
                 }
 
             ]

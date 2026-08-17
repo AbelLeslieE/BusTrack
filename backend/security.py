@@ -21,7 +21,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from backend.auth import get_current_user
 from backend.models import User
-from backend.roles import ROLE_ADMIN, ROLE_DRIVER, ROLE_USER, canonical_role
+from backend.roles import ROLE_ADMIN, ROLE_DRIVER, ROLE_TECHNICIAN, ROLE_USER, canonical_role
 
 
 class _RequestTooLarge(Exception):
@@ -29,7 +29,7 @@ class _RequestTooLarge(Exception):
 
 
 def normalized_role(user: User) -> str:
-    """Return one of Admin, Driver, User, or an empty string for unknown roles."""
+    """Return a canonical role, or an empty string for an unknown role."""
 
     return canonical_role(user.role) or ""
 
@@ -77,6 +77,19 @@ def require_driver(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Driver access required.",
+        )
+    return current_user
+
+
+def require_gps_technician(
+    current_user: User = Depends(require_authenticated),
+) -> User:
+    """Allow only Admins and dedicated GPS technicians into integration tools."""
+
+    if normalized_role(current_user) not in {ROLE_ADMIN, ROLE_TECHNICIAN}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="GPS technician access required.",
         )
     return current_user
 
@@ -144,6 +157,9 @@ class RequestSecurityMiddleware:
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
         self.general_limiter = _SlidingWindowLimiter(240, 60)
+        # Vendor devices can legitimately send one position per bus every
+        # 20 seconds, so this isolated webhook has a fleet-sized allowance.
+        self.gps_ingest_limiter = _SlidingWindowLimiter(2_000, 60)
         self.login_limiter = _SlidingWindowLimiter(10, 60)
         self.upload_limiter = _SlidingWindowLimiter(12, 60)
 
@@ -170,6 +186,32 @@ class RequestSecurityMiddleware:
 
     @staticmethod
     def _security_headers(path: str) -> list[tuple[bytes, bytes]]:
+        # FastAPI's built-in Swagger UI is a development-only page in this
+        # application.  Its HTML bootstraps Swagger with an inline script and
+        # loads the bundled assets from jsDelivr, so it needs a narrowly scoped
+        # policy that differs from the application UI policy below.
+        is_api_docs = path in {"/docs", "/redoc"}
+        script_src = (
+            b"script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            if is_api_docs
+            else b"script-src 'self' https://unpkg.com; "
+        )
+        style_src = (
+            b"style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            if is_api_docs
+            else (
+                b"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com "
+                b"https://cdnjs.cloudflare.com https://unpkg.com; "
+            )
+        )
+        img_src = (
+            b"img-src 'self' data: https://fastapi.tiangolo.com; "
+            if is_api_docs
+            else (
+                b"img-src 'self' data: blob: https://unpkg.com "
+                b"https://tile.openstreetmap.org https://*.tile.openstreetmap.org; "
+            )
+        )
         headers = [
             (b"x-content-type-options", b"nosniff"),
             (b"x-frame-options", b"DENY"),
@@ -182,14 +224,14 @@ class RequestSecurityMiddleware:
                 b"content-security-policy",
                 (
                     b"default-src 'self'; "
-                    b"base-uri 'self'; object-src 'none'; frame-ancestors 'none'; "
-                    b"form-action 'self'; "
-                    b"script-src 'self' https://unpkg.com; "
-                    b"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com https://unpkg.com; "
-                    b"font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
-                    b"img-src 'self' data: blob: https://unpkg.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org; "
-                    b"connect-src 'self' https://unpkg.com https://router.project-osrm.org https://nominatim.openstreetmap.org; "
-                    b"worker-src 'self' blob:"
+                    + b"base-uri 'self'; object-src 'none'; frame-ancestors 'none'; "
+                    + b"form-action 'self'; "
+                    + script_src
+                    + style_src
+                    + b"font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
+                    + img_src
+                    + b"connect-src 'self' https://unpkg.com https://router.project-osrm.org https://nominatim.openstreetmap.org; "
+                    + b"worker-src 'self' blob:"
                 ),
             ),
         ]
@@ -210,7 +252,9 @@ class RequestSecurityMiddleware:
 
         if path.startswith("/api/"):
             limiter = self.general_limiter
-            if path == "/api/auth/login":
+            if path == "/api/integrations/gps/ingest":
+                limiter = self.gps_ingest_limiter
+            elif path == "/api/auth/login":
                 limiter = self.login_limiter
             elif path.endswith("/import") or path.endswith("/preview"):
                 limiter = self.upload_limiter

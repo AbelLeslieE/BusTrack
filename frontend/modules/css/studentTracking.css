@@ -251,9 +251,9 @@
 
     grid-template-columns:
         repeat(
-            4,
+            auto-fit,
             minmax(
-                0,
+                145px,
                 1fr
             )
         );
@@ -2974,5 +2974,40 @@ span {
         animation: none;
 
     }
+
+}
+
+.student-tracking-source-card.is-vehicle {
+
+    border-color:
+        rgba(
+            91,
+            231,
+            171,
+            0.28
+        );
+
+    background:
+        linear-gradient(
+            145deg,
+            rgba(
+                30,
+                125,
+                98,
+                0.46
+            ),
+            rgba(
+                8,
+                35,
+                55,
+                0.78
+            )
+        );
+
+}
+
+.student-tracking-source-card.is-vehicle strong {
+
+    color: #a5f7cc;
 
 }

@@ -138,6 +138,25 @@ def initialize_database() -> None:
                     {"canonical": canonical, "legacy_role": legacy_role},
                 )
 
+    # Lightweight compatibility migrations for the external GPS provider
+    # integration. New provider tables are created by metadata.create_all;
+    # these two columns are added for existing installations.
+    if "live_trips" in inspector.get_table_names():
+        trip_columns = {column["name"] for column in inspector.get_columns("live_trips")}
+        if "current_location_source" not in trip_columns:
+            with engine.begin() as connection:
+                connection.execute(text(
+                    "ALTER TABLE live_trips ADD COLUMN current_location_source VARCHAR(32)"
+                ))
+
+    if "live_locations" in inspector.get_table_names():
+        location_columns = {column["name"] for column in inspector.get_columns("live_locations")}
+        if "source" not in location_columns:
+            with engine.begin() as connection:
+                connection.execute(text(
+                    "ALTER TABLE live_locations ADD COLUMN source VARCHAR(32) NOT NULL DEFAULT 'mobile'"
+                ))
+
     print(
         "Database schema initialized successfully."
     )

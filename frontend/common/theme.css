@@ -181,6 +181,25 @@ body.student-theme{
 
 }
 /* ==========================================================
+   TECHNICIAN THEME
+========================================================== */
+
+body.technician-theme{
+
+    background:
+        linear-gradient(
+            rgba(5,15,30,.45),
+            rgba(5,15,30,.60)
+        ),
+        url("/static/assets/images/fleet-bg.png");
+
+    background-size:cover;
+    background-position:center;
+    background-repeat:no-repeat;
+    background-attachment:fixed;
+
+}
+/* ==========================================================
    AMBIENT LIGHTING
 ========================================================== */
 
