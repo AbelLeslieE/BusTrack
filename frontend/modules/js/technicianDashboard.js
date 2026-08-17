@@ -10,6 +10,41 @@ function formatDate(value) {
     return value ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "Never";
 }
 
+function revealProviderTokenOnce(result, title, subtitle) {
+    const providerToken = String(result?.token || "");
+    if (!providerToken) {
+        Modal.error({ title: "Token generated but unavailable", subtitle: "Create a new token and copy it immediately. Existing token values cannot be retrieved." });
+        return;
+    }
+
+    Modal.open({
+        eyebrow: "CREDENTIALS",
+        title,
+        subtitle,
+        size: "lg",
+        closeOnOverlay: false,
+        content: `<div class="tech-token-reveal"><p>This is the only time BusTrack will show this value. Copy it now and give it to the GPS provider through an approved secure channel.</p><label class="modal-label" for="tech-one-time-provider-token">Permanent GPS token</label><div class="tech-token-reveal-row"><input class="modal-input" id="tech-one-time-provider-token" value="${escapeHtml(providerToken)}" readonly autocomplete="off" spellcheck="false" aria-label="One-time permanent GPS token"><button class="tech-button secondary" id="tech-copy-provider-token" type="button">Copy token</button></div></div>`,
+        actions: [{ text: "I've stored it", style: "primary", close: true }],
+        onOpen: () => {
+            const input = document.querySelector("#tech-one-time-provider-token");
+            const copyButton = document.querySelector("#tech-copy-provider-token");
+            copyButton?.addEventListener("click", async () => {
+                input?.focus();
+                input?.select();
+                let copied = false;
+                try {
+                    if (navigator.clipboard?.writeText) {
+                        await navigator.clipboard.writeText(providerToken);
+                        copied = true;
+                    }
+                } catch { /* A manual selection/copy fallback is available below. */ }
+                if (!copied) copied = Boolean(document.execCommand?.("copy"));
+                copyButton.textContent = copied ? "Copied" : "Select and copy";
+            });
+        },
+    });
+}
+
 function renderDashboard() {
     const tokenRows = state.tokens.length ? state.tokens.map(token => `
         <tr><td>${escapeHtml(token.label)}</td><td>${token.bus_id ? `Bus #${token.bus_id}` : "Fleet-wide"}</td><td><span class="tech-status ${token.is_active ? "live" : "offline"}">${token.is_active ? "Active" : "Disabled"}</span></td><td>${formatDate(token.last_used_at)}</td><td class="tech-token-actions"><button class="tech-button danger-outline" data-rotate-token="${token.id}">Rotate</button><button class="tech-button delete-outline" data-delete-token="${token.id}">Delete</button></td></tr>`).join("") : `<tr><td colspan="5" class="tech-empty">No provider tokens exist yet.</td></tr>`;
@@ -23,7 +58,7 @@ function renderDashboard() {
             <header class="tech-hero glass-card"><div><p class="tech-eyebrow">TECHNICIAN WORKSPACE</p><h1>GPS Integration Control</h1><p>Securely translate provider data, protect live tracking, and keep vehicle mappings correct.</p></div><button class="tech-button primary" id="tech-refresh">↻ Refresh status</button></header>
             <section class="tech-stat-grid"><article class="tech-stat glass-card"><span>Provider tokens</span><strong>${state.tokens.filter(item => item.is_active).length}</strong><small>active credentials</small></article><article class="tech-stat glass-card"><span>Mapped buses</span><strong>${state.devices.filter(item => item.is_active).length}</strong><small>external device IDs</small></article><article class="tech-stat glass-card"><span>Live devices</span><strong>${state.statuses.filter(item => item.is_fresh).length}</strong><small>fresh positions</small></article></section>
             <section class="tech-grid">
-                <article class="tech-panel glass-card tech-wide"><div class="tech-panel-heading"><div><p class="tech-eyebrow">CREDENTIALS</p><h2>Provider tokens</h2><p>Tokens are never displayed here. Rotate immediately if a credential may be compromised.</p></div><button class="tech-button primary" id="create-token">Create token</button></div><div class="tech-table-wrap"><table><thead><tr><th>Label</th><th>Scope</th><th>Status</th><th>Last used</th><th></th></tr></thead><tbody>${tokenRows}</tbody></table></div></article>
+                <article class="tech-panel glass-card tech-wide"><div class="tech-panel-heading"><div><p class="tech-eyebrow">CREDENTIALS</p><h2>Provider tokens</h2><p>Values are shown once immediately after creation or rotation, then remain hidden. Rotate immediately if a credential may be compromised.</p></div><button class="tech-button primary" id="create-token">Create token</button></div><div class="tech-table-wrap"><table><thead><tr><th>Label</th><th>Scope</th><th>Status</th><th>Last used</th><th></th></tr></thead><tbody>${tokenRows}</tbody></table></div></article>
                 <article class="tech-panel glass-card tech-wide"><div class="tech-panel-heading"><div><p class="tech-eyebrow">DEVICE TRANSLATION</p><h2>External bus IDs</h2><p>Update the GPS-company identifier without changing BusTrack’s internal bus number.</p></div><button class="tech-button primary" id="add-device">Map device</button></div><div class="tech-table-wrap"><table><thead><tr><th>Bus</th><th>Provider device ID</th><th>Display name</th><th>Status</th><th></th></tr></thead><tbody>${deviceRows}</tbody></table></div></article>
                 <article class="tech-panel glass-card tech-wide"><div class="tech-panel-heading"><div><p class="tech-eyebrow">FORMAT ADAPTER</p><h2>Provider field layout</h2><p>When the GPS company changes its JSON field names, update these paths here. The translation still runs securely on the server.</p></div><button class="tech-button secondary" id="edit-translator">Edit field paths</button></div><div class="tech-translation">${translationSummary}</div></article>
                 <article class="tech-panel glass-card tech-wide"><div class="tech-panel-heading"><div><p class="tech-eyebrow">LIVE SIGNAL</p><h2>Latest vehicle GPS</h2></div><span class="tech-muted">20s while on · 2m while off</span></div><div class="tech-device-grid">${statusCards}</div></article>
@@ -46,8 +81,8 @@ async function refresh() {
 
 function rotateToken(id) {
     const token = state.tokens.find(item => item.id === id);
-    Modal.confirm({ eyebrow: "SECURITY ACTION", title: "Rotate provider token?", subtitle: "The existing token will stop working immediately.", content: `<p>Rotate <strong>${escapeHtml(token?.label || "this token")}</strong>? This blocks a compromised credential. The replacement is not displayed in this portal.</p>`, confirmText: "Rotate token", style: "danger", onConfirm: async () => {
-        try { await request(`/integrations/gps/tokens/${id}/rotate`, { method: "POST" }); Modal.close(); await refresh(); Modal.success({ title: "New token generated", subtitle: "The previous provider token has been blocked." }); }
+    Modal.confirm({ eyebrow: "SECURITY ACTION", title: "Rotate provider token?", subtitle: "The existing token will stop working immediately.", content: `<p>Rotate <strong>${escapeHtml(token?.label || "this token")}</strong>? This blocks a compromised credential. The new value will be shown once so you can copy it.</p>`, confirmText: "Rotate token", style: "danger", onConfirm: async () => {
+        try { const result = await request(`/integrations/gps/tokens/${id}/rotate`, { method: "POST" }); Modal.close(); await refresh(); revealProviderTokenOnce(result, "Copy replacement token", "The previous provider token has been blocked."); }
         catch (error) { Modal.error({ title: "Token rotation failed", subtitle: error.message }); }
     }});
 }
@@ -62,13 +97,13 @@ function deleteToken(id) {
 
 function createToken() {
     let busDropdown;
-    Modal.form({ eyebrow: "CREDENTIALS", title: "Create provider token", subtitle: "The token value is not displayed in this portal.", content: `<div class="modal-group"><label class="modal-label" for="tech-token-label">Label</label><input class="modal-input" id="tech-token-label" maxlength="100" placeholder="GPS provider primary" required></div><div class="modal-group"><label class="modal-label">Scope</label><div id="tech-token-bus-container"></div></div>`, submitText: "Generate token", onOpen: () => {
+    Modal.form({ eyebrow: "CREDENTIALS", title: "Create provider token", subtitle: "The token value will be shown once after creation.", content: `<div class="modal-group"><label class="modal-label" for="tech-token-label">Label</label><input class="modal-input" id="tech-token-label" maxlength="100" placeholder="GPS provider primary" required></div><div class="modal-group"><label class="modal-label">Scope</label><div id="tech-token-bus-container"></div></div>`, submitText: "Generate token", onOpen: () => {
         busDropdown = createDropdown({ id: "tech-token-bus", placeholder: "Fleet-wide token", items: state.buses.map(bus => ({ value: bus.id, label: `${bus.bus_number} · ${bus.registration_number}` })) });
         document.querySelector("#tech-token-bus-container")?.appendChild(busDropdown);
     }, onClose: () => busDropdown?.close(), onSubmit: async () => {
         const label = document.querySelector("#tech-token-label").value.trim(); const busValue = busDropdown?.getValue();
         if (label.length < 2) { Modal.error({ title: "Label required", subtitle: "Enter at least two characters." }); return; }
-        try { await request("/integrations/gps/tokens", { method: "POST", body: JSON.stringify({ label, bus_id: busValue ? Number(busValue) : null }) }); Modal.close(); await refresh(); Modal.success({ title: "New token generated", subtitle: "A new provider credential has been created without showing it in this portal." }); }
+        try { const result = await request("/integrations/gps/tokens", { method: "POST", body: JSON.stringify({ label, bus_id: busValue ? Number(busValue) : null }) }); Modal.close(); await refresh(); revealProviderTokenOnce(result, "Copy provider token", "Store this value before closing this window."); }
         catch (error) { Modal.error({ title: "Unable to create token", subtitle: error.message }); }
     }});
 }
