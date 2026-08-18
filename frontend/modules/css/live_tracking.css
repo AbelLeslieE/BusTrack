@@ -48,6 +48,37 @@
 
 }
 
+.tracking-header-note,
+.live-sidebar-note{
+
+    margin:12px 0 0;
+
+    color:#b8c9e8;
+
+    font-size:.82rem;
+
+    line-height:1.5;
+
+}
+
+.tracking-header-note strong{
+
+    color:#a7e5ff;
+
+}
+
+.live-sidebar-note{
+
+    padding:11px 12px;
+
+    border:1px solid rgba(101,211,255,.17);
+
+    border-radius:12px;
+
+    background:rgba(46,142,205,.08);
+
+}
+
 .tracking-stat{
 
     min-width:140px;
@@ -166,6 +197,42 @@
 
     font-size:.9rem;
 
+    display:inline-flex;
+
+    align-items:center;
+
+    gap:7px;
+
+}
+
+.trip-status-dot{
+
+    width:9px;
+
+    height:9px;
+
+    border-radius:50%;
+
+    background:#6ee7b7;
+
+    box-shadow:0 0 10px rgba(110,231,183,.65);
+
+}
+
+.trip-status-dot.off{
+
+    background:#a8b3c7;
+
+    box-shadow:none;
+
+}
+
+.trip-status-dot.stale{
+
+    background:#fbbf24;
+
+    box-shadow:0 0 10px rgba(251,191,36,.55);
+
 }
 
 .trip-body{
@@ -189,6 +256,82 @@
 .trip-body strong{
 
     color:white;
+
+}
+
+.trip-admin-actions{
+
+    display:grid;
+
+    grid-template-columns:1fr 1fr;
+
+    gap:8px;
+
+    margin-top:16px;
+
+    padding-top:14px;
+
+    border-top:1px solid rgba(255,255,255,.1);
+
+}
+
+.trip-admin-button{
+
+    min-height:36px;
+
+    border:1px solid rgba(255,188,120,.36);
+
+    border-radius:10px;
+
+    background:rgba(191,128,45,.12);
+
+    color:#ffe0b0;
+
+    font:inherit;
+
+    font-size:.75rem;
+
+    font-weight:750;
+
+    cursor:pointer;
+
+}
+
+.trip-admin-button.cancel{
+
+    border-color:rgba(255,142,160,.38);
+
+    background:rgba(185,54,82,.14);
+
+    color:#ffc3cd;
+
+}
+
+.trip-admin-button:hover{
+
+    filter:brightness(1.16);
+
+}
+
+.trip-source-note{
+
+    margin:16px 0 0;
+
+    padding-top:14px;
+
+    border-top:1px solid rgba(255,255,255,.1);
+
+    color:#a7d9eb;
+
+    font-size:.78rem;
+
+    line-height:1.45;
+
+}
+
+.trip-source-note strong{
+
+    color:#7de4ff;
 
 }
 .trip-card{
@@ -289,4 +432,78 @@
 
     overflow:visible;
 
+}
+
+@media(max-width:980px){
+    .tracking-header{
+        align-items:flex-start;
+        flex-direction:column;
+        gap:18px;
+    }
+
+    .tracking-stats{
+        width:100%;
+    }
+
+    .tracking-stat{
+        flex:1 1 0;
+        min-width:0;
+    }
+
+    .live-grid{
+        grid-template-columns:1fr;
+    }
+
+    #fleetMap{
+        height:480px;
+    }
+}
+
+@media(max-width:600px){
+    .live-tracking-page{
+        gap:16px;
+    }
+
+    .tracking-header,
+    .live-sidebar,
+    .live-map{
+        padding:18px;
+        border-radius:20px;
+    }
+
+    .tracking-header h1{
+        font-size:clamp(1.9rem,9vw,2.5rem);
+        line-height:1.05;
+    }
+
+    .tracking-stats{
+        display:grid;
+        grid-template-columns:repeat(2,minmax(0,1fr));
+        gap:10px;
+    }
+
+    .tracking-stat{
+        padding:11px 8px;
+        border:1px solid rgba(255,255,255,.09);
+        border-radius:13px;
+        background:rgba(255,255,255,.04);
+    }
+
+    #fleetMap{
+        height:340px;
+        border-radius:14px;
+    }
+
+    .trip-card{
+        padding:15px;
+    }
+
+    .trip-header{
+        align-items:flex-start;
+        gap:8px;
+    }
+
+    .trip-admin-actions{
+        grid-template-columns:1fr;
+    }
 }

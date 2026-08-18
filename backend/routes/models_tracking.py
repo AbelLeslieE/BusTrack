@@ -134,6 +134,19 @@ class LiveTrip(Base):
         nullable=True,
     )
 
+    # An administrator can safely recover from an accidentally started trip.
+    # Keep who ended it and why so the trip history remains explainable.
+    ended_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"),
+        nullable=True,
+        index=True,
+    )
+
+    end_reason: Mapped[str | None] = mapped_column(
+        String(300),
+        nullable=True,
+    )
+
 
 # ==========================================================
 # LIVE LOCATION

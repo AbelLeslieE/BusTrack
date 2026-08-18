@@ -3,7 +3,8 @@
 TODO: Register business-area routers after each fleet workflow is defined.
 """
 
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
+import asyncio
 import os
 from pathlib import Path
 
@@ -15,7 +16,7 @@ from backend.routes.driver import router as driver_router
 import backend.models 
 import backend.routes.models_tracking  # noqa: F401
  # noqa: F401  # Registers SQLAlchemy models before table creation.
-from backend.database import initialize_database
+from backend.database import SessionLocal, initialize_database
 from backend.routes.auth import router as authentication_router
 from database.create_default_admin import create_default_admin
 from backend.routes.buses import router as bus_router
@@ -33,16 +34,49 @@ from backend.routes.settings import router as settings_router
 from backend.routes.active_users import router as active_users_router
 from backend.routes.admin import router as admin_router
 from backend.security import RequestSecurityMiddleware
+from backend.request_audit import RequestAuditMiddleware
 from backend.utils.jwt_handler import validate_security_configuration
+from dotenv import load_dotenv
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = PROJECT_DIR / "frontend"
+load_dotenv(PROJECT_DIR / ".env")
+
+
+async def _airotrack_poll_loop() -> None:
+    """Keep provider pulling independent of browser/admin page visits."""
+
+    try:
+        interval = max(20, int(os.getenv("AIROTRACK_POLL_INTERVAL_SECONDS", "120")))
+    except ValueError:
+        interval = 30
+    while True:
+        database_session = SessionLocal()
+        try:
+            from backend.services.airotrack import refresh_airotrack
+            await asyncio.to_thread(refresh_airotrack, database_session)
+        except Exception as error:  # Keep the tracker available if vendor is temporarily down.
+            print(f"Airotrack polling error: {error}")
+        finally:
+            database_session.close()
+        await asyncio.sleep(interval)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     validate_security_configuration()
     initialize_database()
     create_default_admin()
-    yield
+    poll_task = None
+    if os.getenv("AIROTRACK_API_TOKEN", "").strip():
+        poll_task = asyncio.create_task(_airotrack_poll_loop())
+    try:
+        yield
+    finally:
+        if poll_task is not None:
+            poll_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await poll_task
 
 
 is_production = os.getenv("APP_ENV", "development").strip().casefold() == "production"
@@ -68,6 +102,7 @@ app.add_middleware(
     allow_headers=["Content-Type", "X-GPS-Token"],
     max_age=600,
 )
+app.add_middleware(RequestAuditMiddleware)
 app.include_router(authentication_router)
 app.include_router(bus_router)
 app.include_router(driver_router)

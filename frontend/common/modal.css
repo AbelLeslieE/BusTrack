@@ -2433,3 +2433,65 @@ button.route-view-stop:hover > i{
     }
 
 }
+
+/* Mobile form windows: keep controls reachable above Android/iOS keyboards. */
+@media(max-width:700px){
+    .modal-overlay{
+        align-items:flex-end;
+        padding:
+            12px
+            max(12px,env(safe-area-inset-right))
+            max(12px,env(safe-area-inset-bottom))
+            max(12px,env(safe-area-inset-left));
+    }
+
+    .modal,
+    .modal-sm,
+    .modal-md,
+    .modal-lg,
+    .modal-xl,
+    .modal-full{
+        width:100%;
+        max-width:100%;
+        max-height:min(88dvh,760px);
+        height:auto;
+        border-radius:22px;
+    }
+
+    .modal-header{
+        gap:14px;
+        padding:22px 20px 16px;
+    }
+
+    .modal-header h2{
+        font-size:clamp(1.35rem,6vw,1.8rem);
+    }
+
+    .modal-body{
+        padding:18px 20px;
+        -webkit-overflow-scrolling:touch;
+    }
+
+    .modal-footer{
+        align-items:stretch;
+        flex-direction:column-reverse;
+        gap:9px;
+        padding:16px 20px max(18px,env(safe-area-inset-bottom));
+    }
+
+    .modal-footer button{
+        width:100%;
+        min-height:46px;
+    }
+
+    .modal-actions{
+        align-items:stretch;
+        flex-direction:column-reverse;
+        gap:9px;
+    }
+
+    .modal-btn{
+        width:100%;
+        min-width:0;
+    }
+}

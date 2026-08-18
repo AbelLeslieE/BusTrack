@@ -42,37 +42,15 @@ export function render() {
 
                 <p>
 
-                    Monitor every active bus in real time.
+                    Buses appear here after their configured GPS device reports a position.
 
                 </p>
 
-            </div>
+                <p class="tracking-header-note">
 
-            <div class="tracking-stats">
+                    Select a bus card to focus its real-time map pin. Only reported vehicle data is shown—there are no demo buses or placeholder status cards.
 
-                <div class="tracking-stat">
-
-                    <span>Active Buses</span>
-
-                    <strong id="activeBusCount">
-
-                        0
-
-                    </strong>
-
-                </div>
-
-                <div class="tracking-stat">
-
-                    <span>Online Drivers</span>
-
-                    <strong id="onlineDriverCount">
-
-                        0
-
-                    </strong>
-
-                </div>
+                </p>
 
             </div>
 
@@ -90,9 +68,15 @@ export function render() {
 
                 <h3>
 
-                    Active Trips
+                    Tracked buses
 
                 </h3>
+
+                <p class="live-sidebar-note">
+
+                    Each card shows the latest GPS status supplied by the tracker, including ignition state and when that reading was recorded.
+
+                </p>
 
                 <div
                     id="tripList"
@@ -100,7 +84,7 @@ export function render() {
 
                     <div class="empty-state">
 
-                        No active trips.
+                        Loading tracked buses…
 
                     </div>
 

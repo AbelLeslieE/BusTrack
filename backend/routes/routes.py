@@ -108,16 +108,17 @@ def create_route(
     existing = (
         db.query(Route)
         .filter(
-            (Route.route_code == route.route_code)
-            | (Route.route_name == route.route_name)
+            (func.lower(Route.route_code) == route.route_code.strip().lower())
+            | (func.lower(Route.route_name) == route.route_name.strip().lower())
         )
         .first()
     )
 
     if existing:
+        conflict = "code" if existing.route_code.casefold() == route.route_code.strip().casefold() else "name"
         raise HTTPException(
-            status_code=400,
-            detail="Route already exists.",
+            status_code=409,
+            detail=f"A route with this {conflict} already exists ({existing.route_code} — {existing.route_name}). Edit that route or choose a different {conflict}.",
         )
 
     new_route = Route(**route.model_dump())
@@ -212,6 +213,18 @@ def update_route(
         raise HTTPException(
             status_code=404,
             detail="Route not found.",
+        )
+
+    duplicate = db.query(Route).filter(
+        Route.id != route_id,
+        (func.lower(Route.route_code) == updated.route_code.strip().lower())
+        | (func.lower(Route.route_name) == updated.route_name.strip().lower()),
+    ).first()
+    if duplicate:
+        conflict = "code" if duplicate.route_code.casefold() == updated.route_code.strip().casefold() else "name"
+        raise HTTPException(
+            status_code=409,
+            detail=f"A route with this {conflict} already exists ({duplicate.route_code} — {duplicate.route_name}).",
         )
 
     # Assignments have their own workflow. Editing route details must never

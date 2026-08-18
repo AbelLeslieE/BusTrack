@@ -180,6 +180,59 @@ class UserSession(Base):
 
     user = relationship("User", back_populates="sessions")
 
+
+class AuditEvent(Base):
+    """Immutable, safe-to-display record of security and integration actions.
+
+    The audit stream deliberately stores a snapshot of the actor's username and
+    role.  This keeps historic entries meaningful even if an account is later
+    renamed, disabled, or removed.  Secrets (passwords, JWTs and GPS-token
+    plaintext values) must never be included in ``details_json``.
+    """
+
+    __tablename__ = "audit_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    category: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    action: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    actor_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True
+    )
+    actor_username: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    actor_role: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    subject_type: Mapped[str | None] = mapped_column(String(48), nullable=True)
+    subject_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    subject_label: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    client_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    details_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True, nullable=False
+    )
+
+
+class APIRequestLog(Base):
+    """Safe operational record of an API call, without headers or body data."""
+
+    __tablename__ = "api_request_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    method: Mapped[str] = mapped_column(String(10), index=True, nullable=False)
+    path: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
+    status_code: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    actor_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True
+    )
+    actor_username: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    actor_role: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    integration_token_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
+    integration_token_label: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    client_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True, nullable=False
+    )
+
 class Bus(Base):
     """
     Stores information about every school bus.

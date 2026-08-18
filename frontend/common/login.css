@@ -1245,3 +1245,40 @@ body::before{
     }
 
 }
+
+@media (max-width:480px){
+
+    body{
+        background-attachment:scroll;
+    }
+
+    .login-container{
+        min-height:100dvh;
+        padding:
+            max(16px,env(safe-area-inset-top))
+            16px
+            max(16px,env(safe-area-inset-bottom));
+    }
+
+    .login-card{
+        padding:24px 20px;
+        border-radius:22px;
+    }
+
+    .login-logo{
+        margin-bottom:24px;
+    }
+
+    .login-logo h1{
+        font-size:2rem;
+    }
+
+    .form-group input{
+        min-height:48px;
+        font-size:16px;
+    }
+
+    .login-button{
+        min-height:50px;
+    }
+}

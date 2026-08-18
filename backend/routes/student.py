@@ -464,7 +464,7 @@ def get_student_live_tracking(
     )
     provider_is_fresh = False
     if provider_state is not None:
-        received_at = provider_state.received_at
+        received_at = provider_state.fix_time or provider_state.received_at
         if received_at.tzinfo is None:
             received_at = received_at.replace(tzinfo=timezone.utc)
         expected_interval = 20 if provider_state.ignition is True else 120
@@ -491,7 +491,7 @@ def get_student_live_tracking(
     # and the original payload) remain private to management/technicians.
     location_timestamp = (
         trip.last_location_update if trip is not None
-        else provider_state.received_at if provider_is_fresh else None
+        else (provider_state.fix_time or provider_state.received_at) if provider_is_fresh else None
     )
     location_age_seconds = None
     if location_timestamp is not None:
@@ -827,10 +827,10 @@ def get_student_live_tracking(
                 trip.current_accuracy if trip is not None else provider_state.accuracy,
 
             "last_location_update":
-                trip.last_location_update if trip is not None else provider_state.received_at,
+                trip.last_location_update if trip is not None else (provider_state.fix_time or provider_state.received_at),
 
             "started_at":
-                trip.started_at if trip is not None else provider_state.received_at,
+                trip.started_at if trip is not None else (provider_state.fix_time or provider_state.received_at),
 
             "location_source":
                 tracking_source,

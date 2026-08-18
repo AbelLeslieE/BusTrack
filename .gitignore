@@ -23,6 +23,7 @@ ENV/
 # ==========================================================
 .env
 .env.*
+/.certs/
 
 # Keep the example file
 !.env.example

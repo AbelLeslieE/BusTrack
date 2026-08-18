@@ -5,7 +5,7 @@ GPS Tracking API
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -17,6 +17,7 @@ from backend.routes.models_tracking import (
 
 from backend.schemas_tracking import (
     TripStopRequest,
+    TripAdminStopRequest,
     LocationUpdateRequest,
     LiveTripResponse,
 )
@@ -27,6 +28,7 @@ from backend.services.tracking_engine import (
     is_inside_stop_radius,
 )
 from backend.security import require_driver, require_management
+from backend.audit import record_audit_event
 from backend.routes.gps_provider import vehicle_gps_is_authoritative
 from backend.routes.models_tracking import BusGPSState
 
@@ -1028,6 +1030,52 @@ def stop_trip(
     }
 
 
+@router.post("/admin/trips/{trip_id}/end")
+def end_trip_as_admin(
+    trip_id: int,
+    payload: TripAdminStopRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_management),
+):
+    """Safely stop or cancel a stuck active trip from the Admin portal.
+
+    Ending a trip removes it from live tracking. Historical locations stay
+    available, and the driver can start a fresh trip immediately afterwards.
+    """
+
+    trip = db.query(LiveTrip).filter(
+        LiveTrip.id == trip_id,
+        LiveTrip.ended_at.is_(None),
+    ).first()
+    if trip is None:
+        raise HTTPException(status_code=404, detail="Active trip not found or already ended.")
+
+    trip.status = payload.action
+    trip.ended_at = datetime.now(timezone.utc)
+    trip.ended_by_user_id = current_user.id
+    trip.end_reason = payload.reason.strip() if payload.reason and payload.reason.strip() else None
+    bus = db.get(Bus, trip.bus_id)
+    record_audit_event(
+        db,
+        category="operations",
+        action="trip_cancelled_by_admin" if payload.action == "Cancelled" else "trip_stopped_by_admin",
+        actor=current_user,
+        subject_type="live_trip",
+        subject_id=trip.id,
+        subject_label=bus.bus_number if bus else f"Trip #{trip.id}",
+        details={"driver_id": trip.driver_id, "route_id": trip.route_id, "reason": trip.end_reason},
+        request=request,
+    )
+    db.commit()
+    return {
+        "message": f"Trip {payload.action.casefold()} by administrator.",
+        "trip_id": trip.id,
+        "status": trip.status,
+        "ended_at": trip.ended_at,
+    }
+
+
 # ==========================================================
 # GET ALL ACTIVE LIVE TRIPS
 # ==========================================================
@@ -1234,6 +1282,8 @@ def get_live_tracking(
 
             "trip_id": trip.id,
 
+            "is_active_trip": True,
+
             "status": trip.status,
 
             "started_at": trip.started_at,
@@ -1253,6 +1303,8 @@ def get_live_tracking(
             "bus_id": trip.bus_id,
 
             "bus_number": bus_number,
+
+            "registration_number": bus.registration_number if bus else None,
 
             # ------------------------------------------------
             # Route
@@ -1314,20 +1366,28 @@ def get_live_tracking(
         if bus is None:
             continue
         route = db.query(Route).filter(Route.bus_id == bus.id).first()
-        driver = db.query(Driver).filter(Driver.id == route.driver_id).first() if route and route.driver_id else None
-        received_at = provider_state.received_at
-        if received_at.tzinfo is None:
-            received_at = received_at.replace(tzinfo=timezone.utc)
+        assigned_driver_id = route.driver_id if route and route.driver_id else bus.driver_id
+        driver = db.get(Driver, assigned_driver_id) if assigned_driver_id else None
+        position_time = provider_state.fix_time or provider_state.received_at
+        if position_time.tzinfo is None:
+            position_time = position_time.replace(tzinfo=timezone.utc)
         expected_interval = 20 if provider_state.ignition is True else 120
-        age_seconds = max(0, int((datetime.now(timezone.utc) - received_at).total_seconds()))
+        age_seconds = max(0, int((datetime.now(timezone.utc) - position_time).total_seconds()))
+        # Keep a real, last-known provider position visible even when it has
+        # become stale.  It is explicitly labelled through ``is_fresh`` below,
+        # so administrators never mistake it for a current live position, but
+        # a parked/offline bus does not disappear from the fleet map merely
+        # because its tracker has not emitted another heartbeat yet.
         response.append({
             "trip_id": None,
+            "is_active_trip": False,
             "status": provider_state.status or ("Running" if provider_state.ignition else "Parked"),
             "started_at": None,
             "driver_id": driver.id if driver else None,
             "driver_name": driver.user.full_name if driver and driver.user else None,
             "bus_id": bus.id,
             "bus_number": bus.bus_number,
+            "registration_number": bus.registration_number,
             "route_id": route.id if route else None,
             "route_name": route.route_name if route else None,
             "route_code": route.route_code if route else None,
@@ -1335,7 +1395,10 @@ def get_live_tracking(
             "longitude": provider_state.longitude,
             "speed": provider_state.speed_kmh,
             "accuracy": provider_state.accuracy,
-            "last_location_update": provider_state.received_at,
+            # ``position_time`` is explicitly UTC-aware above. SQLite returns
+            # datetimes without tzinfo, so returning the raw column would make
+            # browsers render a UTC value as a local time.
+            "last_location_update": position_time,
             "location_source": "vehicle_gps",
             "provider_gps": {
                 "external_device_id": provider_state.external_device_id,

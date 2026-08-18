@@ -143,10 +143,18 @@ def initialize_database() -> None:
     # these two columns are added for existing installations.
     if "live_trips" in inspector.get_table_names():
         trip_columns = {column["name"] for column in inspector.get_columns("live_trips")}
-        if "current_location_source" not in trip_columns:
-            with engine.begin() as connection:
+        with engine.begin() as connection:
+            if "current_location_source" not in trip_columns:
                 connection.execute(text(
                     "ALTER TABLE live_trips ADD COLUMN current_location_source VARCHAR(32)"
+                ))
+            if "ended_by_user_id" not in trip_columns:
+                connection.execute(text(
+                    "ALTER TABLE live_trips ADD COLUMN ended_by_user_id INTEGER NULL"
+                ))
+            if "end_reason" not in trip_columns:
+                connection.execute(text(
+                    "ALTER TABLE live_trips ADD COLUMN end_reason VARCHAR(300) NULL"
                 ))
 
     if "live_locations" in inspector.get_table_names():

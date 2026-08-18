@@ -1,6 +1,9 @@
 /** Browser session handling and login-form behavior. */
 
 import { canonicalRole, ROLE_ADMIN, ROLE_DRIVER, ROLE_TECHNICIAN, ROLE_USER } from "/static/common/roles.js";
+import { installHardRefreshShortcut } from "/static/common/cacheRefresh.js";
+
+installHardRefreshShortcut();
 
 const TOKEN_KEY = "bus_tracker_access_token";
 const PROFILE_KEY = "bus_tracker_profile";

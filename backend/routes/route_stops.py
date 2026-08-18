@@ -223,6 +223,48 @@ def get_route_stops(
         })
 
     return data
+
+
+@router.put("/route/{route_id}/replace")
+def replace_route_stops(
+    route_id: int,
+    stop_data: list[RouteStopCreate],
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
+):
+    """Atomically replace a route's ordered list of master stops."""
+
+    route = get_route_or_404(db, route_id)
+    stop_ids = [item.stop_id for item in stop_data]
+    if len(stop_ids) != len(set(stop_ids)):
+        raise HTTPException(status_code=422, detail="A stop can appear only once in a route.")
+
+    stops = db.query(Stop).filter(Stop.id.in_(stop_ids)).all() if stop_ids else []
+    found_ids = {stop.id for stop in stops}
+    missing_ids = sorted(set(stop_ids) - found_ids)
+    if missing_ids:
+        raise HTTPException(status_code=404, detail=f"Stop not found: {missing_ids[0]}.")
+
+    try:
+        db.query(RouteStop).filter(RouteStop.route_id == route_id).delete(synchronize_session=False)
+        db.flush()
+        for sequence, item in enumerate(stop_data, start=1):
+            db.add(RouteStop(
+                route_id=route_id,
+                stop_id=item.stop_id,
+                sequence=sequence,
+                scheduled_time=item.scheduled_time,
+                fare=item.fare,
+                distance_from_previous=item.distance_from_previous,
+                estimated_minutes=item.estimated_minutes,
+            ))
+        route.total_stops = len(stop_data)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    return {"route_id": route_id, "total_stops": len(stop_data)}
 # ==========================================================
 # ADD STOP TO ROUTE
 # ==========================================================

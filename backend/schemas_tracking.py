@@ -5,7 +5,9 @@ Tracking Schemas
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # ==========================================================
@@ -45,6 +47,13 @@ class LocationUpdateRequest(BaseModel):
 class TripStopRequest(BaseModel):
 
     trip_id: int
+
+
+class TripAdminStopRequest(BaseModel):
+    """Administrator recovery action for an active driver trip."""
+
+    action: Literal["Stopped", "Cancelled"] = "Stopped"
+    reason: str | None = Field(default=None, max_length=300)
 
 
 # ==========================================================

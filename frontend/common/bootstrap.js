@@ -1,6 +1,9 @@
 import { requireAuthenticatedSession } from "/static/common/auth.js";
 import { loadModule } from "/static/common/router.js";
 import { canonicalRole, ROLE_ADMIN, ROLE_DRIVER, ROLE_TECHNICIAN, ROLE_USER } from "/static/common/roles.js";
+import { installHardRefreshShortcut } from "/static/common/cacheRefresh.js";
+
+installHardRefreshShortcut();
 
 const profile = await requireAuthenticatedSession();
 

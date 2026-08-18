@@ -150,3 +150,35 @@ export async function refreshRouteStops(routeId) {
     return await getRouteStops(routeId);
 
 }
+
+/* ==========================================================
+   REPLACE ALL ROUTE STOPS ATOMICALLY
+========================================================== */
+
+export async function replaceRouteStops(routeId, stops) {
+
+    const response = await fetch(`${BASE_URL}/route/${routeId}/replace`, {
+
+        method: "PUT",
+
+        headers: {
+
+            "Content-Type": "application/json"
+
+        },
+
+        body: JSON.stringify(stops)
+
+    });
+
+    if (!response.ok) {
+
+        const error = await response.json().catch(() => ({}));
+
+        throw new Error(error.detail || "Failed to save route stops.");
+
+    }
+
+    return await response.json();
+
+}

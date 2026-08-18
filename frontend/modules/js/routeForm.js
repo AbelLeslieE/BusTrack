@@ -549,25 +549,6 @@ async function generateRoadRoute(){
             Number(stop.longitude);
 
 
-        console.log(
-
-            `BusTrack route stop ${index + 1}:`,
-
-            {
-
-                id:stop.id,
-
-                name:stop.stop_name,
-
-                latitude,
-
-                longitude
-
-            }
-
-        );
-
-
         if(
             !Number.isFinite(latitude) ||
             !Number.isFinite(longitude) ||
@@ -630,12 +611,6 @@ async function generateRoadRoute(){
         "?overview=full&geometries=geojson&steps=false";
 
 
-    console.log(
-        "BusTrack OSRM request:",
-        url
-    );
-
-
     try{
 
         updateRouteMapStatus(
@@ -689,12 +664,6 @@ async function generateRoadRoute(){
 
         const data =
             await response.json();
-
-
-        console.log(
-            "BusTrack OSRM response:",
-            data
-        );
 
 
         /* ======================================================

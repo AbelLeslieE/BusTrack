@@ -9,7 +9,6 @@
    • Success Dialog
    • Automatic Refresh
 ========================================================================== */
-console.log("ROUTE IMPORT JS LOADED");
 import { Modal } from "/static/common/modal.js";
 import { escapeHtml } from "/static/common/security.js";
 
@@ -71,8 +70,6 @@ export function showRouteImportModal(onSuccess = null){
         content : renderBody(),
 
         onOpen(){
-
-            console.log("========== ON OPEN ==========");
 
             bindEvents();
 
@@ -185,19 +182,13 @@ function renderBody(){
 
 function bindEvents(){
 
-    console.log("========== BIND EVENTS ==========");
-
     const modal = document.querySelector(".modal");
-
-    console.log("Modal :", modal);
 
     const fileInput = modal.querySelector("#route-import-file");
 
-    console.log("Input :", fileInput);
 
     const chooseButton = modal.querySelector("#choose-file-btn");
 
-    console.log("Button :", chooseButton);
 
     if(!chooseButton){
 
@@ -217,15 +208,11 @@ function bindEvents(){
 
     chooseButton.onclick = () => {
 
-        console.log("Choose button pressed");
-
         fileInput.click();
 
     };
 
     fileInput.onchange = previewExcel;
-
-    console.log("Events attached");
 
 }
 /* ==========================================================================
@@ -581,11 +568,17 @@ async function importExcel(){
 
         }
 
+        const unmatchedBuses = Array.isArray(result.unmatched_buses)
+            ? result.unmatched_buses
+            : [];
+
         Modal.success({
 
             title:"Import Successful",
 
-            subtitle:"Routes have been imported successfully.",
+            subtitle: unmatchedBuses.length
+                ? `Routes imported. Bus assignment was skipped for: ${unmatchedBuses.join(", ")}.`
+                : "Routes have been imported successfully.",
 
             content:`
 

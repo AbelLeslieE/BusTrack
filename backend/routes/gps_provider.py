@@ -15,11 +15,13 @@ import re
 import secrets
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.models import Bus
+from backend.audit import record_audit_event
+from backend.models import APIRequestLog, AuditEvent, Bus, User
 from backend.routes.models_tracking import (
     BusGPSState,
     GPSDeviceMapping,
@@ -37,7 +39,7 @@ from backend.schemas_gps_provider import (
     GPSTranslationConfigUpdate,
 )
 from backend.security import require_driver, require_gps_technician
-from backend.models import Driver, User
+from backend.models import Driver
 
 
 router = APIRouter(prefix="/api/integrations/gps", tags=["GPS Provider Integration"])
@@ -224,10 +226,10 @@ def _find_device_mapping(db: Session, external_ids: list[str]) -> GPSDeviceMappi
 def _serialize_state(state: BusGPSState, bus: Bus, *, include_raw: bool = False) -> dict[str, Any]:
     now = _utc_now()
     expected_interval_seconds = 20 if state.ignition is True else 120
-    received_at = state.received_at
-    if received_at.tzinfo is None:
-        received_at = received_at.replace(tzinfo=timezone.utc)
-    age_seconds = max(0, int((now - received_at).total_seconds()))
+    position_time = state.fix_time or state.received_at
+    if position_time.tzinfo is None:
+        position_time = position_time.replace(tzinfo=timezone.utc)
+    age_seconds = max(0, int((now - position_time).total_seconds()))
     fresh = age_seconds <= expected_interval_seconds * 3
     result = {
         "bus_id": bus.id,
@@ -260,14 +262,39 @@ def _serialize_state(state: BusGPSState, bus: Bus, *, include_raw: bool = False)
     return result
 
 
+def _serialize_audit_event(event: AuditEvent) -> dict[str, Any]:
+    """Return readable audit metadata while keeping credential values secret."""
+
+    try:
+        details = json.loads(event.details_json) if event.details_json else None
+    except (TypeError, json.JSONDecodeError):
+        details = None
+    return {
+        "id": event.id,
+        "category": event.category,
+        "action": event.action,
+        "actor_user_id": event.actor_user_id,
+        "actor_username": event.actor_username,
+        "actor_role": event.actor_role,
+        "subject_type": event.subject_type,
+        "subject_id": event.subject_id,
+        "subject_label": event.subject_label,
+        "client_ip": event.client_ip,
+        "user_agent": event.user_agent,
+        "details": details,
+        "created_at": event.created_at,
+    }
+
+
 def vehicle_gps_is_authoritative(state: BusGPSState | None, now: datetime | None = None) -> bool:
     """Vehicle GPS blocks driver-phone updates only while on and recently heard."""
 
     if state is None or state.ignition is not True or state.valid is False:
         return False
     current = now or _utc_now()
-    received_at = state.received_at.replace(tzinfo=timezone.utc) if state.received_at.tzinfo is None else state.received_at
-    return received_at >= current - timedelta(seconds=60)
+    position_time = state.fix_time or state.received_at
+    position_time = position_time.replace(tzinfo=timezone.utc) if position_time.tzinfo is None else position_time
+    return position_time >= current - timedelta(seconds=60)
 
 
 def _update_active_trip_from_vehicle(db: Session, position: dict[str, Any], bus_id: int, received_at: datetime) -> int | None:
@@ -296,7 +323,7 @@ def _update_active_trip_from_vehicle(db: Session, position: dict[str, Any], bus_
 
 
 @router.post("/tokens", status_code=status.HTTP_201_CREATED)
-def create_ingest_token(payload: GPSIngestTokenCreate, db: Session = Depends(get_db), _technician: User = Depends(require_gps_technician)):
+def create_ingest_token(payload: GPSIngestTokenCreate, request: Request, db: Session = Depends(get_db), technician: User = Depends(require_gps_technician)):
     if payload.bus_id is not None and db.get(Bus, payload.bus_id) is None:
         raise HTTPException(status_code=404, detail="Bus not found.")
     plaintext_token = secrets.token_urlsafe(32)
@@ -305,6 +332,12 @@ def create_ingest_token(payload: GPSIngestTokenCreate, db: Session = Depends(get
         token_hash=hashlib.sha256(plaintext_token.encode("utf-8")).hexdigest(),
     )
     db.add(credential)
+    db.flush()
+    record_audit_event(
+        db, category="gps", action="token_created", actor=technician,
+        subject_type="token", subject_id=credential.id, subject_label=credential.label,
+        details={"scope": f"bus:{credential.bus_id}" if credential.bus_id else "fleet"}, request=request,
+    )
     db.commit()
     db.refresh(credential)
     return {
@@ -316,24 +349,149 @@ def create_ingest_token(payload: GPSIngestTokenCreate, db: Session = Depends(get
 
 
 @router.get("/tokens")
-def list_ingest_tokens(db: Session = Depends(get_db), _technician: User = Depends(require_gps_technician)):
+def list_ingest_tokens(
+    search: str | None = Query(default=None, max_length=100),
+    state: str | None = Query(default=None, pattern="^(active|inactive)$"),
+    db: Session = Depends(get_db),
+    _technician: User = Depends(require_gps_technician),
+):
+    query = db.query(GPSIngestToken)
+    if search and search.strip():
+        query = query.filter(GPSIngestToken.label.ilike(f"%{search.strip()}%"))
+    if state == "active":
+        query = query.filter(GPSIngestToken.is_active.is_(True))
+    elif state == "inactive":
+        query = query.filter(GPSIngestToken.is_active.is_(False))
     return [{"id": item.id, "label": item.label, "bus_id": item.bus_id, "is_active": item.is_active,
              "created_at": item.created_at, "last_used_at": item.last_used_at}
-            for item in db.query(GPSIngestToken).order_by(GPSIngestToken.id.desc()).all()]
+            for item in query.order_by(GPSIngestToken.id.desc()).all()]
+
+
+@router.get("/tokens/{token_id}/history")
+def get_ingest_token_history(token_id: int, db: Session = Depends(get_db), _technician: User = Depends(require_gps_technician)):
+    """Return safe metadata and lifecycle history for one live token.
+
+    The plaintext token is intentionally absent, including from this endpoint.
+    """
+
+    credential = db.get(GPSIngestToken, token_id)
+    if credential is None:
+        raise HTTPException(status_code=404, detail="GPS integration token not found.")
+    events = db.query(AuditEvent).filter(
+        AuditEvent.subject_type == "token", AuditEvent.subject_id == token_id
+    ).order_by(AuditEvent.created_at.desc()).all()
+    return {
+        "token": {
+            "id": credential.id, "label": credential.label, "bus_id": credential.bus_id,
+            "is_active": credential.is_active, "created_at": credential.created_at,
+            "last_used_at": credential.last_used_at,
+            "value_available": False,
+        },
+        "events": [_serialize_audit_event(event) for event in events],
+    }
+
+
+@router.get("/audit")
+def list_integration_audit(
+    category: str | None = Query(default=None, pattern="^(gps|portal|operations)$"),
+    limit: int = Query(default=100, ge=1, le=250),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    _technician: User = Depends(require_gps_technician),
+):
+    """Paginated technician audit log for portal, token, and trip recovery activity."""
+
+    query = db.query(AuditEvent)
+    if category:
+        query = query.filter(AuditEvent.category == category)
+    total = query.count()
+    events = query.order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc()).offset(offset).limit(limit).all()
+    return {
+        "events": [_serialize_audit_event(event) for event in events],
+        "offset": offset,
+        "limit": limit,
+        "total": total,
+        "has_more": offset + len(events) < total,
+    }
+
+
+def _serialize_request_log(item: APIRequestLog) -> dict[str, Any]:
+    return {
+        "id": item.id,
+        "method": item.method,
+        "path": item.path,
+        "status_code": item.status_code,
+        "duration_ms": item.duration_ms,
+        "actor_user_id": item.actor_user_id,
+        "actor_username": item.actor_username,
+        "actor_role": item.actor_role,
+        "integration_token_id": item.integration_token_id,
+        "integration_token_label": item.integration_token_label,
+        "client_ip": item.client_ip,
+        "created_at": item.created_at,
+    }
+
+
+@router.get("/requests")
+def list_api_request_logs(
+    search: str | None = Query(default=None, max_length=100),
+    method: str | None = Query(default=None, pattern="^(GET|POST|PUT|PATCH|DELETE)$"),
+    status_class: str | None = Query(default=None, pattern="^[245]xx$"),
+    token_id: int | None = Query(default=None, ge=1),
+    limit: int = Query(default=100, ge=1, le=250),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    _technician: User = Depends(require_gps_technician),
+):
+    """Search the safe operational request queue; headers and bodies are never stored."""
+
+    query = db.query(APIRequestLog)
+    if search and search.strip():
+        pattern = f"%{search.strip()}%"
+        query = query.filter(or_(
+            APIRequestLog.path.ilike(pattern),
+            APIRequestLog.method.ilike(pattern),
+            APIRequestLog.actor_username.ilike(pattern),
+            APIRequestLog.integration_token_label.ilike(pattern),
+        ))
+    if method:
+        query = query.filter(APIRequestLog.method == method)
+    if status_class:
+        first_digit = int(status_class[0])
+        query = query.filter(
+            APIRequestLog.status_code >= first_digit * 100,
+            APIRequestLog.status_code < (first_digit + 1) * 100,
+        )
+    if token_id is not None:
+        query = query.filter(APIRequestLog.integration_token_id == token_id)
+    total = query.count()
+    entries = query.order_by(APIRequestLog.created_at.desc(), APIRequestLog.id.desc()).offset(offset).limit(limit).all()
+    return {
+        "requests": [_serialize_request_log(item) for item in entries],
+        "offset": offset,
+        "limit": limit,
+        "total": total,
+        "has_more": offset + len(entries) < total,
+    }
 
 
 @router.patch("/tokens/{token_id}")
-def set_ingest_token_status(token_id: int, payload: GPSIngestTokenUpdate, db: Session = Depends(get_db), _technician: User = Depends(require_gps_technician)):
+def set_ingest_token_status(token_id: int, payload: GPSIngestTokenUpdate, request: Request, db: Session = Depends(get_db), technician: User = Depends(require_gps_technician)):
     credential = db.get(GPSIngestToken, token_id)
     if credential is None:
         raise HTTPException(status_code=404, detail="GPS integration token not found.")
     credential.is_active = payload.is_active
+    record_audit_event(
+        db, category="gps", action="token_enabled" if credential.is_active else "token_disabled", actor=technician,
+        subject_type="token", subject_id=credential.id, subject_label=credential.label,
+        details={"scope": f"bus:{credential.bus_id}" if credential.bus_id else "fleet"}, request=request,
+    )
     db.commit()
     return {"id": credential.id, "is_active": credential.is_active}
 
 
 @router.post("/tokens/{token_id}/rotate")
-def rotate_ingest_token(token_id: int, db: Session = Depends(get_db), _technician: User = Depends(require_gps_technician)):
+def rotate_ingest_token(token_id: int, request: Request, db: Session = Depends(get_db), technician: User = Depends(require_gps_technician)):
     """Replace a compromised credential and return the replacement once to the authorised caller."""
 
     credential = db.get(GPSIngestToken, token_id)
@@ -347,6 +505,11 @@ def rotate_ingest_token(token_id: int, db: Session = Depends(get_db), _technicia
     credential.token_hash = hashlib.sha256(replacement_token.encode("utf-8")).hexdigest()
     credential.is_active = True
     credential.last_used_at = None
+    record_audit_event(
+        db, category="gps", action="token_rotated", actor=technician,
+        subject_type="token", subject_id=credential.id, subject_label=credential.label,
+        details={"scope": f"bus:{credential.bus_id}" if credential.bus_id else "fleet", "last_used_reset": True}, request=request,
+    )
     db.commit()
     return {
         "id": credential.id,
@@ -360,19 +523,24 @@ def rotate_ingest_token(token_id: int, db: Session = Depends(get_db), _technicia
 
 
 @router.delete("/tokens/{token_id}")
-def delete_ingest_token(token_id: int, db: Session = Depends(get_db), _technician: User = Depends(require_gps_technician)):
+def delete_ingest_token(token_id: int, request: Request, db: Session = Depends(get_db), technician: User = Depends(require_gps_technician)):
     """Permanently remove an unused or compromised provider credential."""
 
     credential = db.get(GPSIngestToken, token_id)
     if credential is None:
         raise HTTPException(status_code=404, detail="GPS integration token not found.")
+    record_audit_event(
+        db, category="gps", action="token_deleted", actor=technician,
+        subject_type="token", subject_id=credential.id, subject_label=credential.label,
+        details={"scope": f"bus:{credential.bus_id}" if credential.bus_id else "fleet"}, request=request,
+    )
     db.delete(credential)
     db.commit()
     return {"message": "GPS integration token deleted. It can no longer submit positions."}
 
 
 @router.post("/devices", status_code=status.HTTP_201_CREATED)
-def create_device_mapping(payload: GPSDeviceMappingCreate, db: Session = Depends(get_db), _technician: User = Depends(require_gps_technician)):
+def create_device_mapping(payload: GPSDeviceMappingCreate, request: Request, db: Session = Depends(get_db), technician: User = Depends(require_gps_technician)):
     if db.get(Bus, payload.bus_id) is None:
         raise HTTPException(status_code=404, detail="Bus not found.")
     external_device_id = payload.external_device_id.strip()
@@ -380,6 +548,12 @@ def create_device_mapping(payload: GPSDeviceMappingCreate, db: Session = Depends
         raise HTTPException(status_code=409, detail="That external device ID is already mapped.")
     mapping = GPSDeviceMapping(bus_id=payload.bus_id, external_device_id=external_device_id, display_name=payload.display_name)
     db.add(mapping)
+    db.flush()
+    record_audit_event(
+        db, category="gps", action="device_mapping_created", actor=technician,
+        subject_type="device_mapping", subject_id=mapping.id, subject_label=external_device_id,
+        details={"bus_id": mapping.bus_id, "display_name": mapping.display_name}, request=request,
+    )
     db.commit()
     db.refresh(mapping)
     return {"id": mapping.id, "bus_id": mapping.bus_id, "external_device_id": mapping.external_device_id,
@@ -395,7 +569,7 @@ def list_device_mappings(db: Session = Depends(get_db), _technician: User = Depe
 
 
 @router.put("/devices/{mapping_id}")
-def update_device_mapping(mapping_id: int, payload: GPSDeviceMappingUpdate, db: Session = Depends(get_db), _technician: User = Depends(require_gps_technician)):
+def update_device_mapping(mapping_id: int, payload: GPSDeviceMappingUpdate, request: Request, db: Session = Depends(get_db), technician: User = Depends(require_gps_technician)):
     mapping = db.get(GPSDeviceMapping, mapping_id)
     if mapping is None:
         raise HTTPException(status_code=404, detail="GPS device mapping not found.")
@@ -403,7 +577,14 @@ def update_device_mapping(mapping_id: int, payload: GPSDeviceMappingUpdate, db: 
     duplicate = db.query(GPSDeviceMapping).filter(GPSDeviceMapping.external_device_id == external_device_id, GPSDeviceMapping.id != mapping_id).first()
     if duplicate:
         raise HTTPException(status_code=409, detail="That external device ID is already mapped.")
+    previous_external_device_id = mapping.external_device_id
     mapping.external_device_id, mapping.display_name, mapping.is_active = external_device_id, payload.display_name, payload.is_active
+    record_audit_event(
+        db, category="gps", action="device_mapping_updated", actor=technician,
+        subject_type="device_mapping", subject_id=mapping.id, subject_label=external_device_id,
+        details={"bus_id": mapping.bus_id, "previous_external_device_id": previous_external_device_id,
+                 "is_active": mapping.is_active, "display_name": mapping.display_name}, request=request,
+    )
     db.commit()
     return {"id": mapping.id, "bus_id": mapping.bus_id, "external_device_id": mapping.external_device_id,
             "display_name": mapping.display_name, "is_active": mapping.is_active}
@@ -430,7 +611,7 @@ def get_translation_config(db: Session = Depends(get_db), _technician: User = De
 
 
 @router.put("/translator")
-def update_translation_config(payload: GPSTranslationConfigUpdate, db: Session = Depends(get_db), technician: User = Depends(require_gps_technician)):
+def update_translation_config(payload: GPSTranslationConfigUpdate, request: Request, db: Session = Depends(get_db), technician: User = Depends(require_gps_technician)):
     field_paths = _validate_field_paths(payload.field_paths)
     config = db.get(GPSProviderTranslationConfig, 1)
     if config is None:
@@ -439,6 +620,11 @@ def update_translation_config(payload: GPSTranslationConfigUpdate, db: Session =
     else:
         config.field_paths_json = json.dumps(field_paths)
         config.updated_by_user_id = technician.id
+    record_audit_event(
+        db, category="gps", action="translation_updated", actor=technician,
+        subject_type="translation_config", subject_id=1, subject_label="GPS provider field paths",
+        details={"field_paths": field_paths}, request=request,
+    )
     db.commit()
     db.refresh(config)
     return {"field_paths": field_paths, "updated_at": config.updated_at, "updated_by_user_id": config.updated_by_user_id}
@@ -453,10 +639,15 @@ def ingest_positions(
 ):
     """Vendor webhook. POST JSON with `X-GPS-Token` is the recommended contract."""
 
-    del request  # FastAPI keeps Request available for provider logging middleware.
     # This custom token is checked only here. It cannot authenticate a user,
     # read tracking data, alter settings, or access any other API route.
     credential = _authenticate_vendor_token(db, _vendor_token_from_header(x_gps_token))
+    # Safe identity metadata for the request queue. The plaintext token is
+    # intentionally not copied into the database, log, or response.
+    request.state.audit_actor_username = f"GPS token: {credential.label}"
+    request.state.audit_actor_role = "GPS service"
+    request.state.audit_integration_token_id = credential.id
+    request.state.audit_integration_token_label = credential.label
     field_paths = _translation_field_paths(db)
     accepted: list[dict[str, Any]] = []
     ignored: list[dict[str, Any]] = []
@@ -523,6 +714,21 @@ def ingest_positions(
                          "applied_to_current_state": should_apply, "active_trip_id": active_trip_id})
     db.commit()
     return {"accepted": accepted, "ignored": ignored, "received_count": len(accepted) + len(ignored)}
+
+
+@router.post("/airotrack/refresh")
+def refresh_airotrack_positions(
+    bus_id: int | None = Query(default=None, ge=1),
+    db: Session = Depends(get_db),
+    _technician: User = Depends(require_gps_technician),
+):
+    """Fetch configured Airotrack vehicles now; the token stays server-side."""
+
+    from backend.services.airotrack import refresh_airotrack
+    try:
+        return refresh_airotrack(db, bus_id=bus_id)
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
 
 
 @router.get("/status")

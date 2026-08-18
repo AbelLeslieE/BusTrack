@@ -245,6 +245,10 @@
     .portal-two-column,.portal-details,.portal-stats { grid-template-columns: 1fr; }
     .portal-asset-card,.portal-trip-summary { align-items: flex-start; flex-direction: column; }
     .portal-badge { margin-left: 0; }
+    .portal-primary { width:100%; min-height:46px; }
+    .portal-card { border-radius:20px; }
+    .portal-table-wrap { -webkit-overflow-scrolling:touch; }
+    .portal-notice { align-items:flex-start; padding:16px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

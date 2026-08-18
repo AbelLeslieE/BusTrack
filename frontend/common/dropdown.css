@@ -355,3 +355,15 @@
     transform:translateY(0) scale(1);
 
 }
+
+@media(max-width:700px){
+    .dropdown-menu,
+    .dropdown-menu.dropdown-menu--open{
+        max-width:calc(100vw - 24px);
+    }
+
+    .dropdown-items{
+        max-height:min(280px,50dvh);
+        -webkit-overflow-scrolling:touch;
+    }
+}

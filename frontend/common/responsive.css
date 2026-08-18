@@ -320,3 +320,107 @@
     }
 
 }
+
+/* ==========================================================
+   MOBILE DEVICE RESILIENCE
+   Shared guardrails for every dynamically loaded portal page.
+========================================================== */
+
+@media (max-width:900px){
+
+    html{ -webkit-text-size-adjust:100%; }
+
+    body.admin-theme,
+    body.driver-theme,
+    body.student-theme,
+    body.technician-theme{
+        background-attachment:scroll;
+    }
+
+    .app-root{
+        padding:
+            max(12px,env(safe-area-inset-top))
+            max(12px,env(safe-area-inset-right))
+            max(16px,env(safe-area-inset-bottom))
+            max(12px,env(safe-area-inset-left));
+    }
+
+    .app-workspace,
+    .page-content{
+        gap:20px;
+        min-width:0;
+    }
+
+    .page-content > *,
+    .portal-page,
+    .live-tracking-page,
+    .driver-tracking,
+    .dashboard-view,
+    .tech-page{
+        min-width:0;
+        max-width:100%;
+    }
+}
+
+@media (max-width:700px){
+
+    .module-placeholder,
+    .content-card{
+        padding:22px;
+        border-radius:20px;
+    }
+
+    .module-placeholder{
+        min-height:250px;
+    }
+
+    .module-placeholder h2{
+        font-size:clamp(1.8rem,9vw,2.35rem);
+    }
+
+    .grid-2,
+    .grid-3,
+    .grid-4{
+        grid-template-columns:1fr;
+        gap:16px;
+    }
+
+    .flex-between{
+        align-items:flex-start;
+        flex-direction:column;
+        gap:12px;
+    }
+
+    /* Prevent iOS Safari from zooming a form on focus. */
+    input,
+    select,
+    textarea{
+        font-size:16px !important;
+    }
+
+    .table-container,
+    .table-wrapper,
+    .table-responsive,
+    .portal-table-wrap,
+    .tech-table-wrap{
+        width:100%;
+        max-width:100%;
+        -webkit-overflow-scrolling:touch;
+        overscroll-behavior-x:contain;
+    }
+}
+
+@media (max-width:420px){
+
+    .app-root{
+        padding:
+            max(10px,env(safe-area-inset-top))
+            10px
+            max(14px,env(safe-area-inset-bottom));
+    }
+
+    .content-card,
+    .module-placeholder{
+        padding:18px;
+    }
+}

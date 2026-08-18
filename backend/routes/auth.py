@@ -8,8 +8,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 
-from backend.auth import SESSION_COOKIE_NAME, DatabaseSession, authenticate_user, get_current_user
+from backend.audit import record_audit_event
+from backend.auth import SESSION_COOKIE_NAME, DatabaseSession, authenticate_user, get_current_user, normalize_username
 from backend.models import UserSession
+from backend.roles import canonical_role
 from backend.schemas import TokenResponse, UserResponse
 from backend.utils.jwt_handler import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, get_token_identity
 
@@ -29,12 +31,28 @@ def login(
 
     user = authenticate_user(database_session, form_data.username, form_data.password)
     if user is None:
+        request.state.audit_actor_username = normalize_username(form_data.username)[:64] or None
+        # Keep failed attempts visible to an authorised technician without
+        # recording a password or revealing whether an account exists.
+        record_audit_event(
+            database_session,
+            category="portal",
+            action="sign_in_failed",
+            actor_username=normalize_username(form_data.username)[:64] or None,
+            subject_type="portal",
+            subject_label="BusTrack sign-in",
+            request=request,
+        )
+        database_session.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password.",
             headers={"WWW-Authenticate": "Bearer"},
         )
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    request.state.audit_actor_user_id = user.id
+    request.state.audit_actor_username = user.username
+    request.state.audit_actor_role = user.role
     session = UserSession(
         session_id=secrets.token_urlsafe(32),
         user_id=user.id,
@@ -43,6 +61,17 @@ def login(
         expires_at=expires_at,
     )
     database_session.add(session)
+    resolved_role = canonical_role(user.role) or user.role
+    record_audit_event(
+        database_session,
+        category="portal",
+        action="portal_entered",
+        actor=user,
+        subject_type="portal",
+        subject_label=f"{resolved_role} portal",
+        details={"portal_role": resolved_role, "session": "created"},
+        request=request,
+    )
     database_session.commit()
     token = create_access_token(
         user.username,
@@ -76,6 +105,16 @@ def logout(response: Response, request: Request, database_session: DatabaseSessi
                 if session and session.revoked_at is None:
                     session.revoked_at = datetime.now(timezone.utc)
                     session.revoked_reason = "Signed out"
+                    record_audit_event(
+                        database_session,
+                        category="portal",
+                        action="portal_signed_out",
+                        actor=session.user,
+                        subject_type="portal",
+                        subject_label=f"{canonical_role(session.user.role) or session.user.role} portal",
+                        details={"session": "revoked"},
+                        request=request,
+                    )
                     database_session.commit()
         except Exception:
             # Logout remains safe and idempotent even when an expired token is

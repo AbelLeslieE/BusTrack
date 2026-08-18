@@ -139,6 +139,12 @@ def get_current_user(
     if user.status != "Active":
         raise credentials_error
 
+    # Request-audit middleware reads this safe identity metadata after the
+    # response is generated. It never receives passwords, JWT text, or data.
+    request.state.audit_actor_user_id = user.id
+    request.state.audit_actor_username = user.username
+    request.state.audit_actor_role = user.role
+
     now = datetime.now(timezone.utc)
     locked_until = user.locked_until
     if locked_until is not None and locked_until.tzinfo is None:

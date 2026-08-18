@@ -5,6 +5,8 @@
    ADMIN LIVE TRACKING SERVICE
 ========================================================== */
 
+import { request } from "/static/common/api.js";
+import { Modal } from "/static/common/modal.js";
 import { escapeHtml } from "/static/common/security.js";
 
 /* ==========================================================
@@ -73,6 +75,7 @@ let followSelectedBus = false;
     this becomes true temporarily.
 */
 let isAutoFollowing = false;
+let hasFittedFleetMap = false;
 /* ==========================================================
    LOCAL TIME FORMATTER
 ========================================================== */
@@ -92,71 +95,23 @@ function getCurrentLocalTime() {
 
 function getDisplayUpdateTime(trip) {
 
-    const busId = String(trip.bus_id);
+    if (!trip.last_location_update) return "No GPS timestamp";
 
-    const serverUpdate =
-        trip.last_location_update
-            ? String(trip.last_location_update)
-            : null;
+    const timestamp = new Date(trip.last_location_update);
 
+    if (Number.isNaN(timestamp.getTime())) {
 
-    /*
-     * First time this bus appears.
-     */
-    if (!lastServerUpdates.has(busId)) {
-
-        lastServerUpdates.set(
-            busId,
-            serverUpdate
-        );
-
-        const localTime =
-            getCurrentLocalTime();
-
-        lastDisplayTimes.set(
-            busId,
-            localTime
-        );
-
-        return localTime;
+        return String(trip.last_location_update);
 
     }
 
+    return new Intl.DateTimeFormat(undefined, {
 
-    /*
-     * Check whether a NEW GPS update
-     * has arrived from the backend.
-     */
-    const previousServerUpdate =
-        lastServerUpdates.get(busId);
+        dateStyle: "medium",
 
+        timeStyle: "medium",
 
-    if (
-        serverUpdate &&
-        serverUpdate !== previousServerUpdate
-    ) {
-
-        lastServerUpdates.set(
-            busId,
-            serverUpdate
-        );
-
-        const localTime =
-            getCurrentLocalTime();
-
-        lastDisplayTimes.set(
-            busId,
-            localTime
-
-        );
-
-    }
-
-
-    return (
-        lastDisplayTimes.get(busId)
-        || "--"
-    );
+    }).format(timestamp);
 
 }
 /*
@@ -171,6 +126,7 @@ function getDisplayUpdateTime(trip) {
 let fleetMarkerLayer = null;
 
 let refreshInterval = null;
+let visibilityRefreshHandler = null;
 
 /*
     Used to invalidate old admin tracking requests.
@@ -1019,11 +975,11 @@ export function initializeFleetMap(
 
     const DEFAULT_LOCATION = {
 
-        lat: 10.359000,
+        lat: 20.5937,
 
-        lng: 76.286100,
+        lng: 78.9629,
 
-        zoom: 19
+        zoom: 5
 
     };
 
@@ -1294,6 +1250,17 @@ export function startFleetRefresh() {
 
     }
 
+    if (visibilityRefreshHandler) {
+
+        document.removeEventListener(
+            "visibilitychange",
+            visibilityRefreshHandler
+        );
+
+        visibilityRefreshHandler = null;
+
+    }
+
 
     /* ======================================================
        FIRST LOAD
@@ -1303,7 +1270,7 @@ export function startFleetRefresh() {
 
 
     /* ======================================================
-       REFRESH EVERY 2 SECONDS
+       REFRESH EVERY 20 SECONDS
     ====================================================== */
 
     refreshInterval = setInterval(
@@ -1314,10 +1281,64 @@ export function startFleetRefresh() {
 
         },
 
-        2000
+        20000
 
     );
 
+    // A user returning to the tab should see the newest saved GPS reading
+    // immediately, rather than waiting for the next 20-second UI refresh.
+    visibilityRefreshHandler = () => {
+
+        if (document.visibilityState === "visible") {
+
+            loadLiveTrips(session);
+
+        }
+
+    };
+
+    document.addEventListener(
+        "visibilitychange",
+        visibilityRefreshHandler
+    );
+
+}
+
+
+/* ==========================================================
+   ADMIN TRIP RECOVERY
+========================================================== */
+
+function endTripAsAdmin(trip, action) {
+
+    if (!trip?.trip_id) return;
+
+    const actionLabel = action === "Cancelled" ? "Cancel driver trip" : "Stop driver tracking";
+
+    Modal.form({
+        eyebrow: "ADMIN RECOVERY",
+        title: `${actionLabel}?`,
+        subtitle: "This ends the driver's live trip and mobile tracking immediately. Vehicle GPS from the provider can remain visible and is managed separately.",
+        content: `<div class="modal-group modal-group-full"><label class="modal-label" for="admin-trip-end-reason">Reason (optional)</label><textarea class="modal-textarea" id="admin-trip-end-reason" rows="4" maxlength="300" placeholder="For example: trip started accidentally"></textarea></div>`,
+        submitText: actionLabel,
+        onSubmit: async () => {
+            const reason = document.querySelector("#admin-trip-end-reason")?.value.trim() || null;
+            try {
+                await request(`/gps/admin/trips/${trip.trip_id}/end`, {
+                    method: "POST",
+                    body: JSON.stringify({ action, reason }),
+                });
+                Modal.close();
+                await loadLiveTrips(fleetSession);
+                Modal.success({
+                    title: action === "Cancelled" ? "Driver trip cancelled" : "Driver tracking stopped",
+                    subtitle: "The driver trip has ended. The driver may start another trip when needed. A provider GPS card may remain visible for the bus.",
+                });
+            } catch (error) {
+                Modal.error({ title: `${actionLabel} failed`, subtitle: error.message });
+            }
+        },
+    });
 }
 
 /* ==========================================================
@@ -1367,29 +1388,6 @@ function updateFleet(trips) {
        UPDATE COUNTERS
     ====================================================== */
 
-    const activeBusCount =
-        document.getElementById("activeBusCount");
-
-    const onlineDriverCount =
-        document.getElementById("onlineDriverCount");
-
-
-    if (activeBusCount) {
-
-        activeBusCount.textContent =
-            trips.length;
-
-    }
-
-
-    if (onlineDriverCount) {
-
-        onlineDriverCount.textContent =
-            trips.length;
-
-    }
-
-
     /* ======================================================
        GET TRIP LIST
     ====================================================== */
@@ -1423,7 +1421,7 @@ function updateFleet(trips) {
 
             <div class="empty-state">
 
-                No active trips.
+                No tracked buses have reported a GPS location yet.
 
             </div>
 
@@ -1534,6 +1532,10 @@ function updateFleet(trips) {
 
     trips.forEach((trip) => {
 
+        const isActiveTrip =
+            trip.is_active_trip === true ||
+            Boolean(trip.trip_id);
+
         /* ==================================================
            CREATE DISPLAY VALUES
         ================================================== */
@@ -1543,7 +1545,9 @@ function updateFleet(trips) {
         ================================================== */
 
         const busLabel =
-            trip.bus_number
+            trip.registration_number
+                ? trip.registration_number
+                : trip.bus_number
                 ? trip.bus_number
                 : `BUS-${String(
                     trip.bus_id
@@ -1551,9 +1555,13 @@ function updateFleet(trips) {
 
 
         const driverLabel =
-            trip.driver_name
-                ? trip.driver_name
-                : "Unknown Driver";
+            isActiveTrip
+                ? (
+                    trip.driver_name
+                        ? trip.driver_name
+                        : "Driver assignment unavailable"
+                )
+                : "Not running";
 
 
         const routeLabel =
@@ -1562,8 +1570,29 @@ function updateFleet(trips) {
                 : (
                     trip.route_code
                         ? trip.route_code
-                        : `Route ${trip.route_id ?? "--"}`
+                        : (isActiveTrip ? "Route assignment unavailable" : "No route assignment")
                 );
+
+        const providerGPS = trip.provider_gps || null;
+        const ignitionLabel = providerGPS?.ignition === true
+            ? "Ignition on"
+            : providerGPS?.ignition === false
+                ? "Ignition off"
+                : null;
+        const gpsStatus = providerGPS
+            ? (providerGPS.is_fresh ? (ignitionLabel || "GPS reported") : "GPS signal stale")
+            : (isActiveTrip ? "Driver tracking" : "Awaiting GPS");
+        const statusLabel = isActiveTrip ? (trip.status ?? "Running") : gpsStatus;
+        const statusClass = providerGPS?.is_fresh === false
+            ? "stale"
+            : providerGPS?.ignition === false
+                ? "off"
+                : "on";
+        const tripControls = isActiveTrip ? `
+            <div class="trip-admin-actions" aria-label="Administrator trip actions">
+                <button type="button" class="trip-admin-button stop" data-stop-trip="${trip.trip_id}">Stop driver tracking</button>
+                <button type="button" class="trip-admin-button cancel" data-cancel-trip="${trip.trip_id}">Cancel driver trip</button>
+            </div>` : "";
 
         const speedLabel =
             trip.speed != null
@@ -1820,6 +1849,11 @@ function updateFleet(trips) {
 
                     <br>
 
+                    GPS status :
+                    ${escapeHtml(gpsStatus)}
+
+                    <br>
+
                     Updated :
                     ${escapeHtml(updateLabel)}
 
@@ -1864,7 +1898,8 @@ function updateFleet(trips) {
 
                 <span class="trip-status">
 
-                    🟢 ${escapeHtml(trip.status ?? "Running")}
+                    <span class="trip-status-dot ${statusClass}" aria-hidden="true"></span>
+                    ${escapeHtml(statusLabel)}
 
                 </span>
 
@@ -1875,7 +1910,19 @@ function updateFleet(trips) {
 
                 <p>
 
-                    Driver :
+                    GPS status :
+
+                    <strong>
+
+                        ${escapeHtml(gpsStatus)}
+
+                    </strong>
+
+                </p>
+
+                <p>
+
+                    ${isActiveTrip ? "Driver" : "Driver tracking"} :
 
                     <strong>
 
@@ -1939,7 +1986,18 @@ function updateFleet(trips) {
 
             </div>
 
+            ${tripControls}
+
         `;
+
+        card.querySelector("[data-stop-trip]")?.addEventListener("click", (event) => {
+            event.stopPropagation();
+            endTripAsAdmin(trip, "Stopped");
+        });
+        card.querySelector("[data-cancel-trip]")?.addEventListener("click", (event) => {
+            event.stopPropagation();
+            endTripAsAdmin(trip, "Cancelled");
+        });
 
 
         /* ==================================================
@@ -2031,37 +2089,24 @@ function updateFleet(trips) {
                 CENTER MAP ON SELECTED BUS
                 ================================================== */
 
-                map.flyTo(
+                const busLocation = marker.getLatLng();
 
-                    marker.getLatLng(),
-
-                    18,
-
-                    {
-
-                        animate: true,
-
-                        duration: 1
-
-                    }
-
+                // A dashboard reflow or an iPhone orientation change can
+                // leave Leaflet with an outdated container size. Recalculate
+                // it before positioning, then place the selected bus exactly
+                // at the centre of the visible map.
+                map.invalidateSize({ animate: false, pan: false });
+                map.setView(
+                    busLocation,
+                    17,
+                    { animate: true, duration: 0.45 }
                 );
 
+                requestAnimationFrame(() => {
 
-                
-                /*
-                    The initial flyTo() is an automatic map movement.
-                    Wait until Leaflet actually finishes the movement,
-                    then allow manual interaction again.
-                */
-                map.once(
-                    "moveend",
-                    () => {
+                    isAutoFollowing = false;
 
-                        isAutoFollowing = false;
-
-                    }
-                );
+                });
 
                 /* ==================================================
                 OPEN BUS INFORMATION
@@ -2079,6 +2124,19 @@ function updateFleet(trips) {
         );
 
     });
+
+    /* On first load, frame the map around only the GPS positions that were
+       actually returned by the backend. A selected card keeps control of the
+       map afterwards. */
+    if (!hasFittedFleetMap && selectedBusId === null && markers.size > 0 && map) {
+        const positions = [...markers.values()].map(marker => marker.getLatLng());
+        if (positions.length === 1) {
+            map.setView(positions[0], 15);
+        } else {
+            map.fitBounds(L.latLngBounds(positions), { padding: [36, 36], maxZoom: 15 });
+        }
+        hasFittedFleetMap = true;
+    }
 
 }
 /* ==========================================================
@@ -2130,6 +2188,8 @@ export function cleanupFleetTracking() {
 
     isAutoFollowing = false;
 
+    hasFittedFleetMap = false;
+
     
     /* ======================================================
        STOP REFRESH TIMER
@@ -2142,6 +2202,17 @@ export function cleanupFleetTracking() {
         );
 
         refreshInterval = null;
+
+    }
+
+    if (visibilityRefreshHandler) {
+
+        document.removeEventListener(
+            "visibilitychange",
+            visibilityRefreshHandler
+        );
+
+        visibilityRefreshHandler = null;
 
     }
 

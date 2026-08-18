@@ -18,11 +18,7 @@ import {
 
     getRouteStops,
 
-    addRouteStop,
-
-    deleteRouteStop,
-
-    clearRouteStops
+    replaceRouteStops
 
 } from "./routeStopsApi.js";
 /* ==========================================================================
@@ -222,7 +218,6 @@ async function loadDrivers() {
         }
 
         state.drivers = await response.json();
-        console.log("Drivers loaded:", state.drivers);
 
     }
 
@@ -262,9 +257,7 @@ async function loadStops() {
  */
 async function createRoute(routeData) {
 
-    try {
-
-        const response = await fetch(API.ROUTES, {
+    const response = await fetch(API.ROUTES, {
 
             method: "POST",
 
@@ -278,29 +271,19 @@ async function createRoute(routeData) {
 
         });
 
-        if (!response.ok) {
+    if (!response.ok) {
 
-            const error = await response.json();
+        const error = await response.json().catch(() => ({}));
 
-            throw new Error(error.detail || "Unable to create route.");
-
-        }
-
-        const newRoute = await response.json();
-
-        await loadRoutes();
-
-        return newRoute;
+        throw new Error(error.detail || "Unable to create route.");
 
     }
 
-    catch (error) {
+    const newRoute = await response.json();
 
-        console.error(error);
+    await loadRoutes();
 
-        return null;
-
-    }
+    return newRoute;
 
 }
 
@@ -310,9 +293,7 @@ async function createRoute(routeData) {
  */
 async function updateRoute(routeId, routeData) {
 
-    try {
-
-        const response = await fetch(`${API.ROUTES}/${routeId}`, {
+    const response = await fetch(`${API.ROUTES}/${routeId}`, {
 
             method: "PUT",
 
@@ -326,27 +307,19 @@ async function updateRoute(routeId, routeData) {
 
         });
 
-        if (!response.ok) {
+    if (!response.ok) {
 
-            const error = await response.json();
+        const error = await response.json().catch(() => ({}));
 
-            throw new Error(error.detail || "Unable to update route.");
-
-        }
-
-        await loadRoutes();
-
-        return true;
+        throw new Error(error.detail || "Unable to update route.");
 
     }
 
-    catch (error) {
+    const updatedRoute = await response.json();
 
-        console.error(error);
+    await loadRoutes();
 
-        return false;
-
-    }
+    return updatedRoute;
 
 }
 
@@ -356,35 +329,31 @@ async function updateRoute(routeId, routeData) {
  */
 async function deleteRoute(routeId) {
 
-    try {
-
-        const response = await fetch(`${API.ROUTES}/${routeId}`, {
+    const response = await fetch(`${API.ROUTES}/${routeId}`, {
 
             method: "DELETE"
 
         });
 
-        if (!response.ok) {
-
-            const error = await response.json();
-
-            throw new Error(error.detail || "Unable to delete route.");
-
-        }
+    if (response.status === 404) {
 
         await loadRoutes();
 
-        return true;
+        return { deleted: false, stale: true };
 
     }
 
-    catch (error) {
+    if (!response.ok) {
 
-        console.error(error);
+        const error = await response.json().catch(() => ({}));
 
-        return false;
+        throw new Error(error.detail || "Unable to delete route.");
 
     }
+
+    await loadRoutes();
+
+    return { deleted: true, stale: false };
 
 }
 /* =============================================================================
@@ -832,7 +801,7 @@ function renderTableRows() {
 
     }
 
-    return state.filteredRoutes.map(route => `
+    return getVisibleRoutes().map(route => `
 
         <tr>
 
@@ -965,6 +934,14 @@ function renderEmptyState() {
 
 function renderPagination() {
 
+    const total = state.filteredRoutes.length;
+
+    const pageCount = Math.max(1, Math.ceil(total / state.pageSize));
+
+    const start = total ? ((state.currentPage - 1) * state.pageSize) + 1 : 0;
+
+    const end = Math.min(total, state.currentPage * state.pageSize);
+
     return `
 
         <section class="pagination">
@@ -975,10 +952,7 @@ function renderPagination() {
 
                 <strong>
 
-                    ${Math.min(
-                        state.filteredRoutes.length,
-                        state.pageSize
-                    )}
+                    ${start}–${end}
 
                 </strong>
 
@@ -986,7 +960,7 @@ function renderPagination() {
 
                 <strong>
 
-                    ${state.filteredRoutes.length}
+                    ${total}
 
                 </strong>
 
@@ -999,6 +973,7 @@ function renderPagination() {
                 <button
                     class="page-btn"
                     id="previous-page"
+                    ${state.currentPage === 1 ? "disabled" : ""}
                 >
 
                     ← Previous
@@ -1007,15 +982,17 @@ function renderPagination() {
 
                 <button
                     class="page-btn active"
+                    disabled
                 >
 
-                    1
+                    ${state.currentPage} / ${pageCount}
 
                 </button>
 
                 <button
                     class="page-btn"
                     id="next-page"
+                    ${state.currentPage === pageCount ? "disabled" : ""}
                 >
 
                     Next →
@@ -1041,8 +1018,6 @@ function bindEvents(root) {
     bindToolbarEvents(root);
 
     bindSearchEvents(root);
-
-    bindTableEvents(root);
 
 }
 
@@ -1114,6 +1089,10 @@ function bindToolbarEvents(root) {
 
         addButton.addEventListener("click", () => {
 
+            // A cancelled edit must not turn the next Add action into an
+            // accidental update of the previously selected route.
+            state.selectedRoute = null;
+
             Modal.form({
 
                 eyebrow: "Transport Management",
@@ -1167,11 +1146,44 @@ function bindSearchEvents(root) {
 
         state.searchQuery = event.target.value.trim().toLowerCase();
 
+        state.currentPage = 1;
+
         filterRoutes();
 
         refreshTable(root);
 
         refreshStatistics(root);
+
+    });
+
+}
+
+
+function bindPaginationEvents(root) {
+
+    root.querySelector("#previous-page")?.addEventListener("click", () => {
+
+        if (state.currentPage > 1) {
+
+            state.currentPage -= 1;
+
+            refreshUI(root);
+
+        }
+
+    });
+
+    root.querySelector("#next-page")?.addEventListener("click", () => {
+
+        const pageCount = Math.ceil(state.filteredRoutes.length / state.pageSize);
+
+        if (state.currentPage < pageCount) {
+
+            state.currentPage += 1;
+
+            refreshUI(root);
+
+        }
 
     });
 
@@ -1345,12 +1357,6 @@ function bindTableEvents(root) {
                 );
 
 
-            console.log(
-                "BusTrack: Existing route stops loaded:",
-                formattedStops
-            );
-
-
             setSelectedStops(
                 formattedStops
             );
@@ -1379,11 +1385,27 @@ function bindTableEvents(root) {
 
                 onConfirm: async () => {
 
-                    const success = await deleteRoute(routeId);
+                    try {
 
-                    if (success) {
+                        await deleteRoute(routeId);
 
                         refreshUI(root);
+
+                        Modal.close();
+
+                    }
+
+                    catch (error) {
+
+                        Modal.close();
+
+                        Modal.error({
+
+                            title: "Unable to delete route",
+
+                            subtitle: error.message || "Please refresh and try again."
+
+                        });
 
                     }
 
@@ -1447,9 +1469,13 @@ function filterRoutes() {
 
     state.filteredRoutes = state.routes.filter(route => {
 
-        const busName = getBusName(route.bus_id).toLowerCase();
+        const bus = state.buses.find(item => item.id === route.bus_id);
 
-        const driverName = getDriverName(route.driver_id).toLowerCase();
+        const driver = state.drivers.find(item => item.id === route.driver_id);
+
+        const busName = `${bus?.bus_number || ""} ${bus?.registration_number || ""}`.toLowerCase();
+
+        const driverName = `${driver?.user?.full_name || ""} ${driver?.driver_code || ""}`.toLowerCase();
 
         return (
 
@@ -1502,6 +1528,19 @@ function refreshTable(root) {
 }
 
 
+function getVisibleRoutes() {
+
+    const pageCount = Math.max(1, Math.ceil(state.filteredRoutes.length / state.pageSize));
+
+    state.currentPage = Math.min(Math.max(1, state.currentPage), pageCount);
+
+    const start = (state.currentPage - 1) * state.pageSize;
+
+    return state.filteredRoutes.slice(start, start + state.pageSize);
+
+}
+
+
 /**
  * Refresh the entire UI.
  */
@@ -1512,6 +1551,21 @@ function refreshUI(root) {
     refreshStatistics(root);
 
     refreshTable(root);
+
+    refreshPagination(root);
+
+}
+
+
+function refreshPagination(root) {
+
+    const pagination = root.querySelector(".pagination");
+
+    if (!pagination) return;
+
+    pagination.outerHTML = renderPagination();
+
+    bindPaginationEvents(root);
 
 }
 
@@ -1672,6 +1726,38 @@ function formatValue(value) {
    SAVE ROUTE
 ============================================================================= */
 
+function showRouteFormError(form, message) {
+
+    const existing = form.querySelector(".route-save-error");
+
+    if (existing) {
+
+        existing.textContent = message;
+
+    } else {
+
+        const error = document.createElement("p");
+
+        error.className = "modal-error-text route-save-error";
+
+        error.textContent = message;
+
+        form.prepend(error);
+
+    }
+
+    const codeInput = form.querySelector("#route_code");
+
+    if (codeInput) {
+
+        codeInput.classList.add("modal-error");
+
+        codeInput.focus();
+
+    }
+
+}
+
 async function saveRoute(root) {
 
     const form = document.querySelector(".route-form");
@@ -1719,41 +1805,24 @@ async function saveRoute(root) {
 
     }
 
+    const editingRoute = state.selectedRoute;
     let savedRoute = null;
 
-    if (state.selectedRoute) {
+    try {
 
-        const success = await updateRoute(
-
-            state.selectedRoute.id,
-
-            routeData
-
-        );
-
-        if (!success) {
-
-            return;
-
-        }
-
-        savedRoute = state.selectedRoute;
+        savedRoute = editingRoute
+            ? await updateRoute(editingRoute.id, routeData)
+            : await createRoute(routeData);
 
     }
 
-    else {
+    catch (error) {
 
-        savedRoute = await createRoute(routeData);
+        showRouteFormError(form, error.message || "Unable to save this route.");
 
-        if (!savedRoute) {
-
-            return;
-
-        }
+        return;
 
     }
-
-    const editingRoute = state.selectedRoute;
 
     /* ==========================================================
     SAVE ROUTE STOPS
@@ -1761,30 +1830,28 @@ async function saveRoute(root) {
 
     const selectedStops = getSelectedStops();
 
-    /* Editing an existing route?
-    Remove old stop mappings first. */
+    try {
 
-    if (state.selectedRoute) {
-
-        await clearRouteStops(savedRoute.id);
-
-    }
-
-    /* Save the current Route Builder list */
-
-    for (const stop of selectedStops) {
-
-        await addRouteStop(
+        await replaceRouteStops(
 
             savedRoute.id,
 
-            {
-
-                stop_id: stop.id
-
-            }
+            selectedStops.map(stop => ({ stop_id: stop.id }))
 
         );
+
+    }
+
+    catch (error) {
+
+        // A newly created route already has a database ID. Keep it selected
+        // so correcting the stop list retries the update instead of creating
+        // a duplicate route.
+        state.selectedRoute = savedRoute;
+
+        showRouteFormError(form, error.message || "Unable to save route stops.");
+
+        return;
 
     }
 

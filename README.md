@@ -19,8 +19,27 @@ Bus Tracker is a FastAPI and vanilla-JavaScript fleet-management application for
 
 1. Create and activate a Python virtual environment.
 2. Install dependencies with `pip install -r requirements.txt`.
-3. Start the application with `uvicorn backend.main:app --reload` from this project directory.
+3. For computer-only use, start the application with `python -m uvicorn backend.main:app --reload` from this project directory.
 4. Open `http://127.0.0.1:8000/` for the login shell or `http://127.0.0.1:8000/dashboard` for the SPA host.
+
+### Use the app from a phone on your Wi-Fi
+
+Connect the computer and phone to the same trusted Wi-Fi network. In PowerShell,
+from this project directory, run:
+
+```powershell
+.\start-lan.ps1
+```
+
+The helper starts FastAPI on every network interface and prints an address such
+as `http://192.168.1.25:8000/`. Open that exact address in the phone browser.
+Do not use `localhost` or `127.0.0.1` on the phone: those addresses point to
+the phone itself.
+
+If the phone times out, allow the app through Windows Firewall on **Private**
+networks (or add an inbound TCP rule for port 8000), then restart the helper.
+Avoid exposing this development server on public Wi-Fi; it has no HTTPS and is
+intended only for your private local network.
 
 ## First administrator and secure sign-in
 
@@ -102,6 +121,23 @@ not receive general fleet, account, or assignment administration permissions.
 See [`docs/mvd-gps-provider-handoff.md`](docs/mvd-gps-provider-handoff.md) for
 the exact handoff contract to send to the GPS provider, including the accepted
 payload forms, expected response codes, and the final live-delivery check.
+
+## Airotrack pull integration
+
+For Airotrack's `vehicle-live-data` API, configure `AIROTRACK_API_TOKEN` only
+in the server/deployment secret store (or a local uncommitted `.env` file) and
+restart the API. BusTrack then polls every bus's database **registration
+number** every two minutes (set `AIROTRACK_POLL_INTERVAL_SECONDS` to change
+this; the minimum is 20 seconds). Add all 24 buses normally in Bus Management;
+their registration number is the only per-bus Airotrack lookup value. The API
+returns the tracker IMEI and BusTrack stores it with the received position.
+The translated positions feed the existing Admin and User live-tracking APIs
+automatically. A GPS technician can run an immediate authorised refresh with
+`POST /api/integrations/gps/airotrack/refresh`.
+
+The vendor's `source_date`, not the time BusTrack polled it, determines whether
+a location is fresh. An old last-known point remains visible to management but
+is never presented to users as current vehicle movement.
 
 ## Folder guide
 
