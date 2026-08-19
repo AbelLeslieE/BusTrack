@@ -1,7 +1,8 @@
 /* ==========================================================
    DRIVER TRACKING SERVICE
 ========================================================== */
-import { animateVehicleMarker } from "/static/common/vehicleMotion.js";
+import { animateVehicleMarker } from "/static/common/vehicleMotion.js?v=road-safe-2";
+import { createVehicleMarkerIcon } from "/static/common/vehicleMarker.js";
 
 console.log("trackingService.js loaded");
 let map = null;
@@ -162,12 +163,7 @@ export function updateMarker(latitude, longitude, label = "Current Bus") {
             latitude,
             longitude
         ], {
-            icon: L.divIcon({
-                className: "driver-map-bus-marker",
-                html: '<div class="driver-map-bus-marker-inner"><i class="fa-solid fa-bus" aria-hidden="true"></i></div>',
-                iconSize: [44, 44],
-                iconAnchor: [22, 22],
-            }),
+            icon: createVehicleMarkerIcon(),
         })
         .addTo(map)
         .bindPopup(label);
@@ -189,7 +185,7 @@ export function updateMarker(latitude, longitude, label = "Current Bus") {
                 latitude,
                 longitude,
                 markerMotion,
-                ".driver-map-bus-marker-inner"
+                ".fleet-vehicle-marker__visual"
             );
 
         }

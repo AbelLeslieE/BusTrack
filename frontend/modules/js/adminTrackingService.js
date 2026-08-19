@@ -8,6 +8,8 @@
 import { request } from "/static/common/api.js";
 import { Modal } from "/static/common/modal.js";
 import { escapeHtml } from "/static/common/security.js";
+import { createVehicleMarkerIcon } from "/static/common/vehicleMarker.js";
+import { animateVehicleMarker } from "/static/common/vehicleMotion.js?v=road-safe-2";
 
 /* ==========================================================
    ADMIN LIVE TRACKING STATE
@@ -50,6 +52,9 @@ const busHeadings = new Map();
     move smoothly at the same time.
 */
 const markerAnimations = new Map();
+
+// Shared road-following animation state, one instance per visible bus.
+const roadMotions = new Map();
 
 
 
@@ -250,6 +255,13 @@ function clearFleetMarkers() {
 */
 
 function createBusMarkerIcon() {
+
+    return createVehicleMarkerIcon();
+
+}
+
+/* Retained only as a reference for the former admin-only artwork. */
+function createLegacyBusMarkerIcon() {
 
     return L.divIcon({
 
@@ -679,6 +691,28 @@ function animateBusMarker(
     targetHeading = null
 ) {
 
+    const key = String(busId);
+    const motion = roadMotions.get(key) || { heading: null, frame: null };
+    roadMotions.set(key, motion);
+    animateVehicleMarker(
+        marker,
+        targetLatitude,
+        targetLongitude,
+        motion,
+        ".fleet-vehicle-marker__visual"
+    );
+}
+
+/* Legacy direct-line animator retained for reference; all live maps use the
+   shared road-following animator above. */
+function animateLegacyBusMarker(
+    marker,
+    targetLatitude,
+    targetLongitude,
+    busId,
+    targetHeading = null
+) {
+
     if (!marker || !map) return;
 
     const currentPosition =
@@ -812,7 +846,7 @@ function animateBusMarker(
                 marker
                     .getElement()
                     ?.querySelector(
-                        ".bus-marker-visual"
+                        ".fleet-vehicle-marker__visual"
                     );
 
 

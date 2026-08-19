@@ -1020,6 +1020,56 @@
    BUS MAP MARKER
 ========================================================== */
 
+.student-terminal-notice{
+
+    display:grid;
+
+    gap:12px;
+
+    text-align:center;
+
+    color:var(--muted);
+
+    line-height:1.6;
+
+}
+
+.student-terminal-notice i{
+
+    display:grid;
+
+    width:54px;
+
+    height:54px;
+
+    margin:0 auto 2px;
+
+    place-items:center;
+
+    border:1px solid rgba(79,209,255,.42);
+
+    border-radius:50%;
+
+    background:rgba(79,209,255,.13);
+
+    color:var(--primary);
+
+    font-size:1.45rem;
+
+}
+
+.student-terminal-notice p{
+
+    margin:0;
+
+}
+
+.student-terminal-notice strong{
+
+    color:var(--text);
+
+}
+
 .student-map-bus-marker {
 
     display: flex;

@@ -879,6 +879,15 @@ def get_student_live_tracking(
 
     if tracking_available:
 
+        terminal_reached = bool(
+            trip is not None
+            and trip.terminal_reached_at is not None
+            and trip.current_stop_status == "Arrived"
+            and current_stop is not None
+            and current_stop.stop is not None
+            and current_stop.stop.id == trip.terminal_stop_id
+        )
+
         trip_data = {
 
             "id":
@@ -916,6 +925,12 @@ def get_student_live_tracking(
 
             "current_route_stop_id":
                 trip.current_route_stop_id if trip is not None else None,
+
+            "terminal_reached": terminal_reached,
+
+            "terminal_reached_at": trip.terminal_reached_at if terminal_reached else None,
+
+            "terminal_stop_name": current_stop.stop.stop_name if terminal_reached else None,
 
             "ignition":
                 provider_state.ignition if provider_state is not None else None,

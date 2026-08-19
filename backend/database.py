@@ -160,6 +160,14 @@ def initialize_database() -> None:
                 connection.execute(text(
                     "ALTER TABLE live_trips ADD COLUMN end_reason VARCHAR(300) NULL"
                 ))
+            if "terminal_reached_at" not in trip_columns:
+                connection.execute(text(
+                    "ALTER TABLE live_trips ADD COLUMN terminal_reached_at TIMESTAMP NULL"
+                ))
+            if "terminal_stop_id" not in trip_columns:
+                connection.execute(text(
+                    "ALTER TABLE live_trips ADD COLUMN terminal_stop_id INTEGER NULL"
+                ))
 
     if "live_locations" in inspector.get_table_names():
         location_columns = {column["name"] for column in inspector.get_columns("live_locations")}

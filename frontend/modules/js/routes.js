@@ -4,6 +4,7 @@
 ========================================================================== */
 
 import { Modal } from "../../common/modal.js";
+import { confirmDeletion, showOperationFeedback } from "../../common/operationFeedback.js";
 import { escapeHtml } from "../../common/security.js";
 import { openRouteViewModal } from "../../common/routeViewModal.js";
 import {
@@ -1374,44 +1375,30 @@ function bindTableEvents(root) {
         if (deleteButton) {
 
             const routeId = Number(deleteButton.dataset.id);
-
-            Modal.confirm({
-
-                title: "Delete Route",
-
-                subtitle: "This action cannot be undone.",
-
-                confirmText: "Delete",
-
-                onConfirm: async () => {
-
-                    try {
-
-                        await deleteRoute(routeId);
-
-                        refreshUI(root);
-
-                        Modal.close();
-
-                    }
-
-                    catch (error) {
-
-                        Modal.close();
-
-                        Modal.error({
-
-                            title: "Unable to delete route",
-
-                            subtitle: error.message || "Please refresh and try again."
-
-                        });
-
-                    }
-
-                }
-
+            const route = state.routes.find(item => item.id === routeId);
+            const routeName = route?.route_code || route?.route_name || `route #${routeId}`;
+            const confirmed = await confirmDeletion({
+                title: `Delete ${routeName}?`,
+                message: `${routeName} and its stop assignments will be removed. This action cannot be undone.`
             });
+
+            if (!confirmed) return;
+
+            try {
+                await deleteRoute(routeId);
+                refreshUI(root);
+                showOperationFeedback({
+                    type: "success",
+                    title: "Route deleted",
+                    message: `${routeName} was deleted successfully.`
+                });
+            } catch (error) {
+                showOperationFeedback({
+                    type: "error",
+                    title: "Route was not deleted",
+                    message: error.message || "Please refresh and try again."
+                });
+            }
 
         }
 
@@ -1799,7 +1786,9 @@ async function saveRoute(root) {
 
     ) {
 
-        alert("Please fill in all required fields.");
+        const message = "Enter both a route code and route name before saving.";
+        showRouteFormError(form, message);
+        showOperationFeedback({ type: "warning", title: "Route needs more details", message });
 
         return;
 
@@ -1817,8 +1806,9 @@ async function saveRoute(root) {
     }
 
     catch (error) {
-
-        showRouteFormError(form, error.message || "Unable to save this route.");
+        const message = error.message || "Unable to save this route.";
+        showRouteFormError(form, message);
+        showOperationFeedback({ type: "error", title: "Route was not saved", message });
 
         return;
 
@@ -1849,7 +1839,9 @@ async function saveRoute(root) {
         // a duplicate route.
         state.selectedRoute = savedRoute;
 
-        showRouteFormError(form, error.message || "Unable to save route stops.");
+        const message = error.message || "Unable to save route stops.";
+        showRouteFormError(form, message);
+        showOperationFeedback({ type: "error", title: "Route stops were not saved", message });
 
         return;
 
@@ -1870,6 +1862,11 @@ async function saveRoute(root) {
     refreshUI(root);
     state.selectedRoute = null;
     Modal.close();
+    showOperationFeedback({
+        type: "success",
+        title: editingRoute ? "Route updated" : "Route created",
+        message: `${savedRoute.route_code || savedRoute.route_name} was saved successfully.`
+    });
     /* ==========================================================
     ROUTE CREATED
     ========================================================== */

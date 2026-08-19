@@ -332,6 +332,17 @@ def update_route_stop_progression(
 
         record_stop_event("Arrived", current_route_stop, current_stop, current_distance)
 
+        # Reaching the final stop completes this leg of the same live trip.
+        # Reverse the *display/travel* order in memory; never rewrite the
+        # route's saved master stop sequence. The terminal remains current,
+        # but becomes stop 1 of the return journey on the next GPS update.
+        terminal_reached = len(route_stops) > 1 and current_route_stop == route_stops[-1]
+        completed_direction = trip.route_direction
+        if terminal_reached:
+            trip.route_direction = "reverse" if completed_direction != "reverse" else "forward"
+            trip.terminal_reached_at = current_timestamp
+            trip.terminal_stop_id = current_stop.id
+
 
         return {
             "event": "Arrived",
@@ -349,6 +360,9 @@ def update_route_stop_progression(
             )
             if current_stop.radius is not None
             else 50.0,
+            "terminal_reached": terminal_reached,
+            "completed_direction": completed_direction if terminal_reached else None,
+            "next_direction": trip.route_direction if terminal_reached else None,
         }
 
 

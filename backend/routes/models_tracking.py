@@ -128,6 +128,18 @@ class LiveTrip(Base):
         nullable=True,
     )
 
+    # The most recent end-of-line arrival is retained long enough for every
+    # portal to announce it and redraw the trip in the return direction.
+    terminal_reached_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    terminal_stop_id: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
     # ======================================================
     # TRIP TIMESTAMPS
     # ======================================================

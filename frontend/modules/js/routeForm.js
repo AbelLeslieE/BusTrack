@@ -5,6 +5,7 @@
 
 import { createDropdown } from "/static/common/dropdown.js";
 import { escapeHtml } from "/static/common/security.js";
+import { confirmDeletion, showOperationFeedback } from "/static/common/operationFeedback.js";
 /* ==========================================================================
    ROUTE BUILDER STATE
 ========================================================================== */
@@ -1466,11 +1467,7 @@ function bindRouteStopEvents() {
         .forEach(button => {
 
             button.onclick = () => {
-
-                removeStop(
-                    Number(button.dataset.index)
-                );
-
+                void removeStop(Number(button.dataset.index));
             };
 
         });
@@ -1552,7 +1549,17 @@ function bindRouteStopEvents() {
         REMOVE STOP
         ========================================================================== */
 
-        function removeStop(index) {
+        async function removeStop(index) {
+
+            const stop = selectedStops[index];
+            if (!stop) return;
+
+            const confirmed = await confirmDeletion({
+                title: `Remove ${stop.stop_name || "this stop"}?`,
+                message: "The stop will be removed from this route. Save the route to apply the change."
+            });
+
+            if (!confirmed) return;
 
             selectedStops.splice(
                 index,
@@ -1584,8 +1591,11 @@ function addStopToRoute() {
     /* Prevent Duplicate Stops */
 
     if (selectedStops.some(s => s.id === stop.id)) {
-
-        alert("This stop has already been added.");
+        showOperationFeedback({
+            type: "warning",
+            title: "Stop already in this route",
+            message: `${stop.stop_name} is already in the selected route stops.`
+        });
 
         return;
 

@@ -112,7 +112,12 @@ def create_bus(
     if existing_bus:
         raise HTTPException(
             status_code=400,
-            detail="Bus number already exists.",
+            detail=(
+                f'Bus number "{bus.bus_number}" is already registered '
+                f'as {existing_bus.bus_number} (registration '
+                f'"{existing_bus.registration_number}"). Choose a different '
+                "bus number or edit the existing bus."
+            ),
         )
 
     existing_registration = (
@@ -124,7 +129,11 @@ def create_bus(
     if existing_registration:
         raise HTTPException(
             status_code=400,
-            detail="Registration number already exists.",
+            detail=(
+                f'Registration number "{bus.registration_number}" is already '
+                f"used by bus {existing_registration.bus_number}. Choose a "
+                "different registration number or edit that bus."
+            ),
         )
 
     new_bus = Bus(
@@ -200,7 +209,12 @@ def update_bus(
     if duplicate_bus:
         raise HTTPException(
             status_code=400,
-            detail="Bus number already exists.",
+            detail=(
+                f'Bus number "{bus.bus_number}" is already registered '
+                f'as {duplicate_bus.bus_number} (registration '
+                f'"{duplicate_bus.registration_number}"). Choose a different '
+                "bus number or edit the existing bus."
+            ),
         )
 
     duplicate_registration = (
@@ -215,7 +229,11 @@ def update_bus(
     if duplicate_registration:
         raise HTTPException(
             status_code=400,
-            detail="Registration number already exists.",
+            detail=(
+                f'Registration number "{bus.registration_number}" is already '
+                f"used by bus {duplicate_registration.bus_number}. Choose a "
+                "different registration number or edit that bus."
+            ),
         )
 
     existing.bus_number = bus.bus_number

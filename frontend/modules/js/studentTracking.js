@@ -9,7 +9,9 @@
    CONFIGURATION
 ========================================================== */
 
-import { animateVehicleMarker } from "/static/common/vehicleMotion.js";
+import { animateVehicleMarker } from "/static/common/vehicleMotion.js?v=road-safe-2";
+import { createVehicleMarkerIcon } from "/static/common/vehicleMarker.js";
+import { Modal } from "/static/common/modal.js";
 
 const API = {
 
@@ -72,7 +74,9 @@ const state = {
 
     refreshInProgress: false,
 
-    routeDirection: null
+    routeDirection: null,
+
+    terminalNoticeKey: null
 
 };
 
@@ -1295,6 +1299,38 @@ async function loadStudentTracking() {
 }
 
 /* ==========================================================
+   TERMINAL ARRIVAL NOTICE
+========================================================== */
+
+function showTerminalArrivalNotice() {
+
+    const trip = state.liveTrip;
+    if (!trip?.terminal_reached || !trip.terminal_reached_at) return;
+
+    const noticeKey = `${trip.id}:${trip.terminal_reached_at}`;
+    const storageKey = `busTrackTerminalNotice:${noticeKey}`;
+    if (state.terminalNoticeKey === noticeKey || sessionStorage.getItem(storageKey)) return;
+
+    state.terminalNoticeKey = noticeKey;
+    sessionStorage.setItem(storageKey, "shown");
+    const stopName = escapeHTML(trip.terminal_stop_name || "the final stop");
+    const returnDirection = trip.route_direction === "reverse" ? "return" : "outbound";
+
+    Modal.open({
+        eyebrow: "Route update",
+        title: "Bus reached the last stop",
+        subtitle: "The return journey is now ready.",
+        content: `
+            <div class="student-terminal-notice">
+                <i class="fa-solid fa-flag-checkered" aria-hidden="true"></i>
+                <p><strong>${stopName}</strong> is the end of this route leg.</p>
+                <p>The stop order has changed for the ${returnDirection} journey.</p>
+            </div>`,
+        actions: [{ text: "View return route", style: "primary", close: true }],
+    });
+}
+
+/* ==========================================================
    REFRESH TRACKING
 ========================================================== */
 /* ==========================================================
@@ -1363,6 +1399,8 @@ async function refreshTracking() {
          */
 
         updateTrackingInterface();
+
+        showTerminalArrivalNotice();
 
 
         console.log(
@@ -1605,37 +1643,7 @@ function clearMapObjects() {
 ========================================================== */
 
 function createBusIcon() {
-
-    return L.divIcon({
-
-        className:
-            "student-map-bus-marker",
-
-        html: `
-
-            <div
-                class="student-map-bus-marker-inner"
-            >
-
-                <i
-                    class="fa-solid fa-bus"
-                ></i>
-
-            </div>
-
-        `,
-
-        iconSize: [
-            46,
-            46
-        ],
-
-        iconAnchor: [
-            23,
-            23
-        ]
-
-    });
+    return createVehicleMarkerIcon();
 
 }
 
@@ -2289,7 +2297,7 @@ function updateBusPosition() {
             latitude,
             longitude,
             state.busMotion,
-            ".student-map-bus-marker-inner"
+            ".fleet-vehicle-marker__visual"
         );
 
     }
@@ -2899,6 +2907,9 @@ function cleanupTracking() {
        false;
 
     state.routeDirection =
+        null;
+
+    state.terminalNoticeKey =
         null;
 
 }

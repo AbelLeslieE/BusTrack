@@ -403,18 +403,20 @@ function renderActions(actions = []){
 
         }
 
-        button.addEventListener("click", () => {
+        button.addEventListener("click", async () => {
 
-            if(action.onClick){
+            try {
+                if(action.onClick){
+                    await action.onClick();
+                }
 
-                action.onClick();
-
-            }
-
-            if(action.close){
-
-                close();
-
+                if(action.close){
+                    close();
+                }
+            } catch (error) {
+                // Keep the current form and its values intact. This is the
+                // common fallback for every modal-backed async action.
+                showActionError(error?.message || "The action could not be completed.");
             }
 
         });
@@ -422,6 +424,23 @@ function renderActions(actions = []){
         modalState.footer.appendChild(button);
 
     });
+
+}
+
+function showActionError(message){
+
+    if(!modalState.body) return;
+
+    let error = modalState.body.querySelector(".modal-action-error");
+
+    if(!error){
+        error = document.createElement("p");
+        error.className = "modal-error-text modal-action-error";
+        modalState.body.prepend(error);
+    }
+
+    error.textContent = message;
+    error.setAttribute("role", "alert");
 
 }
 

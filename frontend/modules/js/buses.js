@@ -1,5 +1,4 @@
 
- console.log("===== REAL BUSES.JS LOADED =====");
  /**    
  * =============================================================================
  * BUS TRACKER
@@ -25,6 +24,7 @@
  */
 
 import { Modal } from "../../common/modal.js";
+import { confirmDeletion, showOperationFeedback } from "../../common/operationFeedback.js";
 import { escapeHtml } from "../../common/security.js";
 
 import { createBusForm } from "./busForm.js";
@@ -247,10 +247,7 @@ async function createBus(busData) {
  * Update an existing bus.
  */
 async function updateBus(busId, busData) {
-
-    try {
-
-        const response = await fetch(`${API.BUSES}${busId}`, {
+    const response = await fetch(`${API.BUSES}${busId}`, {
 
             method: "PUT",
 
@@ -262,25 +259,16 @@ async function updateBus(busId, busData) {
 
         });
 
-        if (!response.ok) {
-
-            const error = await response.json();
-
-            throw new Error(error.detail || "Unable to update bus.");
-
-        }
-
-        await loadBuses();
-
-        return true;
-
-    } catch (error) {
-
-        console.error(error);
-
-        return false;
-
+    if (!response.ok) {
+        const contentType = response.headers.get("content-type") || "";
+        const error = contentType.includes("application/json")
+            ? await response.json()
+            : { detail: await response.text() };
+        throw new Error(error.detail || "Unable to update bus.");
     }
+
+    await loadBuses();
+    return true;
 
 }
 
@@ -289,37 +277,22 @@ async function updateBus(busId, busData) {
  * Delete a bus.
  */
 async function deleteBus(busId) {
-
-    try {
-
-        const response = await fetch(`${API.BUSES}${busId}`, {
+    const response = await fetch(`${API.BUSES}${busId}`, {
 
             method: "DELETE"
 
         });
 
-        if (!response.ok) {
-
-            const contentType = response.headers.get("content-type") || "";
-            const error = contentType.includes("application/json")
-                ? await response.json()
-                : { detail: await response.text() };
-
-            throw new Error(error.detail || "Unable to delete bus.");
-
-        }
-
-        await loadBuses();
-
-        return true;
-
-    } catch (error) {
-
-        console.error(error);
-
-        return false;
-
+    if (!response.ok) {
+        const contentType = response.headers.get("content-type") || "";
+        const error = contentType.includes("application/json")
+            ? await response.json()
+            : { detail: await response.text() };
+        throw new Error(error.detail || "Unable to delete bus.");
     }
+
+    await loadBuses();
+    return true;
 
 }
 /* =============================================================================
@@ -1166,16 +1139,12 @@ function bindTableEvents(root) {
                 onSubmit: async () => {
 
                     const busData = getBusFormData();
-
-                    const success = await updateBus(bus.id, busData);
-
-                    if (!success) {
-
-                        showNotification(
-                            "Unable to update bus.",
-                            "error"
-                        );
-
+                    try {
+                        await updateBus(bus.id, busData);
+                    } catch (error) {
+                        const message = error.message || "Unable to update this bus.";
+                        showBusFormError(message);
+                        showNotification(message, "error");
                         return;
                     }
 
@@ -1203,30 +1172,22 @@ function bindTableEvents(root) {
         if (deleteButton) {
 
             const busId = Number(deleteButton.dataset.id);
+            const bus = state.buses.find(item => item.id === busId);
+            const busName = bus?.bus_number || `bus #${busId}`;
+            const confirmed = await confirmDeletion({
+                title: `Delete ${busName}?`,
+                message: `${busName} will be permanently removed. This action cannot be undone.`
+            });
 
-            Modal.confirm({
+            if (!confirmed) return;
 
-            title: "Delete Bus",
-
-            subtitle: "This action cannot be undone.",
-
-            confirmText: "Delete",
-
-            onConfirm: async () => {
-
-                const success = await deleteBus(busId);
-
-                if (success) {
-
-                    await loadBuses();
-
-                    refreshUI(root);
-
-                }
-
+            try {
+                await deleteBus(busId);
+                refreshUI(root);
+                showNotification(`${busName} was deleted.`, "success");
+            } catch (error) {
+                showNotification(error.message || `Unable to delete ${busName}.`, "error");
             }
-
-        });
 
         return;
 
@@ -1424,12 +1385,11 @@ function getStatusClass(status) {
  * Later this will become a reusable toast component.
  */
 function showNotification(message, type = "info") {
-
-    console.log(
-
-        `[${type.toUpperCase()}] ${message}`
-
-    );
+    showOperationFeedback({
+        type,
+        title: type === "success" ? "Bus saved" : type === "error" ? "Bus not saved" : "Bus update",
+        message
+    });
 
 }
 
@@ -1680,10 +1640,9 @@ async function saveBus(root) {
     }
 
     catch(error){
-
-        console.error(error);
-
-        showBusFormError(error.message || "Unable to save bus.");
+        const message = error.message || "Unable to save bus.";
+        showBusFormError(message);
+        showNotification(message, "error");
 
     }
 
