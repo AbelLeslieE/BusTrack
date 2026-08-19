@@ -60,6 +60,14 @@ class LiveTrip(Base):
         default="Running",
     )
 
+    # The route definition stays in its normal morning order.  A return trip
+    # uses ``reverse`` so every consumer can present the same travel order.
+    route_direction: Mapped[str] = mapped_column(
+        String(16),
+        default="forward",
+        nullable=False,
+    )
+
     # ======================================================
     # CURRENT LIVE POSITION
     # ======================================================

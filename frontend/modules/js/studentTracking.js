@@ -2732,13 +2732,13 @@ function startTrackingRefresh() {
      * Fetch the latest tracking data immediately.
      *
      * The student should not have to wait for the first
-     * 10-second interval.
+     * 20-second interval.
      */
     refreshTracking();
 
 
     /*
-     * Refresh the backend tracking data every 10 seconds.
+     * Refresh the backend tracking data every 20 seconds.
      *
      * DRIVER:
      * GPS → /api/gps/update
@@ -2757,7 +2757,7 @@ function startTrackingRefresh() {
                 refreshTracking();
 
             },
-            2000
+            20_000
         );
 
 }

@@ -47,9 +47,9 @@ async def _airotrack_poll_loop() -> None:
     """Keep provider pulling independent of browser/admin page visits."""
 
     try:
-        interval = max(20, int(os.getenv("AIROTRACK_POLL_INTERVAL_SECONDS", "120")))
+        interval = max(20, int(os.getenv("AIROTRACK_POLL_INTERVAL_SECONDS", "20")))
     except ValueError:
-        interval = 30
+        interval = 20
     while True:
         database_session = SessionLocal()
         try:

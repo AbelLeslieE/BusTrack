@@ -127,7 +127,7 @@ payload forms, expected response codes, and the final live-delivery check.
 For Airotrack's `vehicle-live-data` API, configure `AIROTRACK_API_TOKEN` only
 in the server/deployment secret store (or a local uncommitted `.env` file) and
 restart the API. BusTrack then polls every bus's database **registration
-number** every two minutes (set `AIROTRACK_POLL_INTERVAL_SECONDS` to change
+number** every 20 seconds (set `AIROTRACK_POLL_INTERVAL_SECONDS` to change
 this; the minimum is 20 seconds). Add all 24 buses normally in Bus Management;
 their registration number is the only per-bus Airotrack lookup value. The API
 returns the tracker IMEI and BusTrack stores it with the received position.

@@ -33,6 +33,7 @@ from backend.routes.models_tracking import (
 from backend.services.tracking_engine import (
     determine_route_progress,
 )
+from backend.services.trip_direction import ordered_route_stops
 from backend.schemas import StudentAssignmentUpdate
 
 
@@ -472,26 +473,37 @@ def get_student_live_tracking(
             datetime.now(timezone.utc) - received_at
         ).total_seconds() <= expected_interval * 3
 
+    # A fresh ignition-on vehicle fix is the authoritative location, even if
+    # an earlier in-app trip has not received a coordinate yet.  Without this
+    # preference, students can be left with an empty map while the GPS company
+    # is already supplying a valid position for their assigned bus.
+    use_provider_position = provider_is_fresh and (
+        trip is None
+        or provider_state.ignition is True
+        or trip.current_latitude is None
+        or trip.current_longitude is None
+    )
+
     tracking_available = trip is not None or provider_is_fresh
     tracking_latitude = (
-        trip.current_latitude if trip is not None
-        else provider_state.latitude if provider_is_fresh else None
+        provider_state.latitude if use_provider_position
+        else trip.current_latitude if trip is not None else None
     )
     tracking_longitude = (
-        trip.current_longitude if trip is not None
-        else provider_state.longitude if provider_is_fresh else None
+        provider_state.longitude if use_provider_position
+        else trip.current_longitude if trip is not None else None
     )
     tracking_source = (
-        trip.current_location_source or "mobile" if trip is not None
-        else "vehicle_gps" if provider_is_fresh else None
+        "vehicle_gps" if use_provider_position
+        else trip.current_location_source or "mobile" if trip is not None else None
     )
 
     # Translate provider telemetry into a small student-safe status summary.
     # Raw vendor diagnostics (device identity, IP, protocol, odometer, power,
     # and the original payload) remain private to management/technicians.
     location_timestamp = (
-        trip.last_location_update if trip is not None
-        else (provider_state.fix_time or provider_state.received_at) if provider_is_fresh else None
+        (provider_state.fix_time or provider_state.received_at) if use_provider_position
+        else trip.last_location_update if trip is not None else None
     )
     location_age_seconds = None
     if location_timestamp is not None:
@@ -502,8 +514,8 @@ def get_student_live_tracking(
         )
         location_age_seconds = max(0, int((datetime.now(timezone.utc) - timestamp).total_seconds()))
     active_speed = (
-        trip.current_speed if trip is not None
-        else provider_state.speed_kmh if provider_is_fresh else None
+        provider_state.speed_kmh if use_provider_position
+        else trip.current_speed if trip is not None else None
     )
     is_moving = (
         provider_state.motion
@@ -542,6 +554,14 @@ def get_student_live_tracking(
         )
         .all()
     )
+    route_stops = ordered_route_stops(
+        route_stops,
+        trip.route_direction if trip is not None else "forward",
+    )
+    display_sequences = {
+        route_stop.id: index
+        for index, route_stop in enumerate(route_stops, start=1)
+    }
 
     # ======================================================
     # 6. BUILD FRONTEND-SAFE STOP LIST
@@ -578,7 +598,7 @@ def get_student_live_tracking(
                 stop.radius,
 
             "sequence":
-                route_stop.sequence,
+                display_sequences[route_stop.id],
 
             "scheduled_time":
                 route_stop.scheduled_time,
@@ -719,7 +739,7 @@ def get_student_live_tracking(
                 current_stop.stop.radius,
 
             "sequence":
-                current_stop.sequence,
+                display_sequences[current_stop.id],
 
             "distance_meters":
                 (
@@ -773,7 +793,7 @@ def get_student_live_tracking(
                 next_stop.stop.radius,
 
             "sequence":
-                next_stop.sequence,
+                display_sequences[next_stop.id],
 
             "distance_meters":
                 (
@@ -821,19 +841,22 @@ def get_student_live_tracking(
                 tracking_longitude,
 
             "speed":
-                trip.current_speed if trip is not None else provider_state.speed_kmh,
+                provider_state.speed_kmh if use_provider_position else trip.current_speed if trip is not None else None,
 
             "accuracy":
-                trip.current_accuracy if trip is not None else provider_state.accuracy,
+                provider_state.accuracy if use_provider_position else trip.current_accuracy if trip is not None else None,
 
             "last_location_update":
-                trip.last_location_update if trip is not None else (provider_state.fix_time or provider_state.received_at),
+                (provider_state.fix_time or provider_state.received_at) if use_provider_position else trip.last_location_update if trip is not None else None,
 
             "started_at":
                 trip.started_at if trip is not None else (provider_state.fix_time or provider_state.received_at),
 
             "location_source":
                 tracking_source,
+
+            "route_direction":
+                trip.route_direction if trip is not None else "forward",
 
             "ignition":
                 provider_state.ignition if provider_state is not None else None,

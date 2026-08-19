@@ -27,6 +27,7 @@ from backend.services.tracking_engine import (
     calculate_stop_distance,
     is_inside_stop_radius,
 )
+from backend.services.trip_direction import direction_from_start_position, ordered_route_stops
 from backend.security import require_driver, require_management
 from backend.audit import record_audit_event
 from backend.routes.gps_provider import vehicle_gps_is_authoritative
@@ -373,17 +374,15 @@ def update_route_stop_progression(
 
 
         # --------------------------------------------------
-        # Find the next route stop.
+        # Find the next route stop in this trip's travel order.  The list can
+        # be reversed for an evening return journey.
         # --------------------------------------------------
 
-        next_route_stop = next(
-            (
-                route_stop
-                for route_stop in route_stops
-                if route_stop.sequence
-                > current_route_stop.sequence
-            ),
-            None,
+        current_index = route_stops.index(current_route_stop)
+        next_route_stop = (
+            route_stops[current_index + 1]
+            if current_index + 1 < len(route_stops)
+            else None
         )
 
 
@@ -557,6 +556,23 @@ def start_trip(
             detail="Trip already running.",
         )
 
+    route_stops = (
+        db.query(RouteStop)
+        .filter(RouteStop.route_id == route.id)
+        .order_by(RouteStop.sequence.asc())
+        .all()
+    )
+    vehicle_state = (
+        db.query(BusGPSState)
+        .filter(BusGPSState.bus_id == driver.bus_id)
+        .first()
+    )
+    route_direction = direction_from_start_position(
+        route_stops,
+        vehicle_state.latitude if vehicle_gps_is_authoritative(vehicle_state) else None,
+        vehicle_state.longitude if vehicle_gps_is_authoritative(vehicle_state) else None,
+    )
+
     # ------------------------------------------------------
     # Create Trip
     # ------------------------------------------------------
@@ -570,6 +586,8 @@ def start_trip(
         route_id=route.id,
 
         status="Running",
+
+        route_direction=route_direction,
 
         started_at=datetime.now(
             timezone.utc
@@ -591,11 +609,6 @@ def start_trip(
     # position, seed the just-created trip immediately. The driver UI can then
     # switch to vehicle GPS without waiting for the next 20-second provider
     # delivery; later deliveries continue through the normal provider mirror.
-    vehicle_state = (
-        db.query(BusGPSState)
-        .filter(BusGPSState.bus_id == trip.bus_id)
-        .first()
-    )
     if vehicle_gps_is_authoritative(vehicle_state):
         received_at = vehicle_state.received_at
         db.add(LiveLocation(
@@ -846,6 +859,11 @@ def update_location(
         )
         .all()
     )
+    if trip.current_route_stop_id is None and trip.current_latitude is None:
+        trip.route_direction = direction_from_start_position(
+            route_stops, request.latitude, request.longitude
+        )
+    route_stops = ordered_route_stops(route_stops, trip.route_direction)
 
 
 

@@ -148,6 +148,10 @@ def initialize_database() -> None:
                 connection.execute(text(
                     "ALTER TABLE live_trips ADD COLUMN current_location_source VARCHAR(32)"
                 ))
+            if "route_direction" not in trip_columns:
+                connection.execute(text(
+                    "ALTER TABLE live_trips ADD COLUMN route_direction VARCHAR(16) NOT NULL DEFAULT 'forward'"
+                ))
             if "ended_by_user_id" not in trip_columns:
                 connection.execute(text(
                     "ALTER TABLE live_trips ADD COLUMN ended_by_user_id INTEGER NULL"
