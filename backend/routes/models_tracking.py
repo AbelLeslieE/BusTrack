@@ -207,6 +207,23 @@ class LiveLocation(Base):
     )
 
 
+class TripStopEvent(Base):
+    """Immutable arrival/departure record for a stop served during a trip."""
+
+    __tablename__ = "trip_stop_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    trip_id: Mapped[int] = mapped_column(ForeignKey("live_trips.id"), index=True, nullable=False)
+    route_stop_id: Mapped[int] = mapped_column(ForeignKey("route_stops.id"), index=True, nullable=False)
+    stop_id: Mapped[int] = mapped_column(ForeignKey("stops.id"), index=True, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(16), index=True, nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True, nullable=False)
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    distance_meters: Mapped[float | None] = mapped_column(Float, nullable=True)
+    radius_meters: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
 # ==========================================================
 # EXTERNAL GPS PROVIDER INTEGRATION
 # ==========================================================

@@ -40,6 +40,10 @@ from backend.schemas_gps_provider import (
 )
 from backend.security import require_driver, require_gps_technician
 from backend.models import Driver
+from backend.services.vehicle_gps import vehicle_gps_is_authoritative
+from backend.routes.gps import update_route_stop_progression
+from backend.services.trip_direction import direction_from_start_position, ordered_route_stops
+from backend.models import RouteStop
 
 
 router = APIRouter(prefix="/api/integrations/gps", tags=["GPS Provider Integration"])
@@ -286,19 +290,8 @@ def _serialize_audit_event(event: AuditEvent) -> dict[str, Any]:
     }
 
 
-def vehicle_gps_is_authoritative(state: BusGPSState | None, now: datetime | None = None) -> bool:
-    """Vehicle GPS blocks driver-phone updates only while on and recently heard."""
-
-    if state is None or state.ignition is not True or state.valid is False:
-        return False
-    current = now or _utc_now()
-    position_time = state.fix_time or state.received_at
-    position_time = position_time.replace(tzinfo=timezone.utc) if position_time.tzinfo is None else position_time
-    return position_time >= current - timedelta(seconds=60)
-
-
 def _update_active_trip_from_vehicle(db: Session, position: dict[str, Any], bus_id: int, received_at: datetime) -> int | None:
-    """Mirror provider GPS into the existing trip API without changing trip lifecycle."""
+    """Mirror vehicle GPS and geofence progression into the active trip."""
 
     trip = db.query(LiveTrip).filter(
         LiveTrip.bus_id == bus_id,
@@ -307,6 +300,33 @@ def _update_active_trip_from_vehicle(db: Session, position: dict[str, Any], bus_
     ).order_by(LiveTrip.last_location_update.desc(), LiveTrip.started_at.desc()).first()
     if trip is None:
         return None
+
+    previous_location = db.query(LiveLocation).filter(
+        LiveLocation.trip_id == trip.id,
+    ).order_by(LiveLocation.recorded_at.desc()).first()
+    route_stops = db.query(RouteStop).filter(
+        RouteStop.route_id == trip.route_id,
+    ).order_by(RouteStop.sequence.asc()).all()
+
+    # A return trip starts near the final morning stop (normally campus).
+    # Store its direction once; the route definition itself is never rewritten.
+    if trip.current_route_stop_id is None and trip.current_latitude is None:
+        trip.route_direction = direction_from_start_position(
+            route_stops,
+            position["latitude"],
+            position["longitude"],
+        )
+
+    update_route_stop_progression(
+        trip=trip,
+        route_stops=ordered_route_stops(route_stops, trip.route_direction),
+        latitude=position["latitude"],
+        longitude=position["longitude"],
+        previous_location=previous_location,
+        current_timestamp=position["fix_time"] or received_at,
+        db=db,
+    )
+
     db.add(LiveLocation(
         trip_id=trip.id,
         latitude=position["latitude"], longitude=position["longitude"],

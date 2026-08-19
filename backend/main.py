@@ -32,6 +32,7 @@ from backend.routes.assignments import router as assignments_router
 from backend.routes.notifications import router as notifications_router
 from backend.routes.settings import router as settings_router
 from backend.routes.active_users import router as active_users_router
+from backend.routes.trip_history import router as trip_history_router
 from backend.routes.admin import router as admin_router
 from backend.security import RequestSecurityMiddleware
 from backend.request_audit import RequestAuditMiddleware
@@ -118,6 +119,7 @@ app.include_router(assignments_router)
 app.include_router(notifications_router)
 app.include_router(settings_router)
 app.include_router(active_users_router)
+app.include_router(trip_history_router)
 app.include_router(admin_router)
 
 

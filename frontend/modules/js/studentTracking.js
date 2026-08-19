@@ -9,6 +9,8 @@
    CONFIGURATION
 ========================================================== */
 
+import { animateVehicleMarker } from "/static/common/vehicleMotion.js";
+
 const API = {
 
     STUDENT:
@@ -40,6 +42,10 @@ const state = {
 
     busMarker: null,
 
+    busMotion: { heading: null, frame: null },
+
+    busTargetLocation: null,
+
     stopMarkers: [],
 
     routeLine: null,
@@ -49,6 +55,8 @@ const state = {
     roadRouteDistance: 0,
 
     roadRouteLoaded: false,
+
+    roadRouteRequestId: 0,
 
     roadRouteDuration: 0,
 
@@ -62,7 +70,9 @@ const state = {
 
     refreshTimer: null,
 
-    refreshInProgress: false
+    refreshInProgress: false,
+
+    routeDirection: null
 
 };
 
@@ -1225,6 +1235,21 @@ async function loadStudentTracking() {
     );
 
 
+    const nextRouteDirection =
+        data?.trip?.route_direction ||
+        "forward";
+
+    if (
+        state.routeDirection &&
+        state.routeDirection !== nextRouteDirection
+    ) {
+        resetRoadRouteForDirection();
+        clearMapObjects();
+    }
+
+    state.routeDirection =
+        nextRouteDirection;
+
     state.trackingData =
         data;
 
@@ -1515,6 +1540,16 @@ function initializeMap() {
 
 function clearMapObjects() {
 
+    if (state.busMotion.frame) {
+
+        cancelAnimationFrame(state.busMotion.frame);
+        state.busMotion.frame = null;
+
+    }
+
+    state.busMotion.heading = null;
+    state.busTargetLocation = null;
+
     if (
         state.busMarker &&
         state.map
@@ -1649,6 +1684,28 @@ function createStopIcon(
    LOAD ROAD-FOLLOWING ROUTE FROM OSRM
 ========================================================== */
 
+function resetRoadRouteForDirection() {
+
+    if (
+        state.map &&
+        state.routeLine
+    ) {
+
+        state.map.removeLayer(
+            state.routeLine
+        );
+
+    }
+
+    state.routeLine = null;
+    state.roadRoute = [];
+    state.roadRouteDistance = 0;
+    state.roadRouteDuration = 0;
+    state.roadRouteLoaded = false;
+    state.roadRouteRequestId += 1;
+
+}
+
 async function loadRoadRoute() {
 
     /*
@@ -1670,6 +1727,8 @@ async function loadRoadRoute() {
 
     const stops =
         getRouteStops();
+
+    const requestId = state.roadRouteRequestId;
 
 
     /*
@@ -1749,6 +1808,14 @@ async function loadRoadRoute() {
 
         const data =
             await response.json();
+
+        // A direction change may have happened while OSRM was responding.
+        // Never draw the old journey over the newly reversed route.
+        if (requestId !== state.roadRouteRequestId) {
+
+            return;
+
+        }
 
 
         /*
@@ -2047,6 +2114,8 @@ function renderMapObjects() {
                 state.map
             );
 
+        state.busTargetLocation = { latitude, longitude };
+
 
         state.busMarker.bindPopup(
             `
@@ -2185,25 +2254,11 @@ function updateBusPosition() {
 
     }
 
-    /*
-     * Current marker position.
-     */
-    const currentPosition =
-        state.busMarker.getLatLng();
-
-    /*
-     * Check whether the server actually supplied
-     * a different GPS position.
-     */
+    /* Compare with the received target, not the marker's in-flight position. */
     const positionChanged =
-        Math.abs(
-            currentPosition.lat -
-            latitude
-        ) > 0.0000001 ||
-        Math.abs(
-            currentPosition.lng -
-            longitude
-        ) > 0.0000001;
+        !state.busTargetLocation ||
+        Math.abs(state.busTargetLocation.latitude - latitude) > 0.0000001 ||
+        Math.abs(state.busTargetLocation.longitude - longitude) > 0.0000001;
 
     /*
      * Log the server position so we can verify
@@ -2212,13 +2267,6 @@ function updateBusPosition() {
     console.log(
         "BusTrack: Updating student bus marker.",
         {
-            previous: {
-                latitude:
-                    currentPosition.lat,
-                longitude:
-                    currentPosition.lng
-            },
-
             newest: {
                 latitude,
                 longitude
@@ -2234,10 +2282,15 @@ function updateBusPosition() {
      */
     if (positionChanged) {
 
-        state.busMarker.setLatLng([
+        state.busTargetLocation = { latitude, longitude };
+
+        animateVehicleMarker(
+            state.busMarker,
             latitude,
-            longitude
-        ]);
+            longitude,
+            state.busMotion,
+            ".student-map-bus-marker-inner"
+        );
 
     }
 
@@ -2738,7 +2791,8 @@ function startTrackingRefresh() {
 
 
     /*
-     * Refresh the backend tracking data every 20 seconds.
+     * Read the saved position every two seconds. Vehicle hardware still
+     * publishes at its configured 20-second / two-minute cadence.
      *
      * DRIVER:
      * GPS → /api/gps/update
@@ -2757,7 +2811,7 @@ function startTrackingRefresh() {
                 refreshTracking();
 
             },
-            20_000
+            2_000
         );
 
 }
@@ -2808,6 +2862,15 @@ function cleanupTracking() {
     state.busMarker =
         null;
 
+    if (state.busMotion.frame) {
+
+        cancelAnimationFrame(state.busMotion.frame);
+
+    }
+
+    state.busMotion = { heading: null, frame: null };
+    state.busTargetLocation = null;
+
     state.stopMarkers = [];
 
     state.routeLine =
@@ -2834,6 +2897,9 @@ function cleanupTracking() {
         0;
     state.refreshInProgress =
        false;
+
+    state.routeDirection =
+        null;
 
 }
 /* ==========================================================
@@ -3531,6 +3597,27 @@ function renderTrackingSummary() {
                         trip?.speed
                     )
                 )}
+
+            </strong>
+
+        </div>
+
+
+        <div
+            class="student-tracking-summary-card"
+        >
+
+            <span>
+                JOURNEY
+            </span>
+
+            <strong>
+
+                ${
+                    trip?.route_direction === "reverse"
+                        ? "Return journey"
+                        : "Morning journey"
+                }
 
             </strong>
 
@@ -4250,6 +4337,9 @@ export function render() {
 
     state.etaRequestId =
         0;
+
+    state.routeDirection =
+        null;
 
 
     /*

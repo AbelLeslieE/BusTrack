@@ -31,6 +31,7 @@ from backend.routes.models_tracking import (
 )
 
 from backend.services.tracking_engine import (
+    calculate_stop_distance,
     determine_route_progress,
 )
 from backend.services.trip_direction import ordered_route_stops
@@ -645,7 +646,59 @@ def get_student_live_tracking(
 
     }
 
+    # The trip's geofence state is written by every accepted mobile and
+    # vehicle-GPS update.  Prefer it so the map and the railway-style view
+    # cannot disagree about which stop the bus is serving.
+    if trip is not None and trip.current_route_stop_id is not None:
+
+        current_index = next(
+            (
+                index
+                for index, route_stop in enumerate(route_stops)
+                if route_stop.id == trip.current_route_stop_id
+            ),
+            -1,
+        )
+
+        if current_index >= 0:
+            current_route_stop = route_stops[current_index]
+            next_index = (
+                current_index + 1
+                if current_index + 1 < len(route_stops)
+                else -1
+            )
+            next_route_stop = (
+                route_stops[next_index]
+                if next_index >= 0
+                else None
+            )
+            current_distance = calculate_stop_distance(
+                tracking_latitude,
+                tracking_longitude,
+                current_route_stop.stop,
+            )
+            next_distance = calculate_stop_distance(
+                tracking_latitude,
+                tracking_longitude,
+                next_route_stop.stop if next_route_stop is not None else None,
+            )
+
+            route_progress = {
+                "current_stop": current_route_stop,
+                "next_stop": next_route_stop,
+                "current_index": current_index,
+                "next_index": next_index,
+                "current_distance_meters": current_distance,
+                "next_distance_meters": next_distance,
+                "current_inside_radius": trip.current_stop_status == "Arrived",
+                "next_inside_radius": False,
+            }
+
+    # Older trips and provider-only tracking have no persisted stop state, so
+    # retain the safe server-side calculated fallback until their next update.
     if (
+        route_progress["current_stop"] is None
+        and
         tracking_available
         and
         tracking_latitude is not None
@@ -857,6 +910,12 @@ def get_student_live_tracking(
 
             "route_direction":
                 trip.route_direction if trip is not None else "forward",
+
+            "stop_status":
+                trip.current_stop_status if trip is not None else None,
+
+            "current_route_stop_id":
+                trip.current_route_stop_id if trip is not None else None,
 
             "ignition":
                 provider_state.ignition if provider_state is not None else None,

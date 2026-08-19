@@ -17,6 +17,7 @@ from backend.routes.models_tracking import (
     GPSIngestToken,
     LiveLocation,
     LiveTrip,
+    TripStopEvent,
     ProviderGPSPosition,
 )
 
@@ -272,6 +273,9 @@ def delete_bus(
     # SET NULL constraints.
     db.query(FleetNotification).filter(FleetNotification.trip_id.in_(trip_ids)).update(
         {FleetNotification.trip_id: None}, synchronize_session=False
+    )
+    db.query(TripStopEvent).filter(TripStopEvent.trip_id.in_(trip_ids)).delete(
+        synchronize_session=False
     )
     db.query(LiveLocation).filter(LiveLocation.trip_id.in_(trip_ids)).delete(
         synchronize_session=False

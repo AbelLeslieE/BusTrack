@@ -9,9 +9,10 @@
 
 .sidebar{
 
-    position:sticky;
+    /* Desktop navigation follows the page and stretches beside its content. */
+    position:relative;
 
-    top:34px;
+    top:auto;
 
     display:flex;
 
@@ -19,11 +20,16 @@
 
     width:100%;
 
-    height:calc(100dvh - 68px);
+    /* Match the height of the current page's content column. */
+    align-self:stretch;
+
+    min-height:calc(100dvh - 68px);
+
+    height:auto;
 
     padding:28px;
 
-    overflow-y:auto;
+    overflow:visible;
 
     overflow-x:hidden;
 
@@ -345,7 +351,7 @@
 
     gap:8px;
 
-    flex:1;
+    flex:0 0 auto;
 
 }
 
@@ -554,6 +560,8 @@
 
     margin-top:32px;
 
+    flex:0 0 auto;
+
 }
 
 /* ==========================================================
@@ -672,10 +680,14 @@
                 calc(100vw - 24px)
             );
 
+        align-self:auto;
+
         height:auto;
 
         max-height:
             calc(100dvh - 24px);
+
+        overflow:hidden;
 
         z-index:9999;
 
@@ -692,7 +704,7 @@
 
         -webkit-overflow-scrolling:touch;
 
-        overscroll-behavior:contain;
+        /* On a small-screen drawer, only the navigation list scrolls. */
 
         transition:
             transform .32s
@@ -704,6 +716,23 @@
             ),
             opacity .2s ease,
             visibility 0s linear .32s;
+
+    }
+
+    .sidebar-nav{
+
+        flex:1 1 auto;
+        min-height:0;
+        overflow-y:auto;
+        overscroll-behavior:contain;
+        scrollbar-width:none;
+        -ms-overflow-style:none;
+
+    }
+
+    .sidebar-nav::-webkit-scrollbar{
+
+        display:none;
 
     }
 

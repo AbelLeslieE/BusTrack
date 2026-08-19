@@ -17,7 +17,7 @@ from backend.models import (
     FleetNotification,
     Student,
 )
-from backend.routes.models_tracking import LiveLocation, LiveTrip
+from backend.routes.models_tracking import LiveLocation, LiveTrip, TripStopEvent
 from backend.schemas import (
     RouteCreate,
     RouteUpdate,
@@ -280,6 +280,9 @@ def delete_route(
     )
     db.query(FleetNotification).filter(FleetNotification.route_id == route.id).update(
         {FleetNotification.route_id: None}, synchronize_session=False
+    )
+    db.query(TripStopEvent).filter(TripStopEvent.trip_id.in_(trip_ids)).delete(
+        synchronize_session=False
     )
     db.query(LiveLocation).filter(LiveLocation.trip_id.in_(trip_ids)).delete(
         synchronize_session=False

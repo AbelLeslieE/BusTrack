@@ -57,6 +57,11 @@ const adminModules = {
         load: () => import("../modules/js/live_tracking.js")
     },
 
+    tripHistory: {
+        title: "Trip History",
+        load: () => import("../modules/js/adminTripHistory.js")
+    },
+
     buses: {
         title: "Buses",
         load: () => import("../modules/js/buses.js")

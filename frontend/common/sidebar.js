@@ -8,6 +8,7 @@ import { logoutSession } from "/static/common/auth.js";
 const primaryItems = [
   ["dashboard", "Overview", "⌂"],
   ["live_tracking", "Live tracking", "◎"],
+  ["tripHistory", "Trip history", "◷"],
   ["buses", "Buses", "▣"],
   ["routes", "Routes", "⌁"],
   ["assignments", "Assignments", "⇄"],

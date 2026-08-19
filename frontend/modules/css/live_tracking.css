@@ -100,6 +100,9 @@
 
     gap:24px;
 
+    /* A list of buses must never determine the grid row's height. */
+    align-items:start;
+
 }
 
 
@@ -110,6 +113,12 @@
 .live-sidebar{
 
     padding:20px;
+
+    /* Keep the fleet list inside the panel beside the fixed-height map. */
+    display:flex;
+    flex-direction:column;
+    height:766px;
+    min-height:0;
 
 }
 
@@ -122,6 +131,20 @@
     gap:16px;
 
     margin-top:20px;
+
+    /* Cards remain scrollable without making the whole page taller. */
+    flex:1 1 auto;
+    min-height:0;
+    overflow-y:auto;
+    overscroll-behavior:contain;
+    scrollbar-width:none;
+    -ms-overflow-style:none;
+
+}
+
+.trip-list::-webkit-scrollbar{
+
+    display:none;
 
 }
 
@@ -470,6 +493,11 @@
 
     .live-grid{
         grid-template-columns:1fr;
+    }
+
+    .live-sidebar{
+        /* The sidebar precedes the map on smaller screens, so keep it bounded. */
+        height:min(34rem, calc(100dvh - 4rem));
     }
 
     #fleetMap{

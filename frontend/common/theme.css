@@ -116,6 +116,22 @@ body{
     overflow-x:hidden;
 
 }
+
+/* Keep page scrolling available without showing a browser scrollbar. */
+html,
+body{
+
+    scrollbar-width:none;
+    -ms-overflow-style:none;
+
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar{
+
+    display:none;
+
+}
 /* ==========================================================
    ADMIN WALLPAPER
 ========================================================== */
@@ -496,6 +512,33 @@ textarea{
     outline:none;
 
     transition:all var(--transition);
+
+}
+
+/* Keep native select menus readable inside the dark portal.  The
+   color-scheme hint also makes Chromium render its expanded menu dark. */
+select{
+
+    color-scheme:dark;
+
+    background-color:#172541;
+
+}
+
+select option,
+select optgroup{
+
+    background:#172541;
+
+    color:var(--text);
+
+}
+
+select option:checked{
+
+    background:#1769c2;
+
+    color:#fff;
 
 }
 

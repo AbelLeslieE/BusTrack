@@ -694,13 +694,11 @@ function animateBusMarker(
         performance.now();
 
     /*
-        The admin refresh currently runs every 2 seconds.
-
-        1800 ms gives the marker enough time to smoothly
-        travel toward the next GPS position before the next
-        server update normally arrives.
+        Vehicle hardware normally supplies the next position every 20 seconds.
+        Animate for 18 seconds so each received segment feels like continuous
+        road travel and finishes just before the next expected point.
     */
-    const duration = 1800;
+    const duration = 18000;
 
     /*
         Cancel the previous animation for this bus.
@@ -1264,7 +1262,7 @@ export function startFleetRefresh() {
 
 
     /* ======================================================
-       REFRESH EVERY 20 SECONDS
+       REFRESH EVERY 2 SECONDS
     ====================================================== */
 
     refreshInterval = setInterval(
@@ -1275,7 +1273,7 @@ export function startFleetRefresh() {
 
         },
 
-        20000
+        2000
 
     );
 
@@ -1782,23 +1780,24 @@ function updateFleet(trips, buses = []) {
                 );
 
 
-                /* ==================================================
-                MOVE + ROTATE BUS
-                ================================================== */
+                /* Do not restart the 18-second segment for a repeated poll. */
+                if (targetHeading !== null) {
 
-                animateBusMarker(
+                    animateBusMarker(
 
-                    marker,
+                        marker,
 
-                    latitude,
+                        latitude,
 
-                    longitude,
+                        longitude,
 
-                    trip.bus_id,
+                        trip.bus_id,
 
-                    targetHeading
+                        targetHeading
 
-                );
+                    );
+
+                }
 
             }
 

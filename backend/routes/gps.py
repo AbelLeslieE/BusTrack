@@ -13,6 +13,7 @@ from backend.database import get_db
 from backend.routes.models_tracking import (
     LiveTrip,
     LiveLocation,
+    TripStopEvent,
 )
 
 from backend.schemas_tracking import (
@@ -30,7 +31,7 @@ from backend.services.tracking_engine import (
 from backend.services.trip_direction import direction_from_start_position, ordered_route_stops
 from backend.security import require_driver, require_management
 from backend.audit import record_audit_event
-from backend.routes.gps_provider import vehicle_gps_is_authoritative
+from backend.services.vehicle_gps import vehicle_gps_is_authoritative
 from backend.routes.models_tracking import BusGPSState
 
 from backend.models import (
@@ -172,6 +173,19 @@ def update_route_stop_progression(
     if not route_stops:
         return None
 
+    def record_stop_event(event_type: str, route_stop: RouteStop, stop, distance: float | None):
+        db.add(TripStopEvent(
+            trip_id=trip.id,
+            route_stop_id=route_stop.id,
+            stop_id=stop.id,
+            event_type=event_type,
+            occurred_at=current_timestamp,
+            latitude=latitude,
+            longitude=longitude,
+            distance_meters=distance,
+            radius_meters=float(stop.radius) if stop.radius is not None else 50.0,
+        ))
+
 
     # ======================================================
     # FIND CURRENT ROUTE STOP
@@ -205,7 +219,7 @@ def update_route_stop_progression(
 
         stops_inside_radius = []
 
-        for route_stop in route_stops:
+        for route_index, route_stop in enumerate(route_stops):
 
             stop = route_stop.stop
 
@@ -224,7 +238,7 @@ def update_route_stop_progression(
             ):
                 stops_inside_radius.append(
                     (
-                        route_stop.sequence,
+                        route_index,
                         route_stop,
                     )
                 )
@@ -250,6 +264,8 @@ def update_route_stop_progression(
             )
 
             trip.current_stop_departed_at = None
+
+            record_stop_event("Arrived", current_route_stop, current_route_stop.stop, None)
 
         else:
 
@@ -314,6 +330,8 @@ def update_route_stop_progression(
 
         trip.current_stop_departed_at = None
 
+        record_stop_event("Arrived", current_route_stop, current_stop, current_distance)
+
 
         return {
             "event": "Arrived",
@@ -371,6 +389,8 @@ def update_route_stop_progression(
         trip.current_stop_departed_at = (
             current_timestamp
         )
+
+        record_stop_event("Departed", current_route_stop, current_stop, current_distance)
 
 
         # --------------------------------------------------
@@ -611,6 +631,15 @@ def start_trip(
     # delivery; later deliveries continue through the normal provider mirror.
     if vehicle_gps_is_authoritative(vehicle_state):
         received_at = vehicle_state.received_at
+        update_route_stop_progression(
+            trip=trip,
+            route_stops=ordered_route_stops(route_stops, trip.route_direction),
+            latitude=vehicle_state.latitude,
+            longitude=vehicle_state.longitude,
+            previous_location=None,
+            current_timestamp=vehicle_state.fix_time or received_at,
+            db=db,
+        )
         db.add(LiveLocation(
             trip_id=trip.id,
             latitude=vehicle_state.latitude,

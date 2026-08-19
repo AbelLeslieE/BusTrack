@@ -80,7 +80,10 @@ export function render() {
 
                 <div
                     id="tripList"
-                    class="trip-list">
+                    class="trip-list"
+                    tabindex="0"
+                    role="region"
+                    aria-label="Tracked buses list">
 
                     <div class="empty-state">
 

@@ -1,9 +1,13 @@
 /* ==========================================================
    DRIVER TRACKING SERVICE
 ========================================================== */
+import { animateVehicleMarker } from "/static/common/vehicleMotion.js";
+
 console.log("trackingService.js loaded");
 let map = null;
 let marker = null;
+const markerMotion = { heading: null, frame: null };
+let markerTargetLocation = null;
 console.log(
     "Driver map initialized WITHOUT bus marker."
 );
@@ -91,6 +95,10 @@ export function initializeMap(containerId = "driverMap") {
     // Reset the old marker reference.
     // The previous marker belonged to the old Leaflet map.
     marker = null;
+    markerTargetLocation = null;
+    if (markerMotion.frame) cancelAnimationFrame(markerMotion.frame);
+    markerMotion.heading = null;
+    markerMotion.frame = null;
 
     // ==========================================================
     // Default Location - Sahrdaya College
@@ -153,16 +161,38 @@ export function updateMarker(latitude, longitude, label = "Current Bus") {
         marker = L.marker([
             latitude,
             longitude
-        ])
+        ], {
+            icon: L.divIcon({
+                className: "driver-map-bus-marker",
+                html: '<div class="driver-map-bus-marker-inner"><i class="fa-solid fa-bus" aria-hidden="true"></i></div>',
+                iconSize: [44, 44],
+                iconAnchor: [22, 22],
+            }),
+        })
         .addTo(map)
         .bindPopup(label);
 
+        markerTargetLocation = { latitude: Number(latitude), longitude: Number(longitude) };
+
     } else {
 
-        marker.setLatLng([
-            latitude,
-            longitude
-        ]);
+        const isNewPosition =
+            !markerTargetLocation ||
+            Math.abs(markerTargetLocation.latitude - Number(latitude)) > 0.0000001 ||
+            Math.abs(markerTargetLocation.longitude - Number(longitude)) > 0.0000001;
+
+        if (isNewPosition) {
+
+            markerTargetLocation = { latitude: Number(latitude), longitude: Number(longitude) };
+            animateVehicleMarker(
+                marker,
+                latitude,
+                longitude,
+                markerMotion,
+                ".driver-map-bus-marker-inner"
+            );
+
+        }
 
     }
 
@@ -681,7 +711,7 @@ export function initializeTrackingSource() {
     if (sourcePollTimer !== null) window.clearInterval(sourcePollTimer);
     sourcePollTimer = window.setInterval(() => {
         void refreshTrackingSource().catch(() => {});
-    }, 10_000);
+    }, 2_000);
 }
 
 async function startTripUsingVehicleGps() {
@@ -1724,6 +1754,11 @@ export function cleanupTracking() {
     ====================================================== */
 
     trackingSession++;
+
+    if (markerMotion.frame) cancelAnimationFrame(markerMotion.frame);
+    markerMotion.heading = null;
+    markerMotion.frame = null;
+    markerTargetLocation = null;
 
     if (sourcePollTimer !== null) {
         window.clearInterval(sourcePollTimer);
