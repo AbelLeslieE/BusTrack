@@ -31,6 +31,7 @@ from backend.schemas import (
     RouteStopReorder,
 ) 
 from backend.security import require_management
+from backend.routes.models_tracking import LiveTrip, TripStopEvent
 # ==========================================================
 # ROUTER
 # ==========================================================
@@ -246,18 +247,66 @@ def replace_route_stops(
         raise HTTPException(status_code=404, detail=f"Stop not found: {missing_ids[0]}.")
 
     try:
-        db.query(RouteStop).filter(RouteStop.route_id == route_id).delete(synchronize_session=False)
-        db.flush()
+        # Route-stop IDs are referenced by the live trip's current geofence
+        # state.  Recreating every row on each route edit invalidates those
+        # references (and PostgreSQL correctly refuses the delete).  Retain
+        # rows for stops that are still part of the route and only remove
+        # genuinely omitted stops.
+        existing_stops = db.query(RouteStop).filter(
+            RouteStop.route_id == route_id
+        ).all()
+        existing_by_stop_id = {item.stop_id: item for item in existing_stops}
+        requested_stop_ids = set(stop_ids)
+        removed_stops = [
+            item for item in existing_stops
+            if item.stop_id not in requested_stop_ids
+        ]
+
+        removed_ids = [item.id for item in removed_stops]
+        if removed_ids:
+            # Stop-arrival history is immutable.  Do not silently delete or
+            # rewrite that audit trail when someone edits a route.
+            has_history = db.query(TripStopEvent.id).filter(
+                TripStopEvent.route_stop_id.in_(removed_ids)
+            ).first()
+            if has_history:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "A removed stop is referenced by trip history and "
+                        "cannot be deleted. Keep the stop or create a new route."
+                    ),
+                )
+
+            # A removed stop may still be the current stop of an active or
+            # completed trip.  The historical trip remains intact; clearing
+            # this transient pointer lets the next GPS update choose from the
+            # newly saved route instead of violating the foreign key.
+            db.query(LiveTrip).filter(
+                LiveTrip.current_route_stop_id.in_(removed_ids)
+            ).update(
+                {
+                    LiveTrip.current_route_stop_id: None,
+                    LiveTrip.current_stop_status: "Approaching",
+                    LiveTrip.current_stop_arrived_at: None,
+                    LiveTrip.current_stop_departed_at: None,
+                },
+                synchronize_session=False,
+            )
+            db.query(RouteStop).filter(RouteStop.id.in_(removed_ids)).delete(
+                synchronize_session=False
+            )
+
         for sequence, item in enumerate(stop_data, start=1):
-            db.add(RouteStop(
-                route_id=route_id,
-                stop_id=item.stop_id,
-                sequence=sequence,
-                scheduled_time=item.scheduled_time,
-                fare=item.fare,
-                distance_from_previous=item.distance_from_previous,
-                estimated_minutes=item.estimated_minutes,
-            ))
+            route_stop = existing_by_stop_id.get(item.stop_id)
+            if route_stop is None:
+                route_stop = RouteStop(route_id=route_id, stop_id=item.stop_id)
+                db.add(route_stop)
+            route_stop.sequence = sequence
+            route_stop.scheduled_time = item.scheduled_time
+            route_stop.fare = item.fare
+            route_stop.distance_from_previous = item.distance_from_previous
+            route_stop.estimated_minutes = item.estimated_minutes
         route.total_stops = len(stop_data)
         db.commit()
     except Exception:
