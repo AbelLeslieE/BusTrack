@@ -42,13 +42,13 @@ export function render() {
 
                 <p>
 
-                    Buses appear here after their configured GPS device reports a position.
+                    Registered buses appear here. A map pin is shown after the configured GPS device reports a position.
 
                 </p>
 
                 <p class="tracking-header-note">
 
-                    Select a bus card to focus its real-time map pin. Only reported vehicle data is shown—there are no demo buses or placeholder status cards.
+                    Cards without a GPS report clearly show that tracking is waiting to start. Select a reported bus card to focus its real-time map pin.
 
                 </p>
 
@@ -74,7 +74,7 @@ export function render() {
 
                 <p class="live-sidebar-note">
 
-                    Each card shows the latest GPS status supplied by the tracker, including ignition state and when that reading was recorded.
+                    Each bus is visible here. Reported buses include the latest tracker status, ignition state, and reading time.
 
                 </p>
 

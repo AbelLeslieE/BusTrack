@@ -1131,22 +1131,13 @@ export async function loadLiveTrips(
 
     try {
 
-        const response = await fetch(
-
-            "/api/gps/live",
-
-            {
-
-                headers: {
-
-                    Authorization:
-                        `Bearer ${token}`
-
-                }
-
-            }
-
-        );
+        const headers = {
+            Authorization: `Bearer ${token}`
+        };
+        const [response, busesResponse] = await Promise.all([
+            fetch("/api/gps/live", { headers }),
+            fetch("/api/buses/", { headers }),
+        ]);
 
 
         /* ======================================================
@@ -1177,6 +1168,9 @@ export async function loadLiveTrips(
 
         const trips =
             await response.json();
+        const buses = busesResponse.ok
+            ? await busesResponse.json()
+            : [];
 
 
         /* ======================================================
@@ -1200,7 +1194,7 @@ export async function loadLiveTrips(
         );
 
 
-        updateFleet(trips);
+        updateFleet(trips, buses);
 
     }
 
@@ -1345,7 +1339,7 @@ function endTripAsAdmin(trip, action) {
    UPDATE FLEET UI
 ========================================================== */
 
-function updateFleet(trips) {
+function updateFleet(trips, buses = []) {
 
     /* ======================================================
        MAP MUST EXIST
@@ -1417,15 +1411,7 @@ function updateFleet(trips) {
         lastServerUpdates.clear();
         lastDisplayTimes.clear();
 
-        tripList.innerHTML = `
-
-            <div class="empty-state">
-
-                No tracked buses have reported a GPS location yet.
-
-            </div>
-
-        `;
+        appendWaitingBusCards(tripList, buses);
 
         return;
 
@@ -2125,6 +2111,8 @@ function updateFleet(trips) {
 
     });
 
+    appendWaitingBusCards(tripList, buses, activeBusIds);
+
     /* On first load, frame the map around only the GPS positions that were
        actually returned by the backend. A selected card keeps control of the
        map afterwards. */
@@ -2138,7 +2126,60 @@ function updateFleet(trips) {
         hasFittedFleetMap = true;
     }
 
+    if (!Array.isArray(buses)) {
+
+        buses = [];
+
+    }
+
 }
+function appendWaitingBusCards(tripList, buses, activeBusIds = new Set()) {
+
+    const waitingBuses = buses.filter(
+        (bus) => !activeBusIds.has(String(bus.id))
+    );
+
+    if (waitingBuses.length === 0 && activeBusIds.size === 0) {
+
+        tripList.innerHTML = `
+            <div class="empty-state">
+                No buses have been added to the fleet yet.
+            </div>
+        `;
+
+        return;
+
+    }
+
+    waitingBuses.forEach((bus) => {
+
+        const card = document.createElement("div");
+        card.className = "trip-card trip-card-unavailable";
+        const gpsMessage = bus.device_id
+            ? "Waiting for the first GPS report"
+            : "GPS device not configured";
+
+        card.innerHTML = `
+            <div class="trip-header">
+                <strong>${escapeHtml(bus.bus_number || bus.registration_number || `BUS-${bus.id}`)}</strong>
+                <span class="trip-status">
+                    <span class="trip-status-dot off" aria-hidden="true"></span>
+                    GPS unavailable
+                </span>
+            </div>
+            <div class="trip-body">
+                <p>Registration: <strong>${escapeHtml(bus.registration_number || "Not set")}</strong></p>
+                <p>Tracker: <strong>${escapeHtml(gpsMessage)}</strong></p>
+                <p>Fleet status: <strong>${escapeHtml(bus.status || "Active")}</strong></p>
+            </div>
+        `;
+
+        tripList.appendChild(card);
+
+    });
+
+}
+
 /* ==========================================================
    CLEANUP ADMIN LIVE TRACKING
 ========================================================== */

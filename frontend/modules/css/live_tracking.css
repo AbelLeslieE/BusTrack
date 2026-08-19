@@ -179,6 +179,24 @@
 
 }
 
+.trip-card-unavailable{
+
+    cursor:default;
+
+    opacity:.82;
+
+}
+
+.trip-card-unavailable:hover{
+
+    transform:none;
+
+    border-color:rgba(255,255,255,.08);
+
+    background:rgba(255,255,255,.05);
+
+}
+
 .trip-header{
 
     display:flex;
