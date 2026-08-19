@@ -8,13 +8,15 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.models import Bus, Driver, Route, Student
+from backend.models import Bus, Driver, FleetNotification, Route, Student
 from backend.schemas import BusCreate, BusUpdate, BusResponse
 from backend.security import require_management
 from backend.routes.models_tracking import (
     BusGPSState,
     GPSDeviceMapping,
     GPSIngestToken,
+    LiveLocation,
+    LiveTrip,
     ProviderGPSPosition,
 )
 
@@ -260,6 +262,26 @@ def delete_bus(
     )
     db.query(Student).filter(Student.bus_id == bus.id).update(
         {Student.bus_id: None}, synchronize_session=False
+    )
+    # Live trips retain a required bus reference, and each location retains a
+    # required trip reference. Remove the dependent locations first so a bus
+    # with historical or active tracking data can be deleted safely.
+    trip_ids = db.query(LiveTrip.id).filter(LiveTrip.bus_id == bus.id)
+    # Detach feedback before deleting its associated trip as well. This is
+    # explicit so it also works with older database schemas lacking ON DELETE
+    # SET NULL constraints.
+    db.query(FleetNotification).filter(FleetNotification.trip_id.in_(trip_ids)).update(
+        {FleetNotification.trip_id: None}, synchronize_session=False
+    )
+    db.query(LiveLocation).filter(LiveLocation.trip_id.in_(trip_ids)).delete(
+        synchronize_session=False
+    )
+    db.query(LiveTrip).filter(LiveTrip.bus_id == bus.id).delete(
+        synchronize_session=False
+    )
+    # Preserve operational feedback, but detach it from the deleted vehicle.
+    db.query(FleetNotification).filter(FleetNotification.bus_id == bus.id).update(
+        {FleetNotification.bus_id: None}, synchronize_session=False
     )
     bus.driver_id = None
     bus.route = None

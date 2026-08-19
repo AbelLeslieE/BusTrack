@@ -213,40 +213,32 @@ async function loadRoutes() {
  */
 async function createBus(busData) {
 
-    try {
+    const response = await fetch(API.BUSES, {
 
-        const response = await fetch(API.BUSES, {
+        method: "POST",
 
-            method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
 
-            headers: {
-                "Content-Type": "application/json"
-            },
+        body: JSON.stringify(busData)
 
-            body: JSON.stringify(busData)
+    });
 
-        });
+    if (!response.ok) {
 
-        if (!response.ok) {
+        const contentType = response.headers.get("content-type") || "";
+        const error = contentType.includes("application/json")
+            ? await response.json()
+            : { detail: await response.text() };
 
-            const error = await response.json();
-
-            throw new Error(error.detail || "Unable to create bus.");
-
-        }
-
-        const createdBus = await response.json();
-
-        await loadBuses();
-
-        return true;
-    } catch (error) {
-
-        console.error(error);
-
-        return false;
+        throw new Error(error.detail || "Unable to create bus.");
 
     }
+
+    await loadBuses();
+
+    return true;
 
 }
 
@@ -308,7 +300,10 @@ async function deleteBus(busId) {
 
         if (!response.ok) {
 
-            const error = await response.json();
+            const contentType = response.headers.get("content-type") || "";
+            const error = contentType.includes("application/json")
+                ? await response.json()
+                : { detail: await response.text() };
 
             throw new Error(error.detail || "Unable to delete bus.");
 
@@ -1615,27 +1610,58 @@ function getBusFormData() {
    SAVE BUS
 ========================================================================== */
 
+function showBusFormError(message) {
+
+    const form = document.querySelector(".bus-form");
+
+    if (!form) {
+
+        return;
+
+    }
+
+    form.querySelectorAll(".modal-error").forEach((input) => {
+
+        input.classList.remove("modal-error");
+
+    });
+
+    let error = form.querySelector(".bus-save-error");
+
+    if (!error) {
+
+        error = document.createElement("p");
+        error.className = "modal-error-text bus-save-error";
+        form.prepend(error);
+
+    }
+
+    error.textContent = message;
+
+    const normalizedMessage = message.toLowerCase();
+    const fieldId = normalizedMessage.includes("registration")
+        ? "registration_number"
+        : normalizedMessage.includes("bus number")
+            ? "bus_number"
+            : null;
+    const field = fieldId ? form.querySelector(`#${fieldId}`) : null;
+
+    if (field) {
+
+        field.classList.add("modal-error");
+        field.focus();
+
+    }
+
+}
+
 async function saveBus(root) {
 
     try{
 
         const bus = getBusFormData();
 
-        const success = await createBus(bus);
-
-        if(!success){
-
-            showNotification(
-
-                "Unable to save bus.",
-
-                "error"
-
-            );
-
-            return;
-
-        }
+        await createBus(bus);
 
         Modal.close();
 
@@ -1657,13 +1683,7 @@ async function saveBus(root) {
 
         console.error(error);
 
-        showNotification(
-
-            error.message,
-
-            "error"
-
-        );
+        showBusFormError(error.message || "Unable to save bus.");
 
     }
 

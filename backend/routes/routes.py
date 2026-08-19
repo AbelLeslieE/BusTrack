@@ -14,8 +14,10 @@ from backend.models import (
     RouteStop,
     Bus,
     Driver,
+    FleetNotification,
     Student,
 )
+from backend.routes.models_tracking import LiveLocation, LiveTrip
 from backend.schemas import (
     RouteCreate,
     RouteUpdate,
@@ -268,6 +270,27 @@ def delete_route(
     db.query(Student).filter(Student.route_id == route.id).update(
         {Student.route_id: None, Student.bus_id: None, Student.stop_id: None}, synchronize_session=False
     )
+
+    # Route stops and live trips both have required references to this route.
+    # Remove trip locations before their trips, then remove the route stops so
+    # an active or historical trip cannot block route deletion.
+    trip_ids = db.query(LiveTrip.id).filter(LiveTrip.route_id == route.id)
+    db.query(FleetNotification).filter(FleetNotification.trip_id.in_(trip_ids)).update(
+        {FleetNotification.trip_id: None}, synchronize_session=False
+    )
+    db.query(FleetNotification).filter(FleetNotification.route_id == route.id).update(
+        {FleetNotification.route_id: None}, synchronize_session=False
+    )
+    db.query(LiveLocation).filter(LiveLocation.trip_id.in_(trip_ids)).delete(
+        synchronize_session=False
+    )
+    db.query(LiveTrip).filter(LiveTrip.route_id == route.id).delete(
+        synchronize_session=False
+    )
+    db.query(RouteStop).filter(RouteStop.route_id == route.id).delete(
+        synchronize_session=False
+    )
+
     if bus:
         bus.driver_id = None
         bus.route = None
