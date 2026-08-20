@@ -32,6 +32,8 @@ ENV/
 # SQLite Databases
 # ==========================================================
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 database/.dev_jwt_secret

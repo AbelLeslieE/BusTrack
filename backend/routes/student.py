@@ -18,6 +18,7 @@ from backend.security import require_management, require_user
 from backend.models import (
     Student,
     User,
+    Bus,
     Route,
     Driver,
     RouteStop,
@@ -174,16 +175,20 @@ def get_current_student(
     # Build a frontend-safe response.
     # ------------------------------------------------------
 
-    bus = student.bus
-    stop = student.stop
-
     # ------------------------------------------------------
     # The student's selected route is authoritative. The fallback supports
     # profiles created before route_id was added to student assignments.
     route = student.route or (
-        db.query(Route).filter(Route.bus_id == bus.id).first()
-        if bus else None
+        db.query(Route).filter(Route.bus_id == student.bus_id).first()
+        if student.bus_id else None
     )
+    # Route assignments are authoritative.  Resolve the bus through the route
+    # so a student cannot be left viewing an older bus_id mirror after an
+    # administrator changes the route assignment.
+    bus = db.get(Bus, route.bus_id) if route is not None and route.bus_id else (
+        student.bus if route is None else None
+    )
+    stop = student.stop
     driver = db.get(Driver, route.driver_id) if route and route.driver_id else None
 
     return {
@@ -320,10 +325,18 @@ def get_student_live_tracking(
         )
 
     # ======================================================
-    # 2. FIND ASSIGNED BUS
+    # 2. FIND AUTHORITATIVE ROUTE AND ASSIGNED BUS
     # ======================================================
 
-    bus = student.bus
+    route = student.route or (
+        db.query(Route).filter(Route.bus_id == student.bus_id).first()
+        if student.bus_id else None
+    )
+    # Route changes in the Admin portal take effect in the Student portal on
+    # the next tracking read, even if a legacy Student.bus_id mirror is stale.
+    bus = db.get(Bus, route.bus_id) if route is not None and route.bus_id else (
+        student.bus if route is None else None
+    )
 
     if bus is None:
 
@@ -358,15 +371,8 @@ def get_student_live_tracking(
         }
 
     # ======================================================
-    # 3. FIND AUTHORITATIVE ROUTE
-    #
-    # The student's selected route is authoritative. The fallback supports
-    # older student profiles that predate student.route_id.
+    # 3. VALIDATE THE AUTHORITATIVE ROUTE
     # ======================================================
-
-    route = student.route or (
-        db.query(Route).filter(Route.bus_id == bus.id).first()
-    )
 
     if route is None:
 

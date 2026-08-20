@@ -48,7 +48,12 @@ export function startSessionMonitor() {
     sessionCheckInFlight = true;
     try {
       const response = await fetch("/api/auth/me", { credentials: "same-origin" });
-      if (!response.ok) {
+      // A transient server failure must not be treated as a revoked session.
+      // In particular, editing stops can coincide with a short database write
+      // (GPS, audit logging, or another administrator action).  Only an
+      // explicit authentication/authorization response means this browser
+      // needs to return to the sign-in screen.
+      if (response.status === 401 || response.status === 403) {
         clearSession();
         if (window.location.pathname !== "/") window.location.replace("/");
       }

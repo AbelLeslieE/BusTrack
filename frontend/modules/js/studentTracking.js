@@ -84,7 +84,11 @@ const state = {
 
     lifecycleId: 0,
 
+    visibilityHandler: null,
+
     routeDirection: null,
+
+    routeDefinitionKey: null,
 
     terminalNoticeKey: null
 
@@ -1226,6 +1230,35 @@ function calculateRouteProgress() {
 
 state.trackingData = null;
 
+function routeDefinitionKey(data) {
+    const stops = Array.isArray(data?.stops) ? data.stops : [];
+    return JSON.stringify({
+        route: {
+            id: data?.route?.id ?? null,
+            code: data?.route?.route_code ?? null,
+            name: data?.route?.route_name ?? null,
+            status: data?.route?.status ?? null,
+            totalStops: data?.route?.total_stops ?? null,
+        },
+        bus: {
+            id: data?.bus?.id ?? null,
+            number: data?.bus?.bus_number ?? null,
+            registration: data?.bus?.registration_number ?? null,
+            status: data?.bus?.status ?? null,
+        },
+        stops: stops.map(stop => ({
+            id: stop.id,
+            sequence: stop.sequence,
+            latitude: stop.latitude,
+            longitude: stop.longitude,
+            radius: stop.radius,
+            name: stop.stop_name,
+            scheduledTime: stop.scheduled_time,
+            estimatedMinutes: stop.estimated_minutes,
+        })),
+    });
+}
+
 
 /* ==========================================================
    LOAD STUDENT TRACKING DATA
@@ -1268,9 +1301,11 @@ async function loadStudentTracking() {
         data?.trip?.route_direction ||
         "forward";
 
+    const nextRouteDefinitionKey = routeDefinitionKey(data);
+
     if (
-        state.routeDirection &&
-        state.routeDirection !== nextRouteDirection
+        (state.routeDirection && state.routeDirection !== nextRouteDirection)
+        || (state.routeDefinitionKey && state.routeDefinitionKey !== nextRouteDefinitionKey)
     ) {
         resetRoadRouteForDirection();
         clearMapObjects();
@@ -1278,6 +1313,9 @@ async function loadStudentTracking() {
 
     state.routeDirection =
         nextRouteDirection;
+
+    state.routeDefinitionKey =
+        nextRouteDefinitionKey;
 
     state.trackingData =
         data;
@@ -2858,6 +2896,15 @@ function startTrackingRefresh() {
      */
     stopTrackingRefresh();
 
+    if (state.visibilityHandler) {
+
+        document.removeEventListener(
+            "visibilitychange",
+            state.visibilityHandler
+        );
+
+    }
+
 
     /*
      * Fetch the latest tracking data immediately.
@@ -2892,6 +2939,22 @@ function startTrackingRefresh() {
             2_000
         );
 
+    state.visibilityHandler =
+        () => {
+
+            if (document.visibilityState === "visible") {
+
+                void refreshTracking();
+
+            }
+
+        };
+
+    document.addEventListener(
+        "visibilitychange",
+        state.visibilityHandler
+    );
+
 }
 
 
@@ -2911,6 +2974,18 @@ function stopTrackingRefresh() {
         );
 
         state.refreshTimer =
+            null;
+
+    }
+
+    if (state.visibilityHandler) {
+
+        document.removeEventListener(
+            "visibilitychange",
+            state.visibilityHandler
+        );
+
+        state.visibilityHandler =
             null;
 
     }

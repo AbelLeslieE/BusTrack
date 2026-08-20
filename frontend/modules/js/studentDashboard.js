@@ -1472,7 +1472,7 @@ function startDashboardTracking(page) {
     void refreshDashboardTracking(page);
     page.dashboardTrackingTimer = window.setInterval(
         () => void refreshDashboardTracking(page),
-        3_000
+        2_000
     );
     page.dashboardVisibilityHandler = () => {
         if (document.visibilityState === "visible") void refreshDashboardTracking(page);

@@ -7,7 +7,7 @@ from collections.abc import Generator
 import os
 from pathlib import Path
 
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from backend.roles import LEGACY_ROLE_MAPPINGS
@@ -30,9 +30,30 @@ if DATABASE_URL.startswith("postgres://"):
 
 engine_options: dict[str, object] = {"pool_pre_ping": True}
 if DATABASE_URL.startswith("sqlite"):
-    engine_options["connect_args"] = {"check_same_thread": False}
+    # SQLite normally gives up after five seconds when another request is
+    # writing.  The portals poll concurrently, so a short default timeout
+    # turns a transient write lock into a visible 500 response.
+    engine_options["connect_args"] = {
+        "check_same_thread": False,
+        "timeout": 30,
+    }
 
 engine = create_engine(DATABASE_URL, **engine_options)
+
+
+if DATABASE_URL.startswith("sqlite"):
+    @event.listens_for(engine, "connect")
+    def _configure_sqlite_connection(connection, _connection_record) -> None:
+        """Make local SQLite connections wait safely for a pending writer."""
+
+        cursor = connection.cursor()
+        try:
+            cursor.execute("PRAGMA busy_timeout = 30000")
+            cursor.execute("PRAGMA foreign_keys = ON")
+        finally:
+            cursor.close()
+
+
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
@@ -61,6 +82,13 @@ def initialize_database() -> None:
     reset_database = (
         os.getenv("RESET_DATABASE", "false").lower() == "true"
     )
+
+    # WAL lets read-only portal polling continue while a short write (such as
+    # login auditing or a GPS update) is in progress.  It is safe to issue on
+    # every startup and is ignored for non-SQLite deployments.
+    if DATABASE_URL.startswith("sqlite"):
+        with engine.connect() as connection:
+            connection.exec_driver_sql("PRAGMA journal_mode=WAL")
 
     # ======================================================
     # TEMPORARY DATABASE RESET

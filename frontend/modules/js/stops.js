@@ -2418,6 +2418,8 @@ function openAddStopModal(root){
 
         submitText:"Save Stop",
 
+        onClose:destroyStopMap,
+
 
         onSubmit:async()=>{
 
@@ -3058,6 +3060,8 @@ function openEditStopModal(root, stop){
 
         submitText:"Update Stop",
 
+        onClose:destroyStopMap,
+
 
         onSubmit:async()=>{
 
@@ -3184,14 +3188,20 @@ function openEditStopModal(root, stop){
 
                 console.error(error);
 
+                // Keep the edit form, including its map marker and selected
+                // coordinates, open when saving fails.  Replacing it with a
+                // separate modal made it appear as though the Stops module
+                // had kicked the administrator out of the editor.
+                showStopFormError(
 
-                Modal.error({
+                    content,
 
-                    title:"Update Failed",
+                    "Unable to Update Stop",
 
-                    subtitle:error.message
+                    error.message ||
+                        "An unexpected error occurred."
 
-                });
+                );
 
             }
 

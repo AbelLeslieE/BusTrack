@@ -21,6 +21,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=Fals
 DatabaseSession = Annotated[Session, Depends(get_db)]
 MAX_LOGIN_FAILURES = 5
 LOGIN_LOCKOUT_MINUTES = 15
+SESSION_HEARTBEAT_INTERVAL = timedelta(minutes=1)
 
 
 def normalize_username(username: str) -> str:
@@ -166,9 +167,16 @@ def get_current_user(
             session_expires_at = session_expires_at.replace(tzinfo=timezone.utc)
         if session is None or session.revoked_at is not None or session_expires_at is None or session_expires_at <= now:
             raise credentials_error
-        # The session heartbeat and ordinary API traffic make active-user data
-        # accurate without trusting values supplied by the browser.
-        session.last_seen_at = now
-        database_session.commit()
+        # The student and fleet dashboards poll frequently.  Persisting a
+        # heartbeat on every request makes each poll a SQLite write and can
+        # exhaust its short write lock window, causing unrelated requests to
+        # fail with HTTP 500.  A minute-level heartbeat remains accurate for
+        # the active-user view while keeping normal polling read-only.
+        last_seen_at = session.last_seen_at
+        if last_seen_at is not None and last_seen_at.tzinfo is None:
+            last_seen_at = last_seen_at.replace(tzinfo=timezone.utc)
+        if last_seen_at is None or now - last_seen_at >= SESSION_HEARTBEAT_INTERVAL:
+            session.last_seen_at = now
+            database_session.commit()
 
     return user

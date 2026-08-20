@@ -19,6 +19,79 @@ def _bounds(date_from: date | None, date_to: date | None):
     return start, end
 
 
+def _build_stop_visits(
+    events: list[TripStopEvent],
+    *,
+    stops: dict[int, Stop],
+    route_stops: dict[int, RouteStop],
+) -> list[dict]:
+    """Pair each stop-radius entry with the following exit for Trip History."""
+
+    visits: list[dict] = []
+    open_visits: dict[tuple[int, int], list[dict]] = {}
+
+    for event in sorted(events, key=lambda item: (item.occurred_at, item.id)):
+        stop = stops.get(event.stop_id)
+        route_stop = route_stops.get(event.route_stop_id)
+        key = (event.trip_id, event.route_stop_id)
+        event_type = event.event_type.strip().casefold()
+
+        if event_type == "arrived":
+            visit = {
+                "trip_id": event.trip_id,
+                "route_stop_id": event.route_stop_id,
+                "stop_id": event.stop_id,
+                "stop_name": stop.stop_name if stop else "Unknown stop",
+                "stop_code": stop.stop_code if stop else None,
+                "sequence": route_stop.sequence if route_stop else None,
+                "arrived_at": event.occurred_at,
+                "departed_at": None,
+                "arrival_distance_meters": event.distance_meters,
+                "departure_distance_meters": None,
+            }
+            visits.append(visit)
+            open_visits.setdefault(key, []).append(visit)
+            continue
+
+        if event_type != "departed":
+            continue
+
+        # A historic record may contain only a departure. Preserve it rather
+        # than discarding a useful timestamp, but normally this updates the
+        # most recent open arrival for the same trip stop.
+        visit = next(
+            (
+                candidate
+                for candidate in reversed(open_visits.get(key, []))
+                if candidate["departed_at"] is None
+            ),
+            None,
+        )
+        if visit is None:
+            visit = {
+                "trip_id": event.trip_id,
+                "route_stop_id": event.route_stop_id,
+                "stop_id": event.stop_id,
+                "stop_name": stop.stop_name if stop else "Unknown stop",
+                "stop_code": stop.stop_code if stop else None,
+                "sequence": route_stop.sequence if route_stop else None,
+                "arrived_at": None,
+                "departed_at": event.occurred_at,
+                "arrival_distance_meters": None,
+                "departure_distance_meters": event.distance_meters,
+            }
+            visits.append(visit)
+        else:
+            visit["departed_at"] = event.occurred_at
+            visit["departure_distance_meters"] = event.distance_meters
+
+    return sorted(
+        visits,
+        key=lambda visit: visit["arrived_at"] or visit["departed_at"],
+        reverse=True,
+    )
+
+
 @router.get("/buses")
 def list_history_buses(
     search: str = Query(default="", max_length=100),
@@ -66,12 +139,14 @@ def bus_history(
     drivers = {driver.id: driver for driver in db.query(Driver).all()}
     route_stops = {item.id: item for item in db.query(RouteStop).all()}
     stops = {stop.id: stop for stop in db.query(Stop).all()}
+    stop_event_models: list[TripStopEvent] = []
     events = []
     if trip_ids:
         event_query = db.query(TripStopEvent).filter(TripStopEvent.trip_id.in_(trip_ids))
         if start: event_query = event_query.filter(TripStopEvent.occurred_at >= start)
         if end: event_query = event_query.filter(TripStopEvent.occurred_at <= end)
-        for event in event_query.order_by(TripStopEvent.occurred_at.desc()).all():
+        stop_event_models = event_query.order_by(TripStopEvent.occurred_at.asc(), TripStopEvent.id.asc()).all()
+        for event in stop_event_models:
             stop = stops.get(event.stop_id)
             route_stop = route_stops.get(event.route_stop_id)
             events.append({"id": event.id, "kind": "stop", "trip_id": event.trip_id,
@@ -101,5 +176,10 @@ def bus_history(
                    "route_code": routes.get(trip.route_id).route_code if trip.route_id in routes else None,
                    "driver_name": drivers.get(trip.driver_id).user.full_name if trip.driver_id in drivers and drivers[trip.driver_id].user else None,
                    "direction": trip.route_direction, "end_reason": trip.end_reason} for trip in trips],
+        "stop_visits": _build_stop_visits(
+            stop_event_models,
+            stops=stops,
+            route_stops=route_stops,
+        ),
         "timeline": timeline,
     }

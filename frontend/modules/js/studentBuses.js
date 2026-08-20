@@ -27,7 +27,15 @@ const state = {
 
     loading: true,
 
-    error: null
+    error: null,
+
+    refreshTimer: null,
+
+    refreshInProgress: false,
+
+    assignmentFingerprint: null,
+
+    visibilityHandler: null
 
 };
 
@@ -58,6 +66,8 @@ async function fetchStudent() {
             {
 
                 method: "GET",
+
+                cache: "no-store",
 
                 headers: {
 
@@ -984,25 +994,57 @@ function refreshPage(
 ========================================================== */
 
 async function loadData(
-    root
+    root,
+    { showLoading = true } = {}
 ) {
 
-    state.loading =
+    if (state.refreshInProgress) {
+
+        return;
+
+    }
+
+    state.refreshInProgress =
         true;
 
-    state.error =
-        null;
+    if (showLoading) {
 
+        state.loading =
+            true;
 
-    refreshPage(
-        root
-    );
+        state.error =
+            null;
 
+        refreshPage(
+            root
+        );
+
+    }
 
     try {
 
-        state.student =
+        const student =
             await fetchStudent();
+
+        const nextFingerprint =
+            JSON.stringify(student);
+
+        const hasChanged =
+            nextFingerprint !== state.assignmentFingerprint;
+
+        state.student =
+            student;
+
+        state.assignmentFingerprint =
+            nextFingerprint;
+
+        if (!showLoading && hasChanged) {
+
+            refreshPage(
+                root
+            );
+
+        }
 
     }
 
@@ -1013,12 +1055,16 @@ async function loadData(
             error
         );
 
-        state.student =
-            null;
+        if (showLoading || !state.student) {
 
-        state.error =
-            error.message ||
-            "Unable to load your bus information.";
+            state.student =
+                null;
+
+            state.error =
+                error.message ||
+                "Unable to load your bus information.";
+
+        }
 
     }
 
@@ -1027,11 +1073,85 @@ async function loadData(
         state.loading =
             false;
 
-        refreshPage(
-            root
-        );
+        if (showLoading) {
+
+            refreshPage(
+                root
+            );
+
+        }
+
+        state.refreshInProgress =
+            false;
 
     }
+
+}
+
+
+/* ==========================================================
+   LIVE ASSIGNMENT SYNCHRONIZATION
+========================================================== */
+
+function stopAssignmentSync() {
+
+    if (state.refreshTimer) {
+
+        clearInterval(state.refreshTimer);
+
+        state.refreshTimer =
+            null;
+
+    }
+
+    if (state.visibilityHandler) {
+
+        document.removeEventListener(
+            "visibilitychange",
+            state.visibilityHandler
+        );
+
+        state.visibilityHandler =
+            null;
+
+    }
+
+}
+
+
+function startAssignmentSync(root) {
+
+    stopAssignmentSync();
+
+    state.refreshTimer =
+        window.setInterval(
+            () => {
+
+                if (document.visibilityState === "visible") {
+
+                    void loadData(root, { showLoading: false });
+
+                }
+
+            },
+            2_000
+        );
+
+    state.visibilityHandler =
+        () => {
+
+            if (document.visibilityState === "visible") {
+
+                void loadData(root, { showLoading: false });
+
+            }
+
+        };
+
+    document.addEventListener(
+        "visibilitychange",
+        state.visibilityHandler
+    );
 
 }
 
@@ -1121,6 +1241,9 @@ export function render() {
     state.error =
         null;
 
+    state.assignmentFingerprint =
+        null;
+
 
     /*
      * Create the page root expected
@@ -1166,6 +1289,17 @@ export function render() {
     loadData(
         root
     );
+
+    startAssignmentSync(
+        root
+    );
+
+    root.cleanup =
+        () => {
+
+            stopAssignmentSync();
+
+        };
 
 
     return root;

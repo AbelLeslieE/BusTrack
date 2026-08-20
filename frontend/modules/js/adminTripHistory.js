@@ -17,12 +17,26 @@ function eventMarkup(event) {
     return `<article class="history-event"><time>${formatDateTime(event.occurred_at)}</time><div><strong>${escapeHtml(event.event_type)} · ${escapeHtml(event.stop_name)}</strong><p>Stop ${escapeHtml(event.sequence)}${event.distance_meters != null ? ` · ${Math.round(event.distance_meters)}m from stop` : ""}</p></div><span>Stop</span></article>`;
 }
 
+function dwellTime(arrivedAt, departedAt) {
+    if (!arrivedAt) return "Arrival was not recorded";
+    if (!departedAt) return "Currently at stop";
+    const milliseconds = Date.parse(departedAt) - Date.parse(arrivedAt);
+    if (!Number.isFinite(milliseconds) || milliseconds < 0) return "—";
+    const seconds = Math.floor(milliseconds / 1000);
+    const minutes = Math.floor(seconds / 60);
+    return minutes ? `${minutes}m ${seconds % 60}s` : `${seconds}s`;
+}
+
+function stopVisitMarkup(visit) {
+    return `<tr><td>${escapeHtml(String(visit.trip_id))}</td><td>${escapeHtml(visit.stop_name)}${visit.stop_code ? `<small> · ${escapeHtml(visit.stop_code)}</small>` : ""}</td><td>${formatDateTime(visit.arrived_at, "—")}</td><td>${formatDateTime(visit.departed_at, "Currently at stop")}</td><td>${escapeHtml(dwellTime(visit.arrived_at, visit.departed_at))}</td></tr>`;
+}
+
 function renderDetails(page) {
     const target = page.querySelector("#history-details");
     if (!state.history) { target.innerHTML = `<div class="history-empty">Select a bus to view its complete trip timeline.</div>`; return; }
-    const { bus, trips, timeline } = state.history;
+    const { bus, trips, timeline, stop_visits: stopVisits = [] } = state.history;
     const events = state.type === "all" ? timeline : timeline.filter(item => item.kind === state.type);
-    target.innerHTML = `<section class="glass-panel history-section"><div class="history-summary"><div><p class="eyebrow">Selected bus</p><h2>${escapeHtml(bus.bus_number)}</h2><p>${escapeHtml(bus.registration_number)} · ${escapeHtml(bus.manufacturer)} ${escapeHtml(bus.model)}</p></div><div><strong>${trips.length}</strong><small> trips</small></div></div><h3>Trip records</h3>${trips.length ? `<div class="portal-table-wrap"><table class="portal-table"><thead><tr><th>Route</th><th>Driver</th><th>Started</th><th>Ended</th><th>Direction</th></tr></thead><tbody>${trips.map(trip => `<tr><td>${escapeHtml(trip.route_name || trip.route_code || "—")}</td><td>${escapeHtml(trip.driver_name || "—")}</td><td>${formatDateTime(trip.started_at)}</td><td>${formatDateTime(trip.ended_at,"In progress")}</td><td>${escapeHtml(trip.direction)}</td></tr>`).join("")}</tbody></table></div>` : `<p>No trips match this date range.</p>`}<h3>Stop arrivals and driver feedback</h3><div class="history-timeline">${events.length ? events.map(eventMarkup).join("") : `<div class="history-empty">No ${state.type === "all" ? "history" : state.type} records match these filters.</div>`}</div></section>`;
+    target.innerHTML = `<section class="glass-panel history-section"><div class="history-summary"><div><p class="eyebrow">Selected bus</p><h2>${escapeHtml(bus.bus_number)}</h2><p>${escapeHtml(bus.registration_number)} · ${escapeHtml(bus.manufacturer)} ${escapeHtml(bus.model)}</p></div><div><strong>${trips.length}</strong><small> trips</small></div></div><h3>Trip records</h3>${trips.length ? `<div class="portal-table-wrap"><table class="portal-table"><thead><tr><th>Route</th><th>Driver</th><th>Started</th><th>Ended</th><th>Direction</th></tr></thead><tbody>${trips.map(trip => `<tr><td>${escapeHtml(trip.route_name || trip.route_code || "—")}</td><td>${escapeHtml(trip.driver_name || "—")}</td><td>${formatDateTime(trip.started_at)}</td><td>${formatDateTime(trip.ended_at,"In progress")}</td><td>${escapeHtml(trip.direction)}</td></tr>`).join("")}</tbody></table></div>` : `<p>No trips match this date range.</p>`}<h3>Stop-by-stop movement</h3>${stopVisits.length ? `<div class="portal-table-wrap"><table class="portal-table"><thead><tr><th>Trip</th><th>Stop</th><th>Entered stop radius</th><th>Exited stop radius</th><th>Time at stop</th></tr></thead><tbody>${stopVisits.map(stopVisitMarkup).join("")}</tbody></table></div>` : `<div class="history-empty">No stop movements have been recorded for these trips yet.</div>`}<h3>Stop events and driver feedback</h3><div class="history-timeline">${events.length ? events.map(eventMarkup).join("") : `<div class="history-empty">No ${state.type === "all" ? "history" : state.type} records match these filters.</div>`}</div></section>`;
 }
 
 function renderBuses(page) {

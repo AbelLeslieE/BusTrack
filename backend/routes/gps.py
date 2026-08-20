@@ -1282,22 +1282,36 @@ def get_live_tracking(
 
 
             # --------------------------------------------------
-            # Find the next stop in route order.
+            # Find the next stop in this trip's travel order.
+            # A route is saved in its morning order, while an evening return
+            # journey travels that same list in reverse from the campus stop.
             # --------------------------------------------------
 
-            next_route_stop = (
+            trip_route_stops = (
                 db.query(RouteStop)
                 .filter(
-                    RouteStop.route_id ==
-                    trip.route_id,
-
-                    RouteStop.sequence >
-                    current_route_stop.sequence,
+                    RouteStop.route_id == trip.route_id,
                 )
-                .order_by(
-                    RouteStop.sequence.asc()
-                )
-                .first()
+                .order_by(RouteStop.sequence.asc())
+                .all()
+            )
+            trip_route_stops = ordered_route_stops(
+                trip_route_stops,
+                trip.route_direction,
+            )
+            current_index = next(
+                (
+                    index
+                    for index, route_stop in enumerate(trip_route_stops)
+                    if route_stop.id == current_route_stop.id
+                ),
+                -1,
+            )
+            next_route_stop = (
+                trip_route_stops[current_index + 1]
+                if current_index >= 0
+                and current_index + 1 < len(trip_route_stops)
+                else None
             )
 
             if next_route_stop is not None:
@@ -1394,6 +1408,8 @@ def get_live_tracking(
 
             "location_source":
                 trip.current_location_source or "mobile",
+
+            "route_direction": trip.route_direction,
             # ------------------------------------------------
             # ROUTE STOP PROGRESSION
             # ------------------------------------------------
