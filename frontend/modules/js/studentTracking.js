@@ -9,7 +9,7 @@
    CONFIGURATION
 ========================================================== */
 
-import { animateVehicleMarker } from "/static/common/vehicleMotion.js?v=road-safe-2";
+import { animateVehicleMarker } from "/static/common/vehicleMotion.js?v=road-safe-5";
 import { createVehicleMarkerIcon } from "/static/common/vehicleMarker.js";
 import { Modal } from "/static/common/modal.js";
 
@@ -44,7 +44,7 @@ const state = {
 
     busMarker: null,
 
-    busMotion: { heading: null, frame: null },
+    busMotion: { heading: null, frame: null, followMap: true },
 
     busTargetLocation: null,
 
@@ -70,9 +70,19 @@ const state = {
 
     etaRequestId: 0,
 
+    etaOrigin: null,
+
+    etaDestinationId: null,
+
+    etaLastCalculatedAt: 0,
+
     refreshTimer: null,
 
     refreshInProgress: false,
+
+    refreshRequestId: 0,
+
+    lifecycleId: 0,
 
     routeDirection: null,
 
@@ -110,6 +120,8 @@ async function fetchAuthenticated(
             {
 
                 method: "GET",
+
+                cache: "no-store",
 
                 headers: {
 
@@ -651,7 +663,7 @@ function renderBusInformation() {
                     SPEED
                 </span>
 
-                <strong>
+                <strong id="student-tracking-speed">
 
                     ${escapeHTML(
                         formatSpeed(
@@ -672,7 +684,7 @@ function renderBusInformation() {
                     LAST UPDATED
                 </span>
 
-                <strong>
+                <strong id="student-tracking-last-updated">
 
                     ${escapeHTML(
                         formatLastUpdate(
@@ -686,6 +698,7 @@ function renderBusInformation() {
 
 
             <div
+                id="student-tracking-live-status"
                 class="student-tracking-live-wrapper"
             >
 
@@ -1220,10 +1233,22 @@ state.trackingData = null;
 
 async function loadStudentTracking() {
 
+    const requestId = ++state.refreshRequestId;
+    const lifecycleId = state.lifecycleId;
+
     const data =
         await fetchAuthenticated(
             API.TRACKING
         );
+
+    // A late response from a previous refresh or page instance must never
+    // replace the newest bus position.
+    if (
+        requestId !== state.refreshRequestId ||
+        lifecycleId !== state.lifecycleId
+    ) {
+        return null;
+    }
 
 
     /*
@@ -1370,7 +1395,9 @@ async function refreshTracking() {
          * ======================================================
          */
 
-        await loadStudentTracking();
+        const data = await loadStudentTracking();
+
+        if (!data) return;
 
 
         console.log(
@@ -1586,6 +1613,9 @@ function clearMapObjects() {
     }
 
     state.busMotion.heading = null;
+    state.busMotion.target = null;
+    state.busMotion.stageDistance = null;
+    state.busMotion.lastMapFollowAt = null;
     state.busTargetLocation = null;
 
     if (
@@ -2124,6 +2154,8 @@ function renderMapObjects() {
 
         state.busTargetLocation = { latitude, longitude };
 
+        coordinates.push([latitude, longitude]);
+
 
         state.busMarker.bindPopup(
             `
@@ -2380,6 +2412,10 @@ async function calculateNextStopETA() {
         state.etaMinutes =
             null;
 
+        state.etaOrigin = null;
+        state.etaDestinationId = null;
+        state.etaLastCalculatedAt = 0;
+
         updateETAInterface();
 
         return;
@@ -2409,6 +2445,10 @@ async function calculateNextStopETA() {
         state.etaMinutes =
             null;
 
+        state.etaOrigin = null;
+        state.etaDestinationId = null;
+        state.etaLastCalculatedAt = 0;
+
         updateETAInterface(
             "waiting"
         );
@@ -2416,6 +2456,36 @@ async function calculateNextStopETA() {
         return;
 
     }
+
+    // Routing is comparatively expensive and does not need to run for every
+    // two-second GPS poll. Reuse the result until the bus has moved 25 m, the
+    // destination changes, or ten seconds pass.
+    const now = Date.now();
+    const origin = {
+        latitude: Number(trip.latitude),
+        longitude: Number(trip.longitude)
+    };
+    const movedKilometers = state.etaOrigin
+        ? calculateDistance(
+            state.etaOrigin.latitude,
+            state.etaOrigin.longitude,
+            origin.latitude,
+            origin.longitude
+        )
+        : Infinity;
+    const destinationId = nextStop.id ?? nextStop.stop_id ?? nextStop.sequence;
+    if (
+        state.etaDestinationId === destinationId &&
+        movedKilometers < 0.025 &&
+        now - state.etaLastCalculatedAt < 10_000
+    ) {
+        updateETAInterface();
+        return;
+    }
+
+    state.etaOrigin = origin;
+    state.etaDestinationId = destinationId;
+    state.etaLastCalculatedAt = now;
 
 
     /*
@@ -2854,6 +2924,8 @@ function stopTrackingRefresh() {
 
 function cleanupTracking() {
 
+    state.lifecycleId++;
+    state.refreshRequestId++;
     stopTrackingRefresh();
 
 
@@ -2876,7 +2948,7 @@ function cleanupTracking() {
 
     }
 
-    state.busMotion = { heading: null, frame: null };
+    state.busMotion = { heading: null, frame: null, followMap: true };
     state.busTargetLocation = null;
 
     state.stopMarkers = [];
@@ -2903,6 +2975,9 @@ function cleanupTracking() {
 
     state.etaRequestId =
         0;
+    state.etaOrigin = null;
+    state.etaDestinationId = null;
+    state.etaLastCalculatedAt = 0;
     state.refreshInProgress =
        false;
 
@@ -4146,6 +4221,8 @@ function updateTrackingInterface() {
      */
     updateTrackingMessage();
 
+    updateTrackingInfoBar();
+
 
     /*
      * Update the railway-style interface.
@@ -4181,6 +4258,8 @@ async function initializeTrackingModule() {
 
     state.loading =
         true;
+
+    state.refreshInProgress = false;
 
     state.error =
         null;
@@ -4269,6 +4348,8 @@ export function render() {
      * the student enters Live Tracking.
      */
 
+    state.lifecycleId++;
+
     currentView =
         "map";
 
@@ -4349,6 +4430,10 @@ export function render() {
     state.etaRequestId =
         0;
 
+    state.etaOrigin = null;
+    state.etaDestinationId = null;
+    state.etaLastCalculatedAt = 0;
+
     state.routeDirection =
         null;
 
@@ -4359,6 +4444,11 @@ export function render() {
 
     const root =
         renderTrackingPage();
+
+    // The router invokes cleanup on the rendered view, not the module object.
+    // Register it here so polling, Leaflet, and animation frames cannot leak
+    // into the next student page.
+    root.cleanup = cleanupTracking;
 
 
     /*
@@ -4387,4 +4477,15 @@ export function destroy() {
 
     cleanupTracking();
 
+}
+
+function updateTrackingInfoBar() {
+    const speed = document.querySelector("#student-tracking-speed");
+    if (speed) speed.textContent = formatSpeed(state.liveTrip?.speed);
+
+    const updated = document.querySelector("#student-tracking-last-updated");
+    if (updated) updated.textContent = formatLastUpdate(state.liveTrip?.last_location_update);
+
+    const status = document.querySelector("#student-tracking-live-status");
+    if (status) status.innerHTML = renderLiveStatus();
 }

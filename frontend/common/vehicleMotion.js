@@ -1,14 +1,11 @@
-/*
- * Shared road-following motion for every Leaflet vehicle marker.
- * Raw GPS points are never interpolated in a straight line: OSRM supplies a
- * drivable segment, then the marker travels its geometry at a steady pace.
- */
+/* Shared, gap-hiding motion for every Leaflet vehicle marker. */
 
-const ROAD_ROUTER = "https://router.project-osrm.org/route/v1/driving/";
 const MIN_MOVEMENT_METERS = 7;
-const MAX_SPEED_METERS_PER_SECOND = 45; // 162 km/h, allowing normal GPS gaps.
-const MIN_PLAUSIBLE_JUMP_METERS = 220;
-const ANIMATION_DURATION_MS = 17_000;
+const MAX_SPEED_METERS_PER_SECOND = 30; // 108 km/h; safely above a city bus.
+const MIN_PLAUSIBLE_JUMP_METERS = 120;
+const LIVE_SEGMENT_DURATION_MS = 17_000;
+const MIN_CATCH_UP_DURATION_MS = 500;
+const MAX_CATCH_UP_DURATION_MS = 3_000;
 
 function radians(value) {
     return value * Math.PI / 180;
@@ -70,24 +67,6 @@ function positionOnPath(path, cumulative, distance) {
     };
 }
 
-async function roadPath(start, target, signal) {
-    const coordinates = `${start.lng},${start.lat};${target.lng},${target.lat}`;
-    const response = await fetch(
-        `${ROAD_ROUTER}${coordinates}?overview=full&geometries=geojson&steps=false`,
-        { signal }
-    );
-    if (!response.ok) throw new Error(`Road routing failed (${response.status}).`);
-    const payload = await response.json();
-    const coordinatesList = payload.routes?.[0]?.geometry?.coordinates;
-    if (!Array.isArray(coordinatesList) || coordinatesList.length < 2) {
-        throw new Error("Road routing returned no usable geometry.");
-    }
-    return coordinatesList.map(([longitude, latitude]) => ({
-        lat: Number(latitude),
-        lng: Number(longitude),
-    })).filter(point => Number.isFinite(point.lat) && Number.isFinite(point.lng));
-}
-
 function rotateMarker(marker, selector, heading) {
     const visual = marker.getElement()?.querySelector(selector);
     if (visual) {
@@ -113,10 +92,30 @@ function stableHeading(motion, desiredHeading, frameTime) {
     return (motion.heading + Math.max(-maximumTurn, Math.min(maximumTurn, turn)) + 360) % 360;
 }
 
+function followMarkerSmoothly(marker, point, motion, frameTime) {
+    if (!motion.followMap || frameTime - (motion.lastMapFollowAt || 0) < 350) return;
+
+    const map = marker._map;
+    if (!map?.getBounds) return;
+
+    // Keep the vehicle within the middle of the viewport. This avoids the
+    // distracting snap caused by recentering on every animation frame.
+    const comfortableBounds = map.getBounds().pad(-0.22);
+    if (!comfortableBounds.isValid() || comfortableBounds.contains(point)) return;
+
+    motion.lastMapFollowAt = frameTime;
+    map.panTo([point.lat, point.lng], {
+        animate: true,
+        duration: 0.65,
+        noMoveStart: true,
+    });
+}
+
 /**
- * Moves a marker only over an OSRM road geometry. `motion` must be retained
- * per bus/marker so stale requests, GPS noise, and sudden bad fixes are
- * ignored rather than producing a spin or an off-road jump.
+ * `motion` must be retained per bus/marker. Each normal GPS segment lasts
+ * 17 seconds, which hides the usual 20-second delivery gap. If a newer fix
+ * arrives early, the marker briefly catches up to the prior fresh fix before
+ * continuing to the newest one within the same 17-second window.
  */
 export function animateVehicleMarker(marker, latitude, longitude, motion, visualSelector) {
     const start = marker?.getLatLng();
@@ -136,63 +135,90 @@ export function animateVehicleMarker(marker, latitude, longitude, motion, visual
         return;
     }
 
+    const previousTarget = motion.target;
+    const previousAnimationIsRunning = Boolean(
+        motion.frame &&
+        previousTarget &&
+        Number.isFinite(previousTarget.lat) &&
+        Number.isFinite(previousTarget.lng)
+    );
+
     if (motion.frame) cancelAnimationFrame(motion.frame);
     motion.abortController?.abort();
     const requestId = (motion.requestId || 0) + 1;
-    const abortController = new AbortController();
     motion.requestId = requestId;
-    motion.abortController = abortController;
     motion.lastAcceptedAt = now;
+    motion.abortController = null;
+    // Store the latest server coordinate immediately. If another update
+    // arrives while catching up, it catches this newest known location rather
+    // than replaying an older one.
+    motion.target = target;
 
-    // A failed road lookup deliberately leaves the bus at its previous
-    // road-matched position. Drawing a straight fallback would put it off road.
-    return roadPath(start, target, abortController.signal)
-        .then(path => {
-            if (motion.requestId !== requestId || path.length < 2) return;
-            const cumulative = pathLengths(path);
-            const totalDistance = cumulative[cumulative.length - 1];
-            if (totalDistance < 1) return;
+    /*
+     * A public road-routing request must never decide whether a live marker
+     * moves. GPS points are interpolated immediately, while the 17-second
+     * duration makes normal 20-second reports appear continuous.
+     */
+    const stages = [];
+    if (
+        previousAnimationIsRunning &&
+        distanceMeters(start, previousTarget) >= MIN_MOVEMENT_METERS
+    ) {
+        const remainingDistance = distanceMeters(start, previousTarget);
+        const catchUpDuration = Math.min(
+            MAX_CATCH_UP_DURATION_MS,
+            Math.max(
+                MIN_CATCH_UP_DURATION_MS,
+                Math.round(
+                    MAX_CATCH_UP_DURATION_MS *
+                    (remainingDistance / Math.max(motion.stageDistance || remainingDistance, 1))
+                )
+            )
+        );
+        stages.push({ target: previousTarget, duration: catchUpDuration });
+        stages.push({ target, duration: LIVE_SEGMENT_DURATION_MS - catchUpDuration });
+    } else {
+        stages.push({ target, duration: LIVE_SEGMENT_DURATION_MS });
+    }
 
-            const startedAt = performance.now();
+    const animateStage = stageIndex => {
+        if (motion.requestId !== requestId) return;
+        const stage = stages[stageIndex];
+        const stageStart = marker.getLatLng();
+        const stageTarget = stage.target;
+        const path = [{ lat: stageStart.lat, lng: stageStart.lng }, stageTarget];
+        const cumulative = pathLengths(path);
+        const totalDistance = cumulative[cumulative.length - 1];
+        const startedAt = performance.now();
+        motion.duration = stage.duration;
+        motion.startedAt = startedAt;
+        motion.stageDistance = totalDistance;
 
-            const render = frameTime => {
-                if (motion.requestId !== requestId) return;
-                const progress = Math.min(1, (frameTime - startedAt) / ANIMATION_DURATION_MS);
-                // Gentle sine easing avoids the abrupt acceleration of the old animation.
-                const eased = 0.5 - Math.cos(Math.PI * progress) / 2;
-                const currentDistance = totalDistance * eased;
-                const current = positionOnPath(path, cumulative, currentDistance);
-                const lookAhead = positionOnPath(
-                    path,
-                    cumulative,
-                    Math.min(totalDistance, currentDistance + 15)
-                );
-                marker.setLatLng([current.point.lat, current.point.lng]);
+        const render = frameTime => {
+            if (motion.requestId !== requestId) return;
+            const progress = Math.min(1, (frameTime - startedAt) / stage.duration);
+            const eased = progress * progress * (3 - 2 * progress);
+            const current = positionOnPath(path, cumulative, totalDistance * eased);
+            marker.setLatLng([current.point.lat, current.point.lng]);
+            followMarkerSmoothly(marker, current.point, motion, frameTime);
 
-                // Read the road direction 15 m ahead rather than from tiny
-                // geometry fragments under the bus; this keeps phone rotation
-                // stable around junctions and on low-frame-rate browsers.
-                const desiredHeading = distanceMeters(current.point, lookAhead.point) > .5
-                    ? bearingBetween(current.point, lookAhead.point)
-                    : current.heading;
-                const heading = stableHeading(motion, desiredHeading, frameTime);
-                rotateMarker(marker, visualSelector, heading);
-                motion.heading = heading;
+            const heading = stableHeading(motion, current.heading, frameTime);
+            rotateMarker(marker, visualSelector, heading);
+            motion.heading = heading;
 
-                if (progress < 1) {
-                    motion.frame = requestAnimationFrame(render);
-                } else {
-                    motion.frame = null;
-                    motion.abortController = null;
-                    // The final coordinate is still the road-matched endpoint,
-                    // never the raw off-road GPS coordinate.
-                    marker.setLatLng([current.point.lat, current.point.lng]);
-                }
-            };
+            if (progress < 1) {
+                motion.frame = requestAnimationFrame(render);
+            } else if (stageIndex + 1 < stages.length) {
+                marker.setLatLng([stageTarget.lat, stageTarget.lng]);
+                animateStage(stageIndex + 1);
+            } else {
+                motion.frame = null;
+                marker.setLatLng([target.lat, target.lng]);
+            }
+        };
 
-            motion.frame = requestAnimationFrame(render);
-        })
-        .catch(error => {
-            if (error.name !== "AbortError") console.warn("Vehicle road animation skipped.", error);
-        });
+        motion.frame = requestAnimationFrame(render);
+    };
+
+    animateStage(0);
 }

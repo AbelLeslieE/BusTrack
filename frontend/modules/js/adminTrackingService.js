@@ -9,7 +9,7 @@ import { request } from "/static/common/api.js";
 import { Modal } from "/static/common/modal.js";
 import { escapeHtml } from "/static/common/security.js";
 import { createVehicleMarkerIcon } from "/static/common/vehicleMarker.js";
-import { animateVehicleMarker } from "/static/common/vehicleMotion.js?v=road-safe-2";
+import { animateVehicleMarker } from "/static/common/vehicleMotion.js?v=road-safe-5";
 
 /* ==========================================================
    ADMIN LIVE TRACKING STATE

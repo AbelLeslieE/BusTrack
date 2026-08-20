@@ -4,6 +4,8 @@
    ========================================================== */
 
 import { escapeHtml } from "/static/common/security.js";
+import { animateVehicleMarker } from "/static/common/vehicleMotion.js?v=road-safe-5";
+import { createVehicleMarkerIcon } from "/static/common/vehicleMarker.js";
 
 
 
@@ -553,6 +555,12 @@ export function render() {
 
     loadCurrentStudent(page);
 
+    // Assignment details are loaded once; this endpoint supplies the changing
+    // GPS position, speed, and next-stop state for the dashboard itself.
+    startDashboardTracking(page);
+
+    page.cleanup = () => cleanupStudentDashboard(page);
+
 
     return page;
 
@@ -900,6 +908,10 @@ function updateStudentStopMap(
        CREATE STOP MARKER
     ====================================================== */
 
+    if (page.studentStopMarker) {
+        map.removeLayer(page.studentStopMarker);
+    }
+
     const stopMarker =
         window.L.marker(
             [
@@ -907,6 +919,8 @@ function updateStudentStopMap(
                 longitude
             ]
         ).addTo(map);
+
+    page.studentStopMarker = stopMarker;
 
 
     stopMarker.bindPopup(
@@ -1299,8 +1313,8 @@ export function updateStudentLiveStatus(
     if (speed) {
 
         speed.textContent =
-            trackingData.current_speed != null
-                ? `${trackingData.current_speed} km/h`
+        (trackingData.speed ?? trackingData.current_speed) != null
+                ? `${Number(trackingData.speed ?? trackingData.current_speed).toFixed(1)} km/h`
                 : "—";
 
     }
@@ -1351,4 +1365,127 @@ function formatUpdateTime(
         }
     );
 
+}
+
+/* ==========================================================
+   LIVE DASHBOARD TRACKING
+========================================================== */
+
+async function fetchDashboardTracking() {
+    const token = localStorage.getItem("bus_tracker_access_token");
+    if (!token) throw new Error("Student access token not found.");
+
+    const response = await fetch("/api/students/me/tracking", {
+        method: "GET",
+        cache: "no-store",
+        headers: {
+            "Authorization": `Bearer ${token}`,
+            "Accept": "application/json",
+            "Cache-Control": "no-cache"
+        }
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(data?.detail || "Unable to load live tracking.");
+    return data;
+}
+
+function dashboardTrackingLabel(trip) {
+    if (!trip) return "Waiting for live tracking";
+    if (!trip.telemetry?.is_fresh) return "Last known location";
+    if (trip.telemetry?.moving === true) return "Bus moving";
+    if (trip.telemetry?.ignition_on === false) return "Bus parked";
+    return "Live tracking";
+}
+
+function updateStudentLiveMap(page, trip, bus) {
+    if (!page?.studentMap || !trip) return;
+    const latitude = Number(trip.latitude);
+    const longitude = Number(trip.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+
+    const map = page.studentMap;
+    if (!page.studentBusMarker) {
+        page.studentBusMarker = window.L.marker([latitude, longitude], {
+            icon: createVehicleMarkerIcon(),
+            zIndexOffset: 1000
+        }).addTo(map);
+        page.studentBusMotion = { heading: null, frame: null, followMap: true };
+        map.setView([latitude, longitude], Math.max(map.getZoom(), 15));
+    } else {
+        animateVehicleMarker(
+            page.studentBusMarker,
+            latitude,
+            longitude,
+            page.studentBusMotion,
+            ".fleet-vehicle-marker__visual"
+        );
+    }
+
+    page.studentBusMarker.bindPopup(
+        `<strong>${escapeHtml(bus?.bus_number || "Bus")}</strong><br>Speed: ${
+            trip.speed == null ? "—" : `${Number(trip.speed).toFixed(1)} km/h`
+        }`
+    );
+    const emptyOverlay = page.querySelector("#student-map-empty");
+    if (emptyOverlay) emptyOverlay.style.display = "none";
+    const mapStatus = page.querySelector("#student-map-status");
+    if (mapStatus) mapStatus.innerHTML = `<span></span> ${escapeHtml(dashboardTrackingLabel(trip))}`;
+}
+
+function applyDashboardTracking(page, data) {
+    if (!page.isConnected) return;
+
+    const trip = data?.trip || null;
+    const bus = data?.bus || null;
+    if (bus) {
+        updateStudentBusInformation(page, { ...bus, route: data.route || null });
+        updateStudentAssignmentStatus(page, bus);
+    }
+
+    updateStudentLiveStatus(page, {
+        status: dashboardTrackingLabel(trip),
+        speed: trip?.speed,
+        last_location_update: trip?.last_location_update
+    });
+
+    const nextStop = trip?.next_stop || data?.assigned_stop;
+    if (nextStop) updateStudentStopInformation(page, nextStop);
+    updateStudentLiveMap(page, trip, bus);
+
+    const liveStatus = page.querySelector(".student-live-status span:last-child");
+    if (liveStatus) liveStatus.textContent = dashboardTrackingLabel(trip);
+}
+
+async function refreshDashboardTracking(page) {
+    if (!page.isConnected || page.dashboardTrackingInFlight) return;
+    page.dashboardTrackingInFlight = true;
+    try {
+        applyDashboardTracking(page, await fetchDashboardTracking());
+    } catch (error) {
+        console.error("BusTrack: Student dashboard live tracking failed.", error);
+    } finally {
+        page.dashboardTrackingInFlight = false;
+    }
+}
+
+function startDashboardTracking(page) {
+    void refreshDashboardTracking(page);
+    page.dashboardTrackingTimer = window.setInterval(
+        () => void refreshDashboardTracking(page),
+        3_000
+    );
+    page.dashboardVisibilityHandler = () => {
+        if (document.visibilityState === "visible") void refreshDashboardTracking(page);
+    };
+    document.addEventListener("visibilitychange", page.dashboardVisibilityHandler);
+}
+
+function cleanupStudentDashboard(page) {
+    if (page.dashboardTrackingTimer) window.clearInterval(page.dashboardTrackingTimer);
+    if (page.dashboardVisibilityHandler) {
+        document.removeEventListener("visibilitychange", page.dashboardVisibilityHandler);
+    }
+    if (page.studentBusMotion?.frame) cancelAnimationFrame(page.studentBusMotion.frame);
+    if (page.studentMap) page.studentMap.remove();
+    page.studentMap = null;
 }

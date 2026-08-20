@@ -1,13 +1,13 @@
 /* ==========================================================
    DRIVER TRACKING SERVICE
 ========================================================== */
-import { animateVehicleMarker } from "/static/common/vehicleMotion.js?v=road-safe-2";
+import { animateVehicleMarker } from "/static/common/vehicleMotion.js?v=road-safe-5";
 import { createVehicleMarkerIcon } from "/static/common/vehicleMarker.js";
 
 console.log("trackingService.js loaded");
 let map = null;
 let marker = null;
-const markerMotion = { heading: null, frame: null };
+const markerMotion = { heading: null, frame: null, followMap: true };
 let markerTargetLocation = null;
 console.log(
     "Driver map initialized WITHOUT bus marker."
@@ -35,14 +35,20 @@ let sourcePollTimer = null;
  *
  * The driver map can update immediately from GPS,
  * but the server/database will receive an update
- * at most once every 10 seconds.
+ * at most once every two seconds.
  */
 let lastServerUpdateTime = 0;
+
+// GPS callbacks and network responses are independent. Queue the most recent
+// fix so a slow request cannot cause stale positions to be written afterward.
+let locationUpdateInFlight = false;
+let pendingLocation = null;
+let locationFlushTimer = null;
 
 /*
  * Server update interval.
  *
- * 10 seconds = 10000 milliseconds.
+ * Two seconds keeps student tracking responsive without flooding the API.
  */
 const SERVER_UPDATE_INTERVAL = 2000;
 
@@ -100,6 +106,9 @@ export function initializeMap(containerId = "driverMap") {
     if (markerMotion.frame) cancelAnimationFrame(markerMotion.frame);
     markerMotion.heading = null;
     markerMotion.frame = null;
+    markerMotion.target = null;
+    markerMotion.duration = null;
+    markerMotion.stageDistance = null;
 
     // ==========================================================
     // Default Location - Sahrdaya College
@@ -169,6 +178,7 @@ export function updateMarker(latitude, longitude, label = "Current Bus") {
         .bindPopup(label);
 
         markerTargetLocation = { latitude: Number(latitude), longitude: Number(longitude) };
+        map.setView([latitude, longitude], Math.max(map.getZoom(), 15), { animate: true });
 
     } else {
 
@@ -191,25 +201,6 @@ export function updateMarker(latitude, longitude, label = "Current Bus") {
         }
 
     }
-
-    map.flyTo(
-
-        [
-            latitude,
-            longitude
-        ],
-
-        map.getZoom(),
-
-        {
-
-            animate: true,
-
-            duration: 0.5
-
-        }
-
-    );
 
 }
 /* ==========================================================
@@ -1205,7 +1196,7 @@ async function onLocationSuccess(position) {
      * Backend receives the calculated speed instead of
      * receiving null when browser GPS does not provide speed.
      *
-     * sendLocation() still controls the 10-second server
+     * sendLocation() still controls the server-side update
      * update interval.
      */
 
@@ -1234,198 +1225,81 @@ async function onLocationSuccess(position) {
  * Therefore:
  *
  * - Driver map updates immediately.
- * - Backend receives a position at most every 10 seconds.
+ * - Backend receives a position at most every two seconds.
  *
  * This prevents unnecessary database/API traffic while
  * keeping the student live-tracking page responsive.
  */
-async function sendLocation(
-    latitude,
-    longitude,
-    speed,
-    accuracy
-) {
+function scheduleLocationFlush(delay) {
+    if (locationFlushTimer !== null) return;
+    locationFlushTimer = window.setTimeout(() => {
+        locationFlushTimer = null;
+        void flushPendingLocation();
+    }, delay);
+}
 
-    if (activeTrackingSource !== "mobile") return;
+async function flushPendingLocation() {
+    if (locationUpdateInFlight || activeTrackingSource !== "mobile" || !currentTripId) return;
 
-    // ------------------------------------------------------
-    // There is nothing to send without an active trip.
-    // ------------------------------------------------------
-
-    if (!currentTripId) {
-
+    const elapsed = Date.now() - lastServerUpdateTime;
+    if (lastServerUpdateTime !== 0 && elapsed < SERVER_UPDATE_INTERVAL) {
+        scheduleLocationFlush(SERVER_UPDATE_INTERVAL - elapsed);
         return;
-
     }
 
+    const location = pendingLocation;
+    if (!location) return;
+    pendingLocation = null;
 
-    // ------------------------------------------------------
-    // Check whether 10 seconds have passed since the last
-    // server update.
-    // ------------------------------------------------------
-
-    const now = Date.now();
-
-    const elapsed =
-        now - lastServerUpdateTime;
-
-
-    if (
-        lastServerUpdateTime !== 0 &&
-        elapsed < SERVER_UPDATE_INTERVAL
-    ) {
-
-        console.log(
-            "GPS received locally. " +
-            "Server update throttled."
-        );
-
-        return;
-
-    }
-
-
-    // ------------------------------------------------------
-    // Get authentication token.
-    // ------------------------------------------------------
-
-    const token =
-        trackingAccessToken ||
-        localStorage.getItem(
-            "bus_tracker_access_token"
-        );
-
-
+    const token = trackingAccessToken || localStorage.getItem("bus_tracker_access_token");
     if (!token) {
-
-        console.error(
-            "No authentication token found."
-        );
-
+        console.error("No authentication token found.");
         return;
-
     }
 
-
-    // ------------------------------------------------------
-    // Send GPS position to backend.
-    // ------------------------------------------------------
-
+    locationUpdateInFlight = true;
     try {
-
-        const response =
-            await fetch(
-                "/api/gps/update",
-                {
-                    method: "POST",
-
-                    headers: {
-                        "Authorization":
-                            `Bearer ${token}`,
-
-                        "Content-Type":
-                            "application/json"
-                    },
-
-                    body: JSON.stringify({
-
-                        trip_id:
-                            currentTripId,
-
-                        latitude:
-                            latitude,
-
-                        longitude:
-                            longitude,
-
-                        speed:
-                            speed,
-
-                        accuracy:
-                            accuracy
-                    })
-                }
-            );
-
-
-        // --------------------------------------------------
-        // IMPORTANT:
-        // fetch() does NOT throw for HTTP 4xx/5xx.
-        //
-        // Therefore we MUST check response.ok.
-        // --------------------------------------------------
+        const response = await fetch("/api/gps/update", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                trip_id: currentTripId,
+                latitude: location.latitude,
+                longitude: location.longitude,
+                speed: location.speed,
+                accuracy: location.accuracy
+            })
+        });
 
         if (!response.ok) {
-
-            let errorMessage =
-                `GPS update failed (${response.status}).`;
-
-            try {
-
-                const error =
-                    await response.json();
-
-                if (error.detail) {
-                    errorMessage = typeof error.detail === "string"
-                        ? error.detail
-                        : error.detail.message || errorMessage;
-                }
-
-                if (response.status === 409 && error.detail?.tracking_source === "vehicle_gps") {
-                    void refreshTrackingSource().catch(() => {});
-                    return;
-                }
-
+            const error = await response.json().catch(() => ({}));
+            if (response.status === 409 && error.detail?.tracking_source === "vehicle_gps") {
+                void refreshTrackingSource().catch(() => {});
+                return;
             }
-            catch {
-
-                // Keep the default error message.
-            }
-
-
-            console.error(
-                "BusTrack GPS update failed:",
-                errorMessage
-            );
-
-            return;
-
+            throw new Error(typeof error.detail === "string"
+                ? error.detail
+                : error.detail?.message || `GPS update failed (${response.status}).`);
         }
 
-
-        // --------------------------------------------------
-        // Read backend response.
-        // --------------------------------------------------
-
-        const result =
-            await response.json();
-
-
-        // --------------------------------------------------
-        // Only mark the timestamp after the server accepted
-        // the GPS update.
-        // --------------------------------------------------
-
-        lastServerUpdateTime =
-            Date.now();
-
-
-        console.log(
-            "GPS sent to server successfully:",
-            result
-        );
-
+        lastServerUpdateTime = Date.now();
+        console.log("GPS sent to server successfully:", await response.json());
+    } catch (error) {
+        console.error("Unable to send GPS update:", error);
+    } finally {
+        locationUpdateInFlight = false;
+        if (pendingLocation) void flushPendingLocation();
     }
+}
 
-    catch (error) {
-
-        console.error(
-            "Unable to send GPS update:",
-            error
-        );
-
-    }
-
+async function sendLocation(latitude, longitude, speed, accuracy) {
+    if (activeTrackingSource !== "mobile" || !currentTripId) return;
+    // Preserve only the newest coordinate while the network is busy.
+    pendingLocation = { latitude, longitude, speed, accuracy };
+    await flushPendingLocation();
 }
 /* ==========================================================
    GET CURRENT ACTIVE TRIP
@@ -1754,6 +1628,9 @@ export function cleanupTracking() {
     if (markerMotion.frame) cancelAnimationFrame(markerMotion.frame);
     markerMotion.heading = null;
     markerMotion.frame = null;
+    markerMotion.target = null;
+    markerMotion.duration = null;
+    markerMotion.stageDistance = null;
     markerTargetLocation = null;
 
     if (sourcePollTimer !== null) {
@@ -1788,6 +1665,12 @@ export function cleanupTracking() {
     trackingAccessToken = null;
 
     lastServerUpdateTime = 0;
+    locationUpdateInFlight = false;
+    pendingLocation = null;
+    if (locationFlushTimer !== null) {
+        window.clearTimeout(locationFlushTimer);
+        locationFlushTimer = null;
+    }
     previousGpsSample = null;
 
 

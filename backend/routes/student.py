@@ -10,7 +10,7 @@ The browser never supplies a student ID for these endpoints.
 from datetime import datetime, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -266,6 +266,7 @@ def get_student_live_tracking(
         Depends(require_user),
     ],
     db: Session = Depends(get_db),
+    response: Response = None,
 ):
     """
     Return authoritative live tracking information for the
@@ -292,6 +293,12 @@ def get_student_live_tracking(
             ↓
         Current / Next Stop
     """
+
+    # This endpoint is intentionally polled by the student portal. Never let
+    # a browser or intermediary reuse an old GPS response.
+    if response is not None:
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
 
     # ======================================================
     # 1. FIND STUDENT
