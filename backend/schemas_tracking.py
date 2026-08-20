@@ -11,16 +11,29 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 # ==========================================================
-# START TRIP
+# START TRIP / MOBILE FALLBACK
 # ==========================================================
 
 class TripStartRequest(BaseModel):
+    """Phone position used only when the vehicle GPS is unavailable."""
 
-    driver_id: int
+    latitude: float
+    longitude: float
+    speed: float | None = None  # Browser Geolocation reports metres/second.
+    accuracy: float | None = None
 
-    bus_id: int
 
-    route_id: int
+# ==========================================================
+# START TRIP / MOBILE FALLBACK
+# ==========================================================
+
+class TripStartRequest(BaseModel):
+    """Phone position used only when the vehicle GPS is unavailable."""
+
+    latitude: float
+    longitude: float
+    speed: float | None = None  # Browser Geolocation reports metres/second.
+    accuracy: float | None = None
 
 
 # ==========================================================
@@ -104,6 +117,10 @@ class LiveTripResponse(BaseModel):
     route_code: str | None = None
 
     status: str
+
+    # Returned immediately after a vehicle-GPS-started trip is created, so
+    # the driver UI can render the correct stop order from its first frame.
+    route_direction: Literal["forward", "reverse"] = "forward"
 
     started_at: datetime
 

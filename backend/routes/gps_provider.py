@@ -40,7 +40,9 @@ from backend.schemas_gps_provider import (
 )
 from backend.security import require_driver, require_gps_technician
 from backend.models import Driver
-from backend.services.vehicle_gps import vehicle_gps_is_authoritative
+from backend.services.vehicle_gps import (
+    vehicle_gps_expected_interval_seconds,
+)
 from backend.routes.gps import update_route_stop_progression
 from backend.services.trip_direction import direction_from_start_position, ordered_route_stops
 from backend.models import RouteStop
@@ -229,7 +231,7 @@ def _find_device_mapping(db: Session, external_ids: list[str]) -> GPSDeviceMappi
 
 def _serialize_state(state: BusGPSState, bus: Bus, *, include_raw: bool = False) -> dict[str, Any]:
     now = _utc_now()
-    expected_interval_seconds = 20 if state.ignition is True else 120
+    expected_interval_seconds = vehicle_gps_expected_interval_seconds(state.ignition)
     position_time = state.fix_time or state.received_at
     if position_time.tzinfo is None:
         position_time = position_time.replace(tzinfo=timezone.utc)
@@ -256,7 +258,10 @@ def _serialize_state(state: BusGPSState, bus: Bus, *, include_raw: bool = False)
         "expected_interval_seconds": expected_interval_seconds,
         "age_seconds": age_seconds,
         "is_fresh": fresh,
-        "tracking_source": "vehicle_gps" if fresh and state.ignition is True else "mobile_available",
+        # A parked heartbeat still comes from the vehicle tracker.  Do not
+        # label it as a mobile fallback: browser/driver GPS is not part of
+        # the production tracking data path.
+        "tracking_source": "vehicle_gps" if fresh else "unavailable",
     }
     if include_raw:
         try:
@@ -300,6 +305,13 @@ def _update_active_trip_from_vehicle(db: Session, position: dict[str, Any], bus_
     ).order_by(LiveTrip.last_location_update.desc(), LiveTrip.started_at.desc()).first()
     if trip is None:
         return None
+
+    # A parked/invalid tracker heartbeat is stored in provider history, but it
+    # must not replace the phone while that phone is the active fallback.
+    # The very next fresh ignition-on MVD point *does* take over automatically.
+    vehicle_is_primary = position["ignition"] is True and position["valid"] is not False
+    if trip.current_location_source == "mobile" and not vehicle_is_primary:
+        return trip.id
 
     previous_location = db.query(LiveLocation).filter(
         LiveLocation.trip_id == trip.id,
@@ -770,15 +782,38 @@ def get_provider_status(bus_id: int, db: Session = Depends(get_db), _technician:
 
 @router.get("/driver/source")
 def get_driver_tracking_source(current_user: User = Depends(require_driver), db: Session = Depends(get_db)):
-    """Tell the driver UI when the vehicle GPS must replace phone tracking."""
+    """Return the driver's own latest MVD position, never an admin relay."""
 
     driver = db.query(Driver).filter(Driver.user_id == current_user.id).first()
     if driver is None or driver.bus_id is None:
-        return {"tracking_source": "mobile", "mobile_tracking_allowed": True, "reason": "No bus GPS is assigned."}
+        return {"tracking_source": "unavailable", "mobile_tracking_allowed": False, "reason": "No bus GPS is assigned."}
     state = db.query(BusGPSState).filter(BusGPSState.bus_id == driver.bus_id).first()
-    if vehicle_gps_is_authoritative(state):
+    active_trip = db.query(LiveTrip).filter(
+        LiveTrip.driver_id == driver.id,
+        LiveTrip.status == "Running",
+        LiveTrip.ended_at.is_(None),
+    ).order_by(LiveTrip.started_at.desc()).first()
+    vehicle = _serialize_state(state, db.get(Bus, driver.bus_id)) if state else None
+    vehicle_is_primary = bool(
+        vehicle
+        and vehicle["is_fresh"]
+        and state.ignition is True
+        and state.valid is not False
+    )
+    if vehicle_is_primary:
         return {"tracking_source": "vehicle_gps", "mobile_tracking_allowed": False,
-                "reason": "Fresh ignition-on vehicle GPS is being received.", "vehicle": _serialize_state(state, db.get(Bus, driver.bus_id))}
-    return {"tracking_source": "mobile", "mobile_tracking_allowed": True,
-            "reason": "Vehicle GPS is off, stale, or unavailable.",
-            "vehicle": _serialize_state(state, db.get(Bus, driver.bus_id)) if state else None}
+                "reason": (
+                    "Fresh ignition-on vehicle GPS is being received."
+                    if state.ignition is True
+                    else "Fresh parked-vehicle GPS heartbeat is being received."
+                ), "vehicle": vehicle,
+                "route_direction": active_trip.route_direction if active_trip else None}
+    return {
+            "tracking_source": "mobile" if active_trip else "mobile_available",
+            "mobile_tracking_allowed": True,
+            "reason": (
+                "Vehicle GPS is unavailable; phone GPS fallback is active."
+                if active_trip
+                else "Vehicle GPS is unavailable; phone GPS fallback is ready."
+            ), "vehicle": vehicle,
+            "route_direction": active_trip.route_direction if active_trip else None}

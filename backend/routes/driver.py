@@ -64,6 +64,7 @@ def _driver_portal_data(driver: Driver, db: Session) -> dict:
             "latitude": active_trip.current_latitude, "longitude": active_trip.current_longitude,
             "speed_kmh": active_trip.current_speed, "last_location_update": active_trip.last_location_update,
             "location_source": active_trip.current_location_source,
+            "route_direction": active_trip.route_direction,
         } if active_trip else None),
     }
 

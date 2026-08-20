@@ -3,6 +3,8 @@
 const MIN_MOVEMENT_METERS = 7;
 const MAX_SPEED_METERS_PER_SECOND = 30; // 108 km/h; safely above a city bus.
 const MIN_PLAUSIBLE_JUMP_METERS = 120;
+// Moving MVD fixes arrive every 20 seconds. Reserve a few seconds at the end
+// for an early next fix or a stationary bus, while following road geometry.
 const LIVE_SEGMENT_DURATION_MS = 17_000;
 const MIN_CATCH_UP_DURATION_MS = 500;
 const MAX_CATCH_UP_DURATION_MS = 3_000;
@@ -111,13 +113,61 @@ function followMarkerSmoothly(marker, point, motion, frameTime) {
     });
 }
 
+async function requestRoadPath(start, target, signal) {
+    const coordinates = `${start.lng},${start.lat};${target.lng},${target.lat}`;
+    const response = await fetch(
+        `https://router.project-osrm.org/route/v1/driving/${coordinates}`
+        + "?overview=full&geometries=geojson&steps=false",
+        { signal },
+    );
+    if (!response.ok) throw new Error(`Road route failed (${response.status}).`);
+
+    const data = await response.json();
+    const geometry = data.routes?.[0]?.geometry?.coordinates;
+    if (!Array.isArray(geometry) || geometry.length < 2) {
+        throw new Error("Road route contains no usable geometry.");
+    }
+
+    return geometry
+        .map(([longitude, latitude]) => ({ lat: Number(latitude), lng: Number(longitude) }))
+        .filter(point => Number.isFinite(point.lat) && Number.isFinite(point.lng));
+}
+
+export async function snapVehicleMarkerToRoad(marker, latitude, longitude, motion = {}) {
+    if (!marker || !Number.isFinite(Number(latitude)) || !Number.isFinite(Number(longitude))) return;
+
+    motion.snapAbortController?.abort();
+    const controller = new AbortController();
+    motion.snapAbortController = controller;
+    const requestId = (motion.snapRequestId || 0) + 1;
+    motion.snapRequestId = requestId;
+
+    try {
+        const response = await fetch(
+            `https://router.project-osrm.org/nearest/v1/driving/${Number(longitude)},${Number(latitude)}?number=1`,
+            { signal: controller.signal },
+        );
+        if (!response.ok) throw new Error(`Road snap failed (${response.status}).`);
+        const location = (await response.json()).waypoints?.[0]?.location;
+        if (
+            requestId !== motion.snapRequestId
+            || !Array.isArray(location)
+            || !Number.isFinite(Number(location[0]))
+            || !Number.isFinite(Number(location[1]))
+        ) return;
+        marker.setLatLng([Number(location[1]), Number(location[0])]);
+    } catch (error) {
+        if (error.name !== "AbortError") {
+            console.warn("Unable to snap vehicle marker to road; using raw GPS position.", error);
+        }
+    }
+}
+
 /**
- * `motion` must be retained per bus/marker. Each normal GPS segment lasts
- * 17 seconds, which hides the usual 20-second delivery gap. If a newer fix
- * arrives early, the marker briefly catches up to the prior fresh fix before
- * continuing to the newest one within the same 17-second window.
+ * `motion` must be retained per bus/marker. Each normal GPS segment follows
+ * the road geometry for most of the 20-second moving-provider interval.
  */
-export function animateVehicleMarker(marker, latitude, longitude, motion, visualSelector) {
+export async function animateVehicleMarker(marker, latitude, longitude, motion, visualSelector) {
     const start = marker?.getLatLng();
     const target = { lat: Number(latitude), lng: Number(longitude) };
     if (!start || !Number.isFinite(target.lat) || !Number.isFinite(target.lng)) return;
@@ -137,56 +187,76 @@ export function animateVehicleMarker(marker, latitude, longitude, motion, visual
 
     const previousTarget = motion.target;
     const previousAnimationIsRunning = Boolean(
-        motion.frame &&
-        previousTarget &&
-        Number.isFinite(previousTarget.lat) &&
-        Number.isFinite(previousTarget.lng)
+        motion.frame
+        && previousTarget
+        && Number.isFinite(previousTarget.lat)
+        && Number.isFinite(previousTarget.lng)
     );
-
     if (motion.frame) cancelAnimationFrame(motion.frame);
     motion.abortController?.abort();
     const requestId = (motion.requestId || 0) + 1;
     motion.requestId = requestId;
     motion.lastAcceptedAt = now;
-    motion.abortController = null;
-    // Store the latest server coordinate immediately. If another update
-    // arrives while catching up, it catches this newest known location rather
-    // than replaying an older one.
-    motion.target = target;
+    const controller = new AbortController();
+    motion.abortController = controller;
 
-    /*
-     * A public road-routing request must never decide whether a live marker
-     * moves. GPS points are interpolated immediately, while the 17-second
-     * duration makes normal 20-second reports appear continuous.
-     */
-    const stages = [];
-    if (
-        previousAnimationIsRunning &&
-        distanceMeters(start, previousTarget) >= MIN_MOVEMENT_METERS
-    ) {
-        const remainingDistance = distanceMeters(start, previousTarget);
-        const catchUpDuration = Math.min(
-            MAX_CATCH_UP_DURATION_MS,
-            Math.max(
-                MIN_CATCH_UP_DURATION_MS,
-                Math.round(
-                    MAX_CATCH_UP_DURATION_MS *
-                    (remainingDistance / Math.max(motion.stageDistance || remainingDistance, 1))
+    let stages;
+    try {
+        if (previousAnimationIsRunning) {
+            const [catchUpPath, nextPath] = await Promise.all([
+                requestRoadPath(start, previousTarget, controller.signal),
+                requestRoadPath(previousTarget, target, controller.signal),
+            ]);
+            const remainingDistance = distanceMeters(start, previousTarget);
+            const catchUpDuration = Math.min(
+                MAX_CATCH_UP_DURATION_MS,
+                Math.max(
+                    MIN_CATCH_UP_DURATION_MS,
+                    Math.round(
+                        MAX_CATCH_UP_DURATION_MS
+                        * (remainingDistance / Math.max(motion.stageDistance || remainingDistance, 1))
+                    )
                 )
-            )
-        );
-        stages.push({ target: previousTarget, duration: catchUpDuration });
-        stages.push({ target, duration: LIVE_SEGMENT_DURATION_MS - catchUpDuration });
-    } else {
-        stages.push({ target, duration: LIVE_SEGMENT_DURATION_MS });
+            );
+            stages = [
+                { path: catchUpPath, target: previousTarget, duration: catchUpDuration },
+                {
+                    path: nextPath,
+                    target: nextPath[nextPath.length - 1],
+                    duration: LIVE_SEGMENT_DURATION_MS - catchUpDuration,
+                },
+            ];
+        } else {
+            const roadPath = await requestRoadPath(start, target, controller.signal);
+            stages = [{
+                path: roadPath,
+                target: roadPath[roadPath.length - 1],
+                duration: LIVE_SEGMENT_DURATION_MS,
+            }];
+        }
+    } catch (error) {
+        if (error.name !== "AbortError") {
+            console.warn("Unable to load road geometry; using a direct GPS segment.", error);
+        }
+        stages = [{ path: [start, target], target, duration: LIVE_SEGMENT_DURATION_MS }];
     }
+    if (motion.requestId !== requestId) return;
+
+    const routeStart = stages[0].path[0];
+    const routeTarget = stages[stages.length - 1].target;
+    // OSRM snaps both endpoints to the driveable network. Move an initially
+    // off-road GPS fix to that first road point before animation begins.
+    if (distanceMeters(marker.getLatLng(), routeStart) >= MIN_MOVEMENT_METERS) {
+        marker.setLatLng([routeStart.lat, routeStart.lng]);
+    }
+    motion.target = routeTarget;
+    motion.abortController = null;
 
     const animateStage = stageIndex => {
         if (motion.requestId !== requestId) return;
         const stage = stages[stageIndex];
-        const stageStart = marker.getLatLng();
         const stageTarget = stage.target;
-        const path = [{ lat: stageStart.lat, lng: stageStart.lng }, stageTarget];
+        const path = stage.path;
         const cumulative = pathLengths(path);
         const totalDistance = cumulative[cumulative.length - 1];
         const startedAt = performance.now();

@@ -1,7 +1,7 @@
 /* ==========================================================
    DRIVER TRACKING SERVICE
 ========================================================== */
-import { animateVehicleMarker } from "/static/common/vehicleMotion.js?v=road-safe-5";
+import { animateVehicleMarker, snapVehicleMarkerToRoad } from "/static/common/vehicleMotion.js?v=road-safe-6";
 import { createVehicleMarkerIcon } from "/static/common/vehicleMarker.js";
 
 console.log("trackingService.js loaded");
@@ -24,9 +24,8 @@ let tracking = false;
 
 let trackingAccessToken = null;
 
-// The vehicle device is authoritative whenever it sends a fresh, ignition-on
-// position. Phone GPS is retained solely as an opt-in fallback.
-let activeTrackingSource = "mobile";
+// The MVD unit is primary. Phone GPS runs only while that signal is stale.
+let activeTrackingSource = "unavailable";
 let sourcePollTimer = null;
 
 /*
@@ -178,6 +177,12 @@ export function updateMarker(latitude, longitude, label = "Current Bus") {
         .bindPopup(label);
 
         markerTargetLocation = { latitude: Number(latitude), longitude: Number(longitude) };
+        void snapVehicleMarkerToRoad(
+            marker,
+            Number(latitude),
+            Number(longitude),
+            markerMotion,
+        );
         map.setView([latitude, longitude], Math.max(map.getZoom(), 15), { animate: true });
 
     } else {
@@ -217,9 +222,40 @@ export async function startTrip() {
 
     if (tracking) return;
 
-    // Check the provider before ever requesting phone-location permission.
-    // An ignition-on vehicle device is the primary tracker and the phone must
-    // not begin a competing browser GPS watcher.
+    // Ask once from the driver's button click, when browsers are permitted to
+    // show a location prompt. No phone coordinate is sent while MVD is live;
+    // this merely makes an automatic outage fallback possible later.
+    prepareMobileFallbackPermission();
+
+    try {
+        const source = await refreshTrackingSource();
+        if (source.tracking_source === "vehicle_gps") {
+            await startTripUsingVehicleGps();
+            return;
+        }
+
+        if (source.mobile_tracking_allowed) {
+            await startTripUsingMobileGpsFallback();
+            return;
+        }
+
+        setText("gpsStatus", "Waiting for a GPS source");
+        alert("Neither vehicle GPS nor the approved phone fallback is available.");
+    } catch (error) {
+        console.error("Unable to start trip:", error);
+        setText("gpsStatus", "Unable to read GPS source");
+        alert(error.message);
+    }
+}
+
+// MVD is primary. This path is reached only after the source endpoint has
+// confirmed that the MVD unit is stale, invalid, unavailable, or ignition-off.
+async function startTripUsingMobileGpsFallback() {
+
+    if (tracking) return;
+
+    // Re-check immediately before requesting permission. A newly received MVD
+    // fix wins, so the two devices never publish competing live positions.
     try {
         const source = await refreshTrackingSource();
         if (source.tracking_source === "vehicle_gps") {
@@ -337,7 +373,13 @@ export async function startTrip() {
                     "Content-Type":
                         "application/json"
 
-                }
+                },
+
+                body: JSON.stringify({
+                    latitude: initialPosition.coords.latitude,
+                    longitude: initialPosition.coords.longitude,
+                    accuracy: initialPosition.coords.accuracy
+                })
 
             }
 
@@ -415,6 +457,9 @@ export async function startTrip() {
         // UPDATE UI
         // ==================================================
 
+        // This is the MVD-approved fallback path. Enable the watcher only
+        // after the backend has created the mobile-sourced trip.
+        activeTrackingSource = "mobile";
         tracking = true;
 
 
@@ -637,6 +682,29 @@ function stopMobileLocationTracking() {
     previousGpsSample = null;
 }
 
+function completeTripInDriverUi() {
+    stopMobileLocationTracking();
+
+    if (marker && map) {
+        map.removeLayer(marker);
+        marker = null;
+    }
+
+    tracking = false;
+    currentTripId = null;
+    trackingAccessToken = null;
+    lastServerUpdateTime = 0;
+    previousGpsSample = null;
+
+    setText("tripStatus", "✅ Trip completed");
+    setText("gpsStatus", "Reached terminal");
+
+    const startButton = document.getElementById("startTripBtn");
+    const stopButton = document.getElementById("stopTripBtn");
+    if (startButton) startButton.disabled = false;
+    if (stopButton) stopButton.disabled = true;
+}
+
 function updateVehicleLocation(vehicle) {
     if (!vehicle || !Number.isFinite(vehicle.latitude) || !Number.isFinite(vehicle.longitude)) return;
     updateMarker(vehicle.latitude, vehicle.longitude, "Vehicle GPS");
@@ -650,29 +718,79 @@ function updateVehicleLocation(vehicle) {
 function applyTrackingSource(source) {
     if (!source) return;
     const vehicleIsPrimary = source.tracking_source === "vehicle_gps";
-    activeTrackingSource = vehicleIsPrimary ? "vehicle_gps" : "mobile";
+    const mobileIsActive = source.tracking_source === "mobile";
+    const mobileIsReady = source.tracking_source === "mobile_available";
+    activeTrackingSource = vehicleIsPrimary
+        ? "vehicle_gps"
+        : mobileIsActive
+            ? "mobile"
+            : "unavailable";
     const card = document.getElementById("trackingSourceCard");
     const button = document.getElementById("mobileFallbackBtn");
     card?.classList.toggle("is-vehicle", vehicleIsPrimary);
-    setText("trackingSourceValue", vehicleIsPrimary ? "Vehicle GPS (MVD)" : "Phone GPS fallback");
-    setText("trackingSourcePill", vehicleIsPrimary ? "PRIMARY" : "FALLBACK");
+    setText(
+        "trackingSourceValue",
+        vehicleIsPrimary
+            ? "Vehicle GPS (MVD)"
+            : mobileIsActive
+                ? "Phone GPS fallback"
+                : mobileIsReady
+                    ? "Phone GPS fallback ready"
+                    : "Vehicle GPS offline"
+    );
+    setText(
+        "trackingSourcePill",
+        vehicleIsPrimary ? "PRIMARY" : mobileIsActive ? "FALLBACK" : "WAITING"
+    );
     setText("trackingSourceReason", source.reason || "Location-source status is unavailable.");
-    setText("activeTrackingSource", vehicleIsPrimary ? "🚌 Vehicle GPS" : "📱 Mobile phone");
-    setText("mapTrackingSource", vehicleIsPrimary ? "🚌 Vehicle GPS" : "📱 Mobile fallback");
+    setText(
+        "activeTrackingSource",
+        vehicleIsPrimary ? "🚌 Vehicle GPS" : mobileIsActive ? "📱 Phone GPS fallback" : "⚫ Waiting for GPS"
+    );
+    setText(
+        "mapTrackingSource",
+        vehicleIsPrimary ? "🚌 Vehicle GPS" : mobileIsActive ? "📱 Phone GPS fallback" : "⚫ GPS unavailable"
+    );
     document.getElementById("mapTrackingSource")?.classList.toggle("is-vehicle", vehicleIsPrimary);
-    if (button) button.hidden = vehicleIsPrimary;
+    if (button) button.hidden = true;
 
     if (vehicleIsPrimary) {
-        // This is the client-side companion to the backend's 409 protection.
-        // Stop collecting phone positions immediately, then render the latest
-        // translated provider coordinate on the map.
+        // Refresh the driver map from the latest translated provider position.
         stopMobileLocationTracking();
         updateVehicleLocation(source.vehicle);
-        setText("gpsStatus", "Vehicle GPS · ignition on");
+        setText(
+            "gpsStatus",
+            source.vehicle?.ignition === false
+                ? "Vehicle GPS · ignition off (parked heartbeat)"
+                : "Vehicle GPS · ignition on"
+        );
+        if (tracking && source.route_direction) {
+            setText(
+                "tripStatus",
+                source.route_direction === "reverse"
+                    ? "🟢 Running · Return journey"
+                    : "🟢 Running · Outbound journey"
+            );
+        }
         return;
     }
 
-    setText("gpsStatus", tracking ? "Phone GPS fallback ready" : "Waiting to start");
+    if (mobileIsActive) {
+        setText("gpsStatus", "Phone GPS fallback · waiting for MVD recovery");
+        // Once browser permission has been granted, this begins automatically
+        // whenever the fresh MVD signal disappears. Do not recreate the
+        // watcher on every two-second source poll.
+        if (tracking && currentTripId && watchId === null) {
+            startLocationTracking();
+        }
+        return;
+    }
+
+    stopMobileLocationTracking();
+    setText(
+        "gpsStatus",
+        mobileIsReady ? "Phone GPS fallback ready" : "Waiting for GPS"
+    );
 }
 
 async function refreshTrackingSource() {
@@ -685,15 +803,7 @@ async function refreshTrackingSource() {
 
 export function initializeTrackingSource() {
     const fallbackButton = document.getElementById("mobileFallbackBtn");
-    fallbackButton?.addEventListener("click", async () => {
-        try {
-            const source = await refreshTrackingSource();
-            if (source.tracking_source === "vehicle_gps") return;
-            if (tracking) startLocationTracking();
-        } catch (error) {
-            setText("trackingSourceReason", error.message);
-        }
-    });
+    if (fallbackButton) fallbackButton.hidden = true;
     void refreshTrackingSource().catch(error => setText("trackingSourceReason", error.message));
     if (sourcePollTimer !== null) window.clearInterval(sourcePollTimer);
     sourcePollTimer = window.setInterval(() => {
@@ -706,7 +816,14 @@ async function startTripUsingVehicleGps() {
     const stopButton = document.getElementById("stopTripBtn");
     if (startButton) startButton.disabled = true;
     try {
-        const response = await fetch("/api/gps/start", { method: "POST", headers: { "Content-Type": "application/json" } });
+        const token = localStorage.getItem("bus_tracker_access_token");
+        const headers = { "Content-Type": "application/json" };
+        if (token) headers.Authorization = `Bearer ${token}`;
+        const response = await fetch("/api/gps/start", {
+            method: "POST",
+            headers,
+            credentials: "same-origin",
+        });
         const trip = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(trip.detail || "Unable to start trip.");
         currentTripId = trip.id;
@@ -721,6 +838,15 @@ async function startTripUsingVehicleGps() {
         setText("gpsStatus", "Unable to start trip");
         alert(error.message);
     }
+}
+
+function prepareMobileFallbackPermission() {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+        () => {},
+        () => {},
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 15_000 }
+    );
 }
 
 export async function sendDriverFeedback(feedbackType, message = "") {
@@ -1286,7 +1412,12 @@ async function flushPendingLocation() {
         }
 
         lastServerUpdateTime = Date.now();
-        console.log("GPS sent to server successfully:", await response.json());
+        const result = await response.json();
+        console.log("GPS sent to server successfully:", result);
+
+        if (result.stop_progression_event?.trip_completed) {
+            completeTripInDriverUi();
+        }
     } catch (error) {
         console.error("Unable to send GPS update:", error);
     } finally {
@@ -1442,13 +1573,9 @@ export async function loadCurrentTrip() {
         }
 
 
-        // Restart phone location only when vehicle GPS is not authoritative.
-        // refreshTrackingSource() also immediately stops an existing watcher
-        // if the MVD device has just reported ignition on.
-        const source = await refreshTrackingSource().catch(() => null);
-        if (session === trackingSession && source?.tracking_source !== "vehicle_gps") {
-            startLocationTracking();
-        }
+        // Provider polling continues to refresh the map; this portal never
+        // starts a browser GPS watcher.
+        await refreshTrackingSource().catch(() => null);
 
         return trip;
 

@@ -36,6 +36,7 @@ from backend.services.tracking_engine import (
     determine_route_progress,
 )
 from backend.services.trip_direction import ordered_route_stops
+from backend.services.vehicle_gps import vehicle_gps_expected_interval_seconds
 from backend.schemas import StudentAssignmentUpdate
 
 
@@ -482,7 +483,7 @@ def get_student_live_tracking(
         received_at = provider_state.fix_time or provider_state.received_at
         if received_at.tzinfo is None:
             received_at = received_at.replace(tzinfo=timezone.utc)
-        expected_interval = 20 if provider_state.ignition is True else 120
+        expected_interval = vehicle_gps_expected_interval_seconds(provider_state.ignition)
         provider_is_fresh = (
             datetime.now(timezone.utc) - received_at
         ).total_seconds() <= expected_interval * 3
@@ -537,7 +538,7 @@ def get_student_live_tracking(
         else bool(active_speed is not None and active_speed > 1)
     )
     freshness_limit_seconds = (
-        (20 if provider_state.ignition is True else 120) * 3
+        vehicle_gps_expected_interval_seconds(provider_state.ignition) * 3
         if tracking_source == "vehicle_gps" and provider_state is not None
         else 60
     )

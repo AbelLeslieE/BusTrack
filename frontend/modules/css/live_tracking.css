@@ -300,6 +300,78 @@
 
 }
 
+
+/* A compact, always-visible operations summary for each live bus. */
+.trip-operations{
+
+    display:grid;
+
+    grid-template-columns:repeat(2, minmax(0, 1fr));
+
+    gap:8px;
+
+    margin:6px 0 2px;
+
+}
+
+.trip-operations div{
+
+    min-width:0;
+
+    padding:9px;
+
+    border:1px solid rgba(114, 194, 255, .16);
+
+    border-radius:10px;
+
+    background:rgba(19, 73, 120, .16);
+
+}
+
+.trip-operations div.stale{
+
+    border-color:rgba(251, 191, 36, .4);
+
+    background:rgba(146, 96, 16, .16);
+
+}
+
+.trip-operations dt{
+
+    margin:0 0 4px;
+
+    color:#91afd4;
+
+    font-size:.65rem;
+
+    font-weight:750;
+
+    letter-spacing:.055em;
+
+    text-transform:uppercase;
+
+}
+
+.trip-operations dd{
+
+    overflow:hidden;
+
+    margin:0;
+
+    color:#f2f8ff;
+
+    font-size:.78rem;
+
+    font-weight:700;
+
+    line-height:1.3;
+
+    text-overflow:ellipsis;
+
+    white-space:nowrap;
+
+}
+
 .trip-admin-actions{
 
     display:grid;

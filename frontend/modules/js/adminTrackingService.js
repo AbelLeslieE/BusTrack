@@ -9,7 +9,7 @@ import { request } from "/static/common/api.js";
 import { Modal } from "/static/common/modal.js";
 import { escapeHtml } from "/static/common/security.js";
 import { createVehicleMarkerIcon } from "/static/common/vehicleMarker.js";
-import { animateVehicleMarker } from "/static/common/vehicleMotion.js?v=road-safe-5";
+import { animateVehicleMarker, snapVehicleMarkerToRoad } from "/static/common/vehicleMotion.js?v=road-safe-6";
 
 /* ==========================================================
    ADMIN LIVE TRACKING STATE
@@ -117,6 +117,56 @@ function getDisplayUpdateTime(trip) {
         timeStyle: "medium",
 
     }).format(timestamp);
+
+}
+
+
+function formatGpsAge(ageSeconds) {
+
+    if (ageSeconds == null || !Number.isFinite(Number(ageSeconds))) {
+
+        return "No GPS timestamp";
+
+    }
+
+
+    const seconds = Math.max(0, Math.round(Number(ageSeconds)));
+
+    if (seconds < 60) {
+
+        return `${seconds}s ago`;
+
+    }
+
+
+    const minutes = Math.floor(seconds / 60);
+
+    if (minutes < 60) {
+
+        return `${minutes}m ago`;
+
+    }
+
+
+    return `${Math.floor(minutes / 60)}h ago`;
+
+}
+
+
+function formatNextStopEta(minutes) {
+
+    if (minutes == null || !Number.isFinite(Number(minutes))) {
+
+        return "Waiting for movement";
+
+    }
+
+
+    const roundedMinutes = Math.max(0, Math.round(Number(minutes)));
+
+    return roundedMinutes === 0
+        ? "At stop"
+        : `About ${roundedMinutes} min`;
 
 }
 /*
@@ -728,7 +778,7 @@ function animateLegacyBusMarker(
         performance.now();
 
     /*
-        Vehicle hardware normally supplies the next position every 20 seconds.
+        Vehicle hardware supplies a moving position every 20 seconds.
         Animate for 18 seconds so each received segment feels like continuous
         road travel and finishes just before the next expected point.
     */
@@ -1312,7 +1362,7 @@ export function startFleetRefresh() {
     );
 
     // A user returning to the tab should see the newest saved GPS reading
-    // immediately, rather than waiting for the next 20-second UI refresh.
+    // immediately, rather than waiting for the next live-tracking refresh.
     visibilityRefreshHandler = () => {
 
         if (document.visibilityState === "visible") {
@@ -1588,20 +1638,31 @@ function updateFleet(trips, buses = []) {
                 : (
                     trip.route_code
                         ? trip.route_code
-                        : (isActiveTrip ? "Route assignment unavailable" : "No route assignment")
+                : (isActiveTrip ? "Route assignment unavailable" : "No route assignment")
                 );
 
+        const journeyLabel = trip.route_direction === "reverse"
+            ? "Return journey"
+            : "Outbound journey";
+
         const providerGPS = trip.provider_gps || null;
+        const gpsFreshness =
+            trip.gps_freshness ||
+            providerGPS ||
+            null;
         const ignitionLabel = providerGPS?.ignition === true
             ? "Ignition on"
             : providerGPS?.ignition === false
                 ? "Ignition off"
-                : null;
-        const gpsStatus = providerGPS
-            ? (providerGPS.is_fresh ? (ignitionLabel || "GPS reported") : "GPS signal stale")
-            : (isActiveTrip ? "Driver tracking" : "Awaiting GPS");
+                : "Ignition not reported";
+        const gpsFreshnessLabel = gpsFreshness
+            ? `${gpsFreshness.is_fresh ? "GPS fresh" : "GPS signal stale"} · ${formatGpsAge(gpsFreshness.age_seconds)}`
+            : "Awaiting GPS";
+        const gpsStatus = gpsFreshness?.is_fresh === false
+            ? "GPS signal stale"
+            : (providerGPS ? ignitionLabel : (isActiveTrip ? "Driver tracking" : "Awaiting GPS"));
         const statusLabel = isActiveTrip ? (trip.status ?? "Running") : gpsStatus;
-        const statusClass = providerGPS?.is_fresh === false
+        const statusClass = gpsFreshness?.is_fresh === false
             ? "stale"
             : providerGPS?.ignition === false
                 ? "off"
@@ -1625,6 +1686,21 @@ function updateFleet(trips, buses = []) {
 
         const updateLabel =
             getDisplayUpdateTime(trip);
+
+        const currentStopLabel =
+            trip.current_stop?.stop_name ||
+            "Awaiting stop position";
+
+        const nextStopLabel =
+            trip.next_stop?.stop_name ||
+            "No next stop";
+
+        const etaLabel =
+            trip.next_stop
+                ? formatNextStopEta(
+                    trip.next_stop_eta_minutes
+                )
+                : "—";
 
 
         /* ==================================================
@@ -1677,6 +1753,14 @@ function updateFleet(trips, buses = []) {
                 markers.set(
                     trip.bus_id,
                     marker
+                );
+                const roadMotion = roadMotions.get(String(trip.bus_id)) || {};
+                roadMotions.set(String(trip.bus_id), roadMotion);
+                void snapVehicleMarkerToRoad(
+                    marker,
+                    Number(trip.latitude),
+                    Number(trip.longitude),
+                    roadMotion,
                 );
                 /* ==================================================
                 STORE INITIAL GPS POSITION
@@ -1858,6 +1942,26 @@ function updateFleet(trips, buses = []) {
 
                     <br>
 
+                    Journey :
+                    ${escapeHtml(journeyLabel)}
+
+                    <br>
+
+                    Current stop :
+                    ${escapeHtml(currentStopLabel)}
+
+                    <br>
+
+                    Next stop :
+                    ${escapeHtml(nextStopLabel)}
+
+                    <br>
+
+                    ETA :
+                    ${escapeHtml(etaLabel)}
+
+                    <br>
+
                     Speed :
                     ${escapeHtml(speedLabel)}
 
@@ -1869,7 +1973,12 @@ function updateFleet(trips, buses = []) {
                     <br>
 
                     GPS status :
-                    ${escapeHtml(gpsStatus)}
+                    ${escapeHtml(gpsFreshnessLabel)}
+
+                    <br>
+
+                    Ignition :
+                    ${escapeHtml(ignitionLabel)}
 
                     <br>
 
@@ -1933,7 +2042,7 @@ function updateFleet(trips, buses = []) {
 
                     <strong>
 
-                        ${escapeHtml(gpsStatus)}
+                        ${escapeHtml(gpsFreshnessLabel)}
 
                     </strong>
 
@@ -1965,17 +2074,57 @@ function updateFleet(trips, buses = []) {
                 </p>
 
 
-                <p>
+                <dl class="trip-operations" aria-label="Live trip operations">
 
-                    Speed :
+                    <div>
 
-                    <strong>
+                        <dt>Current stop</dt>
 
-                        ${escapeHtml(speedLabel)}
+                        <dd>${escapeHtml(currentStopLabel)}</dd>
 
-                    </strong>
+                    </div>
 
-                </p>
+                    <div>
+
+                        <dt>Next stop</dt>
+
+                        <dd>${escapeHtml(nextStopLabel)}</dd>
+
+                    </div>
+
+                    <div>
+
+                        <dt>ETA</dt>
+
+                        <dd>${escapeHtml(etaLabel)}</dd>
+
+                    </div>
+
+                    <div>
+
+                        <dt>Speed</dt>
+
+                        <dd>${escapeHtml(speedLabel)}</dd>
+
+                    </div>
+
+                    <div>
+
+                        <dt>Ignition</dt>
+
+                        <dd>${escapeHtml(ignitionLabel)}</dd>
+
+                    </div>
+
+                    <div class="${gpsFreshness?.is_fresh === false ? "stale" : ""}">
+
+                        <dt>GPS freshness</dt>
+
+                        <dd>${escapeHtml(gpsFreshnessLabel)}</dd>
+
+                    </div>
+
+                </dl>
 
 
                 <p>

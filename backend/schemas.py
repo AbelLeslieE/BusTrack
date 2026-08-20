@@ -574,6 +574,14 @@ class RouteStopResponse(BaseModel):
 
     stop_code: str
 
+    # These belong to the referenced master stop. They are included here so
+    # route views and road routing never need a second lookup per stop.
+    latitude: float | None = None
+
+    longitude: float | None = None
+
+    radius: int | None = None
+
     sequence: int
 
     scheduled_time: str | None

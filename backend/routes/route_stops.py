@@ -211,6 +211,12 @@ def get_route_stops(
 
             "stop_name": item.stop.stop_name,
 
+            "latitude": item.stop.latitude,
+
+            "longitude": item.stop.longitude,
+
+            "radius": item.stop.radius,
+
             "sequence": item.sequence,
 
             "scheduled_time": item.scheduled_time,
@@ -454,6 +460,12 @@ def add_stop_to_route(
             "stop_code": stop.stop_code,
 
             "stop_name": stop.stop_name,
+
+            "latitude": stop.latitude,
+
+            "longitude": stop.longitude,
+
+            "radius": stop.radius,
 
             "sequence": route_stop.sequence,
 

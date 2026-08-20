@@ -759,6 +759,10 @@ function renderRouteViewMarkers(){
 
     routeViewMarkers = [];
 
+    // Report genuinely incomplete master-stop data once per route view instead
+    // of producing one console warning for every stop.
+    const stopsWithoutCoordinates = [];
+
 
     /* ==========================================================
        CREATE MARKERS
@@ -796,12 +800,8 @@ function renderRouteViewMarkers(){
 
             ){
 
-                console.warn(
-
-                    "BusTrack: Cannot place Route View marker.",
-
-                    stop
-
+                stopsWithoutCoordinates.push(
+                    stop.stop_name || `Stop ${index + 1}`
                 );
 
                 return;
@@ -899,6 +899,18 @@ function renderRouteViewMarkers(){
         }
 
     );
+
+    if(stopsWithoutCoordinates.length){
+
+        console.warn(
+
+            "BusTrack: Route view skipped stops without coordinates.",
+
+            stopsWithoutCoordinates
+
+        );
+
+    }
 
 
     /* ==========================================================

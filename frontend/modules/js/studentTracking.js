@@ -9,7 +9,7 @@
    CONFIGURATION
 ========================================================== */
 
-import { animateVehicleMarker } from "/static/common/vehicleMotion.js?v=road-safe-5";
+import { animateVehicleMarker, snapVehicleMarkerToRoad } from "/static/common/vehicleMotion.js?v=road-safe-6";
 import { createVehicleMarkerIcon } from "/static/common/vehicleMarker.js";
 import { Modal } from "/static/common/modal.js";
 
@@ -1433,19 +1433,27 @@ function showTerminalArrivalNotice() {
     state.terminalNoticeKey = noticeKey;
     sessionStorage.setItem(storageKey, "shown");
     const stopName = escapeHTML(trip.terminal_stop_name || "the final stop");
-    const returnDirection = trip.route_direction === "reverse" ? "return" : "outbound";
-
     Modal.open({
-        eyebrow: "Route update",
-        title: "Bus reached the last stop",
-        subtitle: "The return journey is now ready.",
+        eyebrow: "Trip leg completed",
+        title: "Bus reached the terminal",
+        subtitle: "The return direction is now ready.",
         content: `
             <div class="student-terminal-notice">
                 <i class="fa-solid fa-flag-checkered" aria-hidden="true"></i>
                 <p><strong>${stopName}</strong> is the end of this route leg.</p>
-                <p>The stop order has changed for the ${returnDirection} journey.</p>
+                <p>The same route is now shown in reverse order for the return journey.</p>
             </div>`,
-        actions: [{ text: "View return route", style: "primary", close: true }],
+        actions: [{
+            text: "OK",
+            style: "primary",
+            close: true,
+            onClick: async () => {
+                // Re-read the student-specific provider projection after the
+                // acknowledgement so the reversed route and terminal GPS
+                // heartbeat are rendered from the backend source of truth.
+                await refreshTracking();
+            },
+        }],
     });
 }
 
@@ -2247,6 +2255,12 @@ function renderMapObjects() {
             );
 
         state.busTargetLocation = { latitude, longitude };
+        void snapVehicleMarkerToRoad(
+            state.busMarker,
+            latitude,
+            longitude,
+            state.busMotion,
+        );
 
         coordinates.push([latitude, longitude]);
 
@@ -2966,20 +2980,17 @@ function startTrackingRefresh() {
      * Fetch the latest tracking data immediately.
      *
      * The student should not have to wait for the first
-     * 20-second interval.
+     * 20-second moving-GPS interval.
      */
     refreshTracking();
 
 
     /*
      * Read the saved position every two seconds. Vehicle hardware still
-     * publishes at its configured 20-second / two-minute cadence.
+     * publishes every 20 seconds while moving and every two minutes while parked.
      *
-     * DRIVER:
-     * GPS → /api/gps/update
-     *
-     * STUDENT:
-     * /api/students/me/tracking → UI
+     * MVD provider → BusGPSState/LiveTrip → this student-specific endpoint
+     * (the admin portal is never an intermediary).
      */
     state.refreshTimer =
         window.setInterval(

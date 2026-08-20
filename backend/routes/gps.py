@@ -4,6 +4,7 @@ GPS Tracking API
 """
 
 from datetime import datetime, timezone
+from math import ceil
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
@@ -17,6 +18,7 @@ from backend.routes.models_tracking import (
 )
 
 from backend.schemas_tracking import (
+    TripStartRequest,
     TripStopRequest,
     TripAdminStopRequest,
     LocationUpdateRequest,
@@ -28,10 +30,17 @@ from backend.services.tracking_engine import (
     calculate_stop_distance,
     is_inside_stop_radius,
 )
-from backend.services.trip_direction import direction_from_start_position, ordered_route_stops
+from backend.services.trip_direction import (
+    direction_from_start_position,
+    direction_from_terminal_position,
+    ordered_route_stops,
+)
 from backend.security import require_driver, require_management
 from backend.audit import record_audit_event
-from backend.services.vehicle_gps import vehicle_gps_is_authoritative
+from backend.services.vehicle_gps import (
+    vehicle_gps_expected_interval_seconds,
+    vehicle_gps_is_authoritative,
+)
 from backend.routes.models_tracking import BusGPSState
 
 from backend.models import (
@@ -51,6 +60,74 @@ router = APIRouter(
     prefix="/api/gps",
     tags=["GPS Tracking"],
 )
+
+
+def build_gps_freshness(
+    timestamp: datetime | None,
+    *,
+    ignition: bool | None = None,
+    source: str | None = None,
+):
+    """Return a single, frontend-safe freshness description for a GPS fix."""
+
+    if timestamp is None:
+        return {
+            "age_seconds": None,
+            "expected_interval_seconds": None,
+            "is_fresh": False,
+            "label": "No GPS reading",
+        }
+
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=timezone.utc)
+
+    expected_interval = vehicle_gps_expected_interval_seconds(ignition)
+    age_seconds = max(
+        0,
+        int((datetime.now(timezone.utc) - timestamp).total_seconds()),
+    )
+    is_fresh = age_seconds <= expected_interval * 3
+
+    return {
+        "age_seconds": age_seconds,
+        "expected_interval_seconds": expected_interval,
+        "is_fresh": is_fresh,
+        "label": "GPS fresh" if is_fresh else "GPS signal stale",
+    }
+
+
+def calculate_next_stop_eta_minutes(
+    latitude: float | None,
+    longitude: float | None,
+    speed_kmh: float | None,
+    next_stop: object | None,
+):
+    """Estimate arrival from the latest point using the reported live speed."""
+
+    if (
+        latitude is None
+        or longitude is None
+        or next_stop is None
+        or speed_kmh is None
+        or float(speed_kmh) < 3
+    ):
+        return None
+
+    distance_meters = calculate_stop_distance(
+        latitude,
+        longitude,
+        next_stop,
+    )
+
+    if distance_meters is None:
+        return None
+
+    meters_per_minute = float(speed_kmh) * 1000 / 60
+
+    if meters_per_minute <= 0:
+        return None
+
+    return max(1, ceil(distance_meters / meters_per_minute))
 
 
 # ==========================================================
@@ -133,6 +210,8 @@ def build_live_trip_response(
 
         "ended_at": trip.ended_at,
 
+        "route_direction": trip.route_direction,
+
     }
 
 # ==========================================================
@@ -187,6 +266,22 @@ def update_route_stop_progression(
             radius_meters=float(stop.radius) if stop.radius is not None else 50.0,
         ))
 
+    def switch_direction_at_terminal(stop) -> tuple[str, str]:
+        """Turn the same live trip around after its terminal arrival.
+
+        The route definition remains immutable.  The terminal stays as the
+        current arrived stop, but becomes index 0 in the newly ordered return
+        journey until the next provider fix confirms the bus has departed.
+        """
+
+        completed_direction = trip.route_direction
+        trip.route_direction = (
+            "reverse" if completed_direction != "reverse" else "forward"
+        )
+        trip.terminal_reached_at = current_timestamp
+        trip.terminal_stop_id = stop.id
+        return completed_direction, trip.route_direction
+
 
     # ======================================================
     # FIND CURRENT ROUTE STOP
@@ -209,86 +304,23 @@ def update_route_stop_progression(
     # ======================================================
     # INITIALIZE ROUTE STOP
     #
-    # If this is the first GPS update of the trip, determine
-    # which stop should become the current stop.
-    #
-    # If the bus is already inside a stop radius, use that
-    # stop. Otherwise start with the first route stop.
+    # Every new trip is seeded at a terminal by ``start_trip``.  For legacy
+    # trips that predate that safeguard, begin at the first stop in the
+    # already direction-ordered view.  Never select an arbitrary nearby stop:
+    # each following update may advance only to the expected next stop.
     # ======================================================
 
     if current_route_stop is None:
 
-        stops_inside_radius = []
+        current_route_stop = route_stops[0]
 
-        for route_index, route_stop in enumerate(route_stops):
+        trip.current_route_stop_id = current_route_stop.id
 
-            stop = route_stop.stop
+        trip.current_stop_status = "Approaching"
 
-            if stop is None:
-                continue
+        trip.current_stop_arrived_at = None
 
-            distance = calculate_stop_distance(
-                latitude,
-                longitude,
-                stop,
-            )
-
-            if distance is not None and is_inside_stop_radius(
-                distance,
-                stop,
-            ):
-                stops_inside_radius.append(
-                    (
-                        route_index,
-                        route_stop,
-                        distance,
-                    )
-                )
-
-        if stops_inside_radius:
-
-            stops_inside_radius.sort(
-                # Overlapping radii are possible. Prefer the actual closest
-                # stop, then the earlier one if two distances are identical.
-                key=lambda item: (item[2], item[0])
-            )
-
-            current_route_stop = (
-                stops_inside_radius[0][1]
-            )
-
-            trip.current_route_stop_id = (
-                current_route_stop.id
-            )
-
-            trip.current_stop_status = "Arrived"
-
-            trip.current_stop_arrived_at = (
-                current_timestamp
-            )
-
-            trip.current_stop_departed_at = None
-
-            record_stop_event(
-                "Arrived",
-                current_route_stop,
-                current_route_stop.stop,
-                stops_inside_radius[0][2],
-            )
-
-        else:
-
-            current_route_stop = route_stops[0]
-
-            trip.current_route_stop_id = (
-                current_route_stop.id
-            )
-
-            trip.current_stop_status = "Approaching"
-
-            trip.current_stop_arrived_at = None
-
-            trip.current_stop_departed_at = None
+        trip.current_stop_departed_at = None
 
 
     # ======================================================
@@ -320,21 +352,24 @@ def update_route_stop_progression(
         current_distance,
         current_stop,
     )
+    # Use a wider exit boundary than the arrival geofence.  A noisy GPS fix
+    # hovering around the arrival edge must not repeatedly toggle a stop
+    # between Arrived and Departed.
+    exit_radius = max(
+        100.0,
+        float(current_stop.radius) * 1.5
+        if current_stop.radius is not None
+        else 75.0,
+    )
+    outside_exit_radius = current_distance > exit_radius
 
-    # ======================================================
-    # LOCATION-BASED FORWARD ADVANCE
-    #
-    # A bus may legally take a shortcut or upload a delayed position. If it
-    # is outside the active stop but inside a later stop in the current travel
-    # order, use the vehicle's real location as the current stop. Only stops
-    # ahead of the active index are eligible, so inaccurate GPS can never
-    # move a trip backward.
-    # ======================================================
-
-    current_index = route_stops.index(current_route_stop)
-    stops_ahead_inside_radius = []
-
-    if not inside_radius:
+    # A vehicle can legitimately take a shortcut. When its next provider GPS
+    # report lands inside a later stop, advance to that stop in the current
+    # travel order. Only later stops are examined, so a delayed reading can
+    # never move the trip backward or change its direction.
+    if outside_exit_radius:
+        current_index = route_stops.index(current_route_stop)
+        stops_ahead_inside_radius = []
         for route_index, route_stop in enumerate(
             route_stops[current_index + 1:],
             start=current_index + 1,
@@ -346,55 +381,55 @@ def update_route_stop_progression(
             if distance is not None and is_inside_stop_radius(distance, stop):
                 stops_ahead_inside_radius.append((route_index, route_stop, distance))
 
-    if stops_ahead_inside_radius:
-        # Prefer the closest matching stop. This makes a shortcut landing at
-        # a later stop reliable while avoiding a false jump through overlapping
-        # geofences.
-        stops_ahead_inside_radius.sort(key=lambda item: (item[2], item[0]))
-        target_index, target_route_stop, target_distance = stops_ahead_inside_radius[0]
-        target_stop = target_route_stop.stop
+        if stops_ahead_inside_radius:
+            # Prefer the closest physical stop. The travel-order index keeps
+            # ties deterministic when two geofences overlap.
+            stops_ahead_inside_radius.sort(key=lambda item: (item[2], item[0]))
+            target_index, target_route_stop, target_distance = stops_ahead_inside_radius[0]
+            target_stop = target_route_stop.stop
 
-        departed_stop = None
-        if trip.current_stop_status == "Arrived":
-            trip.current_stop_departed_at = current_timestamp
-            record_stop_event("Departed", current_route_stop, current_stop, current_distance)
-            departed_stop = {
-                "route_stop_id": current_route_stop.id,
-                "stop_id": current_stop.id,
-                "stop_name": current_stop.stop_name,
-                "sequence": current_route_stop.sequence,
+            departed_stop = None
+            if trip.current_stop_status == "Arrived":
+                trip.current_stop_departed_at = current_timestamp
+                record_stop_event("Departed", current_route_stop, current_stop, current_distance)
+                departed_stop = {
+                    "route_stop_id": current_route_stop.id,
+                    "stop_id": current_stop.id,
+                    "stop_name": current_stop.stop_name,
+                    "sequence": current_route_stop.sequence,
+                }
+
+            trip.current_route_stop_id = target_route_stop.id
+            trip.current_stop_status = "Arrived"
+            trip.current_stop_arrived_at = current_timestamp
+            trip.current_stop_departed_at = None
+            record_stop_event("Arrived", target_route_stop, target_stop, target_distance)
+
+            terminal_reached = target_route_stop == route_stops[-1]
+            completed_direction = None
+            next_direction = None
+            if terminal_reached:
+                completed_direction, next_direction = switch_direction_at_terminal(
+                    target_stop
+                )
+
+            return {
+                "event": "Arrived",
+                "route_stop_id": target_route_stop.id,
+                "stop_id": target_stop.id,
+                "stop_code": target_stop.stop_code,
+                "stop_name": target_stop.stop_name,
+                "sequence": target_route_stop.sequence,
+                "distance_meters": round(target_distance, 2),
+                "radius_meters": float(target_stop.radius) if target_stop.radius is not None else 50.0,
+                "advanced_from_sequence": current_route_stop.sequence,
+                "skipped_stop_count": target_index - current_index - 1,
+                "departed_stop": departed_stop,
+                "terminal_reached": terminal_reached,
+                "completed_direction": completed_direction,
+                "next_direction": next_direction,
+                "trip_leg_completed": terminal_reached,
             }
-
-        trip.current_route_stop_id = target_route_stop.id
-        trip.current_stop_status = "Arrived"
-        trip.current_stop_arrived_at = current_timestamp
-        trip.current_stop_departed_at = None
-        record_stop_event("Arrived", target_route_stop, target_stop, target_distance)
-
-        terminal_reached = len(route_stops) > 1 and target_route_stop == route_stops[-1]
-        completed_direction = trip.route_direction
-        if terminal_reached:
-            trip.route_direction = "reverse" if completed_direction != "reverse" else "forward"
-            trip.terminal_reached_at = current_timestamp
-            trip.terminal_stop_id = target_stop.id
-
-        return {
-            "event": "Arrived",
-            "route_stop_id": target_route_stop.id,
-            "stop_id": target_stop.id,
-            "stop_code": target_stop.stop_code,
-            "stop_name": target_stop.stop_name,
-            "sequence": target_route_stop.sequence,
-            "distance_meters": round(target_distance, 2),
-            "radius_meters": float(target_stop.radius) if target_stop.radius is not None else 50.0,
-            "advanced_from_sequence": current_route_stop.sequence,
-            "skipped_stop_count": target_index - current_index - 1,
-            "departed_stop": departed_stop,
-            "terminal_reached": terminal_reached,
-            "completed_direction": completed_direction if terminal_reached else None,
-            "next_direction": trip.route_direction if terminal_reached else None,
-        }
-
 
     # ======================================================
     # APPROACHING → ARRIVED
@@ -415,16 +450,16 @@ def update_route_stop_progression(
 
         record_stop_event("Arrived", current_route_stop, current_stop, current_distance)
 
-        # Reaching the final stop completes this leg of the same live trip.
-        # Reverse the *display/travel* order in memory; never rewrite the
-        # route's saved master stop sequence. The terminal remains current,
-        # but becomes stop 1 of the return journey on the next GPS update.
+        # The final stop completes the present route leg.  Keep the live trip
+        # running and switch its travel view so the next provider fix advances
+        # from this terminal through the same immutable route in reverse.
         terminal_reached = len(route_stops) > 1 and current_route_stop == route_stops[-1]
-        completed_direction = trip.route_direction
+        completed_direction = None
+        next_direction = None
         if terminal_reached:
-            trip.route_direction = "reverse" if completed_direction != "reverse" else "forward"
-            trip.terminal_reached_at = current_timestamp
-            trip.terminal_stop_id = current_stop.id
+            completed_direction, next_direction = switch_direction_at_terminal(
+                current_stop
+            )
 
 
         return {
@@ -444,8 +479,9 @@ def update_route_stop_progression(
             if current_stop.radius is not None
             else 50.0,
             "terminal_reached": terminal_reached,
-            "completed_direction": completed_direction if terminal_reached else None,
-            "next_direction": trip.route_direction if terminal_reached else None,
+            "completed_direction": completed_direction,
+            "next_direction": next_direction,
+            "trip_leg_completed": terminal_reached,
         }
 
 
@@ -458,7 +494,7 @@ def update_route_stop_progression(
 
     if (
         trip.current_stop_status == "Arrived"
-        and not inside_radius
+        and outside_exit_radius
     ):
 
         departed_route_stop_id = (
@@ -594,6 +630,8 @@ def update_route_stop_progression(
 )
 def start_trip(
 
+    start_request: TripStartRequest | None = None,
+
     current_user: User = Depends(
         require_driver
     ),
@@ -684,11 +722,54 @@ def start_trip(
         .filter(BusGPSState.bus_id == driver.bus_id)
         .first()
     )
-    route_direction = direction_from_start_position(
+    # The installed MVD device is always preferred. A driver phone may start
+    # a trip only while that device is missing, stale, invalid, or ignition
+    # off. This is the same source arbitration used by /update below.
+    vehicle_is_primary = vehicle_gps_is_authoritative(vehicle_state)
+    if vehicle_is_primary:
+        start_latitude = vehicle_state.latitude
+        start_longitude = vehicle_state.longitude
+        start_speed = vehicle_state.speed_kmh
+        start_accuracy = vehicle_state.accuracy
+        start_timestamp = vehicle_state.received_at
+        start_source = "vehicle_gps"
+    else:
+        if start_request is None:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Vehicle GPS is unavailable. Allow phone location to "
+                    "start the mobile fallback."
+                ),
+            )
+        start_latitude = start_request.latitude
+        start_longitude = start_request.longitude
+        reported_start_speed_kmh = (
+            float(start_request.speed) * 3.6
+            if start_request.speed is not None
+            else None
+        )
+        start_speed = validate_speed(
+            reported_speed_kmh=reported_start_speed_kmh,
+            calculated_speed_kmh=None,
+        )["speed_kmh"]
+        start_accuracy = start_request.accuracy
+        start_timestamp = datetime.now(timezone.utc)
+        start_source = "mobile"
+
+    route_direction = direction_from_terminal_position(
         route_stops,
-        vehicle_state.latitude if vehicle_gps_is_authoritative(vehicle_state) else None,
-        vehicle_state.longitude if vehicle_gps_is_authoritative(vehicle_state) else None,
+        start_latitude,
+        start_longitude,
     )
+    if route_direction is None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Start the trip inside the geofence of its first or last "
+                "terminal stop."
+            ),
+        )
 
     # ------------------------------------------------------
     # Create Trip
@@ -722,38 +803,38 @@ def start_trip(
 
     db.refresh(trip)
 
-    # If the mapped vehicle device is already reporting a fresh ignition-on
-    # position, seed the just-created trip immediately. The driver UI can then
-    # switch to vehicle GPS without waiting for the next 20-second provider
-    # delivery; later deliveries continue through the normal provider mirror.
-    if vehicle_gps_is_authoritative(vehicle_state):
-        received_at = vehicle_state.received_at
-        update_route_stop_progression(
-            trip=trip,
-            route_stops=ordered_route_stops(route_stops, trip.route_direction),
-            latitude=vehicle_state.latitude,
-            longitude=vehicle_state.longitude,
-            previous_location=None,
-            current_timestamp=vehicle_state.fix_time or received_at,
-            db=db,
-        )
-        db.add(LiveLocation(
-            trip_id=trip.id,
-            latitude=vehicle_state.latitude,
-            longitude=vehicle_state.longitude,
-            speed=vehicle_state.speed_kmh,
-            accuracy=vehicle_state.accuracy,
-            recorded_at=received_at,
-            source="vehicle_gps",
-        ))
-        trip.current_latitude = vehicle_state.latitude
-        trip.current_longitude = vehicle_state.longitude
-        trip.current_speed = vehicle_state.speed_kmh
-        trip.current_accuracy = vehicle_state.accuracy
-        trip.last_location_update = received_at
-        trip.current_location_source = "vehicle_gps"
-        db.commit()
-        db.refresh(trip)
+    # Seed the trip from the selected source. MVD replaces the mobile fallback
+    # automatically as soon as a fresh ignition-on provider fix arrives.
+    update_route_stop_progression(
+        trip=trip,
+        route_stops=ordered_route_stops(route_stops, trip.route_direction),
+        latitude=start_latitude,
+        longitude=start_longitude,
+        previous_location=None,
+        current_timestamp=(
+            vehicle_state.fix_time or start_timestamp
+            if vehicle_is_primary
+            else start_timestamp
+        ),
+        db=db,
+    )
+    db.add(LiveLocation(
+        trip_id=trip.id,
+        latitude=start_latitude,
+        longitude=start_longitude,
+        speed=start_speed,
+        accuracy=start_accuracy,
+        recorded_at=start_timestamp,
+        source=start_source,
+    ))
+    trip.current_latitude = start_latitude
+    trip.current_longitude = start_longitude
+    trip.current_speed = start_speed
+    trip.current_accuracy = start_accuracy
+    trip.last_location_update = start_timestamp
+    trip.current_location_source = start_source
+    db.commit()
+    db.refresh(trip)
 
     # ------------------------------------------------------
     # Return standard response
@@ -885,10 +966,13 @@ def update_location(
     # FIND PREVIOUS GPS LOCATION
     # ======================================================
 
+    # Never calculate a phone speed from the prior MVD coordinate. A source
+    # switchover can be minutes apart and would create a false speed spike.
     previous_location = (
         db.query(LiveLocation)
         .filter(
-            LiveLocation.trip_id == trip.id
+            LiveLocation.trip_id == trip.id,
+            LiveLocation.source == "mobile",
         )
         .order_by(
             LiveLocation.recorded_at.desc()
@@ -1039,6 +1123,8 @@ def update_location(
 
         recorded_at =
             current_timestamp,
+
+        source="mobile",
 
     )
 
@@ -1319,6 +1405,7 @@ def get_live_tracking(
         next_stop_data = None
 
         current_route_stop = None
+        next_stop = None
 
         if trip.current_route_stop_id is not None:
 
@@ -1428,6 +1515,62 @@ def get_live_tracking(
                         "radius":
                             next_stop.radius,
                     }        
+
+        # The tracker may continue reporting independently of a driver's
+        # mobile trip.  Include its current ignition/freshness data on the
+        # active-trip card without replacing the trip's selected position.
+        provider_state = (
+            db.query(BusGPSState)
+            .filter(BusGPSState.bus_id == trip.bus_id)
+            .first()
+        )
+        provider_gps = None
+
+        if provider_state is not None:
+            provider_timestamp = (
+                provider_state.fix_time
+                or provider_state.received_at
+            )
+            provider_freshness = build_gps_freshness(
+                provider_timestamp,
+                ignition=provider_state.ignition,
+                source="vehicle_gps",
+            )
+            provider_gps = {
+                "external_device_id": provider_state.external_device_id,
+                # Keep the provider telemetry complete for the admin map and
+                # diagnostics.  The top-level values below are the active
+                # trip snapshot; these are the original latest MVD values.
+                "latitude": provider_state.latitude,
+                "longitude": provider_state.longitude,
+                "speed_kmh": provider_state.speed_kmh,
+                "accuracy": provider_state.accuracy,
+                "fix_time": provider_state.fix_time,
+                "received_at": provider_state.received_at,
+                "ignition": provider_state.ignition,
+                "motion": provider_state.motion,
+                "valid": provider_state.valid,
+                "course": provider_state.course,
+                "altitude": provider_state.altitude,
+                "protocol": provider_state.protocol,
+                **provider_freshness,
+            }
+
+        gps_freshness = build_gps_freshness(
+            trip.last_location_update,
+            ignition=(
+                provider_state.ignition
+                if provider_state is not None
+                else None
+            ),
+            source=trip.current_location_source or "mobile",
+        )
+        next_stop_eta_minutes = calculate_next_stop_eta_minutes(
+            trip.current_latitude,
+            trip.current_longitude,
+            trip.current_speed,
+            next_stop,
+        )
         # ==================================================
         # RESPONSE
         # ==================================================
@@ -1492,6 +1635,10 @@ def get_live_tracking(
             "location_source":
                 trip.current_location_source or "mobile",
 
+            "provider_gps": provider_gps,
+
+            "gps_freshness": gps_freshness,
+
             "route_direction": trip.route_direction,
             # ------------------------------------------------
             # ROUTE STOP PROGRESSION
@@ -1502,6 +1649,8 @@ def get_live_tracking(
 
             "next_stop":
                 next_stop_data,
+
+            "next_stop_eta_minutes": next_stop_eta_minutes,
 
             "stop_status":
                 trip.current_stop_status,
@@ -1531,8 +1680,11 @@ def get_live_tracking(
         position_time = provider_state.fix_time or provider_state.received_at
         if position_time.tzinfo is None:
             position_time = position_time.replace(tzinfo=timezone.utc)
-        expected_interval = 20 if provider_state.ignition is True else 120
-        age_seconds = max(0, int((datetime.now(timezone.utc) - position_time).total_seconds()))
+        provider_freshness = build_gps_freshness(
+            position_time,
+            ignition=provider_state.ignition,
+            source="vehicle_gps",
+        )
         # Keep a real, last-known provider position visible even when it has
         # become stale.  It is explicitly labelled through ``is_fresh`` below,
         # so administrators never mistake it for a current live position, but
@@ -1562,18 +1714,24 @@ def get_live_tracking(
             "location_source": "vehicle_gps",
             "provider_gps": {
                 "external_device_id": provider_state.external_device_id,
+                "latitude": provider_state.latitude,
+                "longitude": provider_state.longitude,
+                "speed_kmh": provider_state.speed_kmh,
+                "accuracy": provider_state.accuracy,
+                "fix_time": provider_state.fix_time,
+                "received_at": provider_state.received_at,
                 "ignition": provider_state.ignition,
                 "motion": provider_state.motion,
                 "valid": provider_state.valid,
                 "course": provider_state.course,
                 "altitude": provider_state.altitude,
                 "protocol": provider_state.protocol,
-                "expected_interval_seconds": expected_interval,
-                "age_seconds": age_seconds,
-                "is_fresh": age_seconds <= expected_interval * 3,
+                **provider_freshness,
             },
+            "gps_freshness": provider_freshness,
             "current_stop": None,
             "next_stop": None,
+            "next_stop_eta_minutes": None,
             "stop_status": None,
             "stop_arrived_at": None,
             "stop_departed_at": None,
