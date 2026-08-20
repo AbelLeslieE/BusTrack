@@ -1162,6 +1162,10 @@ function calculateRouteProgress() {
         state.trackingData?.trip;
 
 
+    const stops =
+        getRouteStops();
+
+
     if (!trip) {
 
         return {
@@ -1196,6 +1200,62 @@ function calculateRouteProgress() {
         null;
 
 
+    /*
+     * The tracking API provides the stop IDs that were selected by the
+     * server-side GPS engine.  Resolve those IDs against the same ordered
+     * list used by the timeline instead of assuming `sequence - 1` is the
+     * array index.  That assumption breaks when an administrator reorders,
+     * inserts, or removes stops while a trip is live, and can leave the
+     * visual track at an earlier stop after the bus takes a shortcut.
+     */
+    const findStopIndex = (trackingStop) => {
+
+        if (!trackingStop) {
+
+            return -1;
+
+        }
+
+
+        const trackingStopId =
+            trackingStop.id ??
+            trackingStop.stop_id;
+
+
+        if (trackingStopId != null) {
+
+            const indexById =
+                stops.findIndex(
+                    (stop) =>
+                        String(stop.id ?? stop.stop_id) ===
+                        String(trackingStopId)
+                );
+
+
+            if (indexById >= 0) {
+
+                return indexById;
+
+            }
+
+        }
+
+
+        const trackingSequence =
+            Number(trackingStop.sequence);
+
+
+        return Number.isFinite(trackingSequence)
+            ? stops.findIndex(
+                (stop) =>
+                    Number(stop.sequence) ===
+                    trackingSequence
+            )
+            : -1;
+
+    };
+
+
     return {
 
         currentStop,
@@ -1203,18 +1263,14 @@ function calculateRouteProgress() {
         nextStop,
 
         currentIndex:
-            currentStop?.sequence != null
-                ? Number(
-                    currentStop.sequence
-                ) - 1
-                : -1,
+            findStopIndex(
+                currentStop
+            ),
 
         nextIndex:
-            nextStop?.sequence != null
-                ? Number(
-                    nextStop.sequence
-                ) - 1
-                : -1,
+            findStopIndex(
+                nextStop
+            ),
 
         status:
             trip.stop_status ||
