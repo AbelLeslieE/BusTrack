@@ -51,10 +51,6 @@ let locationFlushTimer = null;
  */
 const SERVER_UPDATE_INTERVAL = 2000;
 
-// A kilometre-scale iPhone estimate comes from cell/Wi-Fi positioning and is
-// not suitable for stop geofences or a live bus marker. Keep it out of the
-// trip until the device has a usable GPS fix.
-const MOBILE_GPS_MAX_ACCURACY_METERS = 100;
 const MOBILE_GPS_INITIAL_FIX_TIMEOUT_MS = 45_000;
 
 // Used to invalidate old GPS callbacks when leaving the page.
@@ -711,6 +707,28 @@ function completeTripInDriverUi() {
     if (stopButton) stopButton.disabled = true;
 }
 
+function stopTripBecauseAdminEndedIt() {
+    stopMobileLocationTracking();
+
+    if (marker && map) {
+        map.removeLayer(marker);
+        marker = null;
+    }
+
+    tracking = false;
+    currentTripId = null;
+    trackingAccessToken = null;
+    lastServerUpdateTime = 0;
+    pendingLocation = null;
+
+    setText("tripStatus", "⏹ Trip stopped by admin");
+    setText("gpsStatus", "Tracking stopped by admin");
+    const startButton = document.getElementById("startTripBtn");
+    const stopButton = document.getElementById("stopTripBtn");
+    if (startButton) startButton.disabled = false;
+    if (stopButton) stopButton.disabled = true;
+}
+
 function updateVehicleLocation(vehicle) {
     if (!vehicle || !Number.isFinite(vehicle.latitude) || !Number.isFinite(vehicle.longitude)) return;
     updateMarker(vehicle.latitude, vehicle.longitude, "Vehicle GPS");
@@ -723,6 +741,17 @@ function updateVehicleLocation(vehicle) {
 
 function applyTrackingSource(source) {
     if (!source) return;
+
+    // Admin stop/cancel actions end the server trip. Stop the local phone
+    // watcher too, so it cannot continue posting a location after that.
+    if (
+        tracking
+        && currentTripId
+        && source.active_trip_id !== currentTripId
+    ) {
+        stopTripBecauseAdminEndedIt();
+    }
+
     const vehicleIsPrimary = source.tracking_source === "vehicle_gps";
     const mobileIsActive = source.tracking_source === "mobile";
     const mobileIsReady = source.tracking_source === "mobile_available";
@@ -758,7 +787,13 @@ function applyTrackingSource(source) {
         vehicleIsPrimary ? "🚌 Vehicle GPS" : mobileIsActive ? "📱 Phone GPS fallback" : "⚫ GPS unavailable"
     );
     document.getElementById("mapTrackingSource")?.classList.toggle("is-vehicle", vehicleIsPrimary);
-    if (button) button.hidden = true;
+    if (button) {
+        const canStartPhoneTest = mobileIsReady
+            && source.mobile_tracking_allowed
+            && !tracking;
+        button.hidden = !canStartPhoneTest;
+        button.disabled = !canStartPhoneTest;
+    }
 
     if (vehicleIsPrimary) {
         // Refresh the driver map from the latest translated provider position.
@@ -810,6 +845,9 @@ async function refreshTrackingSource() {
 export function initializeTrackingSource() {
     const fallbackButton = document.getElementById("mobileFallbackBtn");
     if (fallbackButton) fallbackButton.hidden = true;
+    fallbackButton?.addEventListener("click", () => {
+        void startTripUsingMobileGpsFallback();
+    });
     void refreshTrackingSource().catch(error => setText("trackingSourceReason", error.message));
     if (sourcePollTimer !== null) window.clearInterval(sourcePollTimer);
     sourcePollTimer = window.setInterval(() => {
@@ -872,24 +910,6 @@ function prepareMobileFallbackPermission() {
     );
 }
 
-export async function sendDriverFeedback(feedbackType, message = "") {
-    const token = localStorage.getItem("bus_tracker_access_token");
-    const headers = { "Content-Type": "application/json" };
-    if (token) headers.Authorization = `Bearer ${token}`;
-    const response = await fetch("/api/notifications/feedback", {
-        method: "POST",
-        headers,
-        credentials: "same-origin",
-        body: JSON.stringify({
-            feedback_type: feedbackType,
-            message: message.trim() || null,
-        }),
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.detail || "Unable to send feedback.");
-    return data;
-}
-
 /* ==========================================================
    REQUEST LOCATION PERMISSION
 ========================================================== */
@@ -915,22 +935,13 @@ function requestLocationPermission() {
             finish(
                 reject,
                 new Error(
-                    `Phone GPS accuracy did not improve to ${MOBILE_GPS_MAX_ACCURACY_METERS} m. ` +
-                    "Move outdoors, enable Precise Location, and try again."
+                    "Phone location was not received. Allow location access and try again."
                 )
             );
         }, MOBILE_GPS_INITIAL_FIX_TIMEOUT_MS);
 
         accuracyWatchId = navigator.geolocation.watchPosition(
             (position) => {
-                const accuracy = Number(position.coords.accuracy);
-                if (!Number.isFinite(accuracy) || accuracy > MOBILE_GPS_MAX_ACCURACY_METERS) {
-                    setText(
-                        "gpsStatus",
-                        `Improving phone GPS (${Number.isFinite(accuracy) ? Math.round(accuracy) : "unknown"} m)`
-                    );
-                    return;
-                }
                 finish(resolve, position);
             },
             (error) => finish(reject, error),
@@ -1192,20 +1203,6 @@ async function onLocationSuccess(position) {
         speed,
         accuracy
     } = position.coords;
-
-    const accuracyMeters = Number(accuracy);
-    if (!Number.isFinite(accuracyMeters) || accuracyMeters > MOBILE_GPS_MAX_ACCURACY_METERS) {
-        setText(
-            "gpsStatus",
-            `Improving phone GPS (${Number.isFinite(accuracyMeters) ? Math.round(accuracyMeters) : "unknown"} m)`
-        );
-        setText(
-            "accuracy",
-            Number.isFinite(accuracyMeters) ? `${accuracyMeters.toFixed(1)} m · waiting` : "Waiting for GPS"
-        );
-        return;
-    }
-
 
     // ======================================================
     // GPS STATUS

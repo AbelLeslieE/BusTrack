@@ -786,7 +786,12 @@ def get_driver_tracking_source(current_user: User = Depends(require_driver), db:
 
     driver = db.query(Driver).filter(Driver.user_id == current_user.id).first()
     if driver is None or driver.bus_id is None:
-        return {"tracking_source": "unavailable", "mobile_tracking_allowed": False, "reason": "No bus GPS is assigned."}
+        return {
+            "tracking_source": "unavailable",
+            "mobile_tracking_allowed": False,
+            "active_trip_id": None,
+            "reason": "No bus GPS is assigned.",
+        }
     state = db.query(BusGPSState).filter(BusGPSState.bus_id == driver.bus_id).first()
     active_trip = db.query(LiveTrip).filter(
         LiveTrip.driver_id == driver.id,
@@ -807,7 +812,8 @@ def get_driver_tracking_source(current_user: User = Depends(require_driver), db:
                     if state.ignition is True
                     else "Fresh parked-vehicle GPS heartbeat is being received."
                 ), "vehicle": vehicle,
-                "route_direction": active_trip.route_direction if active_trip else None}
+                "route_direction": active_trip.route_direction if active_trip else None,
+                "active_trip_id": active_trip.id if active_trip else None}
     return {
             "tracking_source": "mobile" if active_trip else "mobile_available",
             "mobile_tracking_allowed": True,
@@ -816,4 +822,5 @@ def get_driver_tracking_source(current_user: User = Depends(require_driver), db:
                 if active_trip
                 else "Vehicle GPS is unavailable; phone GPS fallback is ready."
             ), "vehicle": vehicle,
-            "route_direction": active_trip.route_direction if active_trip else None}
+            "route_direction": active_trip.route_direction if active_trip else None,
+            "active_trip_id": active_trip.id if active_trip else None}

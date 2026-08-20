@@ -3027,6 +3027,81 @@ span {
 
 }
 
+
+/* ==========================================================
+   REACHED TERMINAL
+========================================================== */
+
+.student-route-stop-terminal
+.student-route-stop-marker {
+
+    width: 48px;
+
+    height: 48px;
+
+    flex-basis: 48px;
+
+    margin-left: -3px;
+
+    border-color:
+        rgba(
+            72,
+            225,
+            147,
+            0.75
+        );
+
+    background:
+        linear-gradient(
+            135deg,
+            #36be78,
+            #168d62
+        );
+
+    color: #ffffff;
+
+    box-shadow:
+        0 0 0 7px
+        rgba(
+            72,
+            225,
+            147,
+            0.10
+        ),
+        0 8px 24px
+        rgba(
+            32,
+            174,
+            111,
+            0.30
+        );
+
+}
+
+
+.student-route-stop-terminal
+.student-route-stop-status {
+
+    border-color:
+        rgba(
+            72,
+            225,
+            147,
+            0.30
+        );
+
+    background:
+        rgba(
+            72,
+            225,
+            147,
+            0.10
+        );
+
+    color: #7bf0af;
+
+}
+
 .student-tracking-source-card.is-vehicle {
 
     border-color:

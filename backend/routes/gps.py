@@ -4,7 +4,7 @@ GPS Tracking API
 """
 
 from datetime import datetime, timezone
-from math import ceil, isfinite
+from math import ceil
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
@@ -32,7 +32,6 @@ from backend.services.tracking_engine import (
 )
 from backend.services.trip_direction import (
     direction_from_start_position,
-    direction_from_terminal_position,
     ordered_route_stops,
 )
 from backend.security import require_driver, require_management
@@ -60,32 +59,6 @@ router = APIRouter(
     prefix="/api/gps",
     tags=["GPS Tracking"],
 )
-
-
-# Phone GPS is only the fallback for the installed MVD device. Reject a
-# kilometre-scale cell/Wi-Fi estimate before it can distort stop geofences.
-MOBILE_GPS_MAX_ACCURACY_METERS = 100.0
-
-
-def require_usable_mobile_gps_accuracy(accuracy: float | None) -> float:
-    try:
-        accuracy_meters = float(accuracy) if accuracy is not None else None
-    except (TypeError, ValueError):
-        accuracy_meters = None
-    if (
-        accuracy_meters is None
-        or not isfinite(accuracy_meters)
-        or accuracy_meters < 0
-        or accuracy_meters > MOBILE_GPS_MAX_ACCURACY_METERS
-    ):
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "Phone GPS accuracy must be 100 m or better before it can "
-                "be used for live tracking."
-            ),
-        )
-    return accuracy_meters
 
 
 def build_gps_freshness(
@@ -768,9 +741,7 @@ def start_trip(
                     "start the mobile fallback."
                 ),
             )
-        start_accuracy = require_usable_mobile_gps_accuracy(
-            start_request.accuracy
-        )
+        start_accuracy = start_request.accuracy
         start_latitude = start_request.latitude
         start_longitude = start_request.longitude
         reported_start_speed_kmh = (
@@ -785,19 +756,14 @@ def start_trip(
         start_timestamp = datetime.now(timezone.utc)
         start_source = "mobile"
 
-    route_direction = direction_from_terminal_position(
+    # A trip may start anywhere. Starting near the final terminal selects the
+    # return direction; every other location begins in the saved route order.
+    # Stop arrival and departure remain entirely coordinate/geofence driven.
+    route_direction = direction_from_start_position(
         route_stops,
         start_latitude,
         start_longitude,
     )
-    if route_direction is None:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Start the trip inside the geofence of its first or last "
-                "terminal stop."
-            ),
-        )
 
     # ------------------------------------------------------
     # Create Trip
@@ -990,7 +956,7 @@ def update_location(
             },
         )
 
-    mobile_accuracy = require_usable_mobile_gps_accuracy(request.accuracy)
+    mobile_accuracy = request.accuracy
 
     # ======================================================
     # FIND PREVIOUS GPS LOCATION

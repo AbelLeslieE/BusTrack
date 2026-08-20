@@ -1427,21 +1427,19 @@ function showTerminalArrivalNotice() {
     if (!trip?.terminal_reached || !trip.terminal_reached_at) return;
 
     const noticeKey = `${trip.id}:${trip.terminal_reached_at}`;
-    const storageKey = `busTrackTerminalNotice:${noticeKey}`;
-    if (state.terminalNoticeKey === noticeKey || sessionStorage.getItem(storageKey)) return;
+    if (state.terminalNoticeKey === noticeKey) return;
 
     state.terminalNoticeKey = noticeKey;
-    sessionStorage.setItem(storageKey, "shown");
     const stopName = escapeHTML(trip.terminal_stop_name || "the final stop");
     Modal.open({
         eyebrow: "Trip leg completed",
         title: "Bus reached the terminal",
-        subtitle: "The return direction is now ready.",
+        subtitle: "The saved final position remains visible until the return journey starts.",
         content: `
             <div class="student-terminal-notice">
                 <i class="fa-solid fa-flag-checkered" aria-hidden="true"></i>
                 <p><strong>${stopName}</strong> is the end of this route leg.</p>
-                <p>The same route is now shown in reverse order for the return journey.</p>
+                <p>When the bus moves again, the same route progresses in reverse order for the return journey.</p>
             </div>`,
         actions: [{
             text: "OK",
@@ -3222,9 +3220,14 @@ function renderTrackTimeline() {
                     progress.currentIndex;
 
 
-                const isNext =
-                    index ===
-                    progress.nextIndex;
+            const isNext =
+                index ===
+                progress.nextIndex;
+
+
+                const isReachedTerminal =
+                    isCurrent &&
+                    state.liveTrip?.terminal_reached === true;
 
 
                 let stateClass =
@@ -3239,7 +3242,21 @@ function renderTrackTimeline() {
                     "fa-location-dot";
 
 
-                if (isPassed) {
+                if (isReachedTerminal) {
+
+                    stateClass =
+                        "terminal";
+
+                    statusText =
+                        "Reached terminal";
+
+                    icon =
+                        "fa-check";
+
+                }
+
+
+                else if (isPassed) {
 
                     stateClass =
                         "passed";
