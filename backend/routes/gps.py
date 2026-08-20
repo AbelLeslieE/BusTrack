@@ -4,7 +4,7 @@ GPS Tracking API
 """
 
 from datetime import datetime, timezone
-from math import ceil
+from math import ceil, isfinite
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
@@ -60,6 +60,32 @@ router = APIRouter(
     prefix="/api/gps",
     tags=["GPS Tracking"],
 )
+
+
+# Phone GPS is only the fallback for the installed MVD device. Reject a
+# kilometre-scale cell/Wi-Fi estimate before it can distort stop geofences.
+MOBILE_GPS_MAX_ACCURACY_METERS = 100.0
+
+
+def require_usable_mobile_gps_accuracy(accuracy: float | None) -> float:
+    try:
+        accuracy_meters = float(accuracy) if accuracy is not None else None
+    except (TypeError, ValueError):
+        accuracy_meters = None
+    if (
+        accuracy_meters is None
+        or not isfinite(accuracy_meters)
+        or accuracy_meters < 0
+        or accuracy_meters > MOBILE_GPS_MAX_ACCURACY_METERS
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Phone GPS accuracy must be 100 m or better before it can "
+                "be used for live tracking."
+            ),
+        )
+    return accuracy_meters
 
 
 def build_gps_freshness(
@@ -742,6 +768,9 @@ def start_trip(
                     "start the mobile fallback."
                 ),
             )
+        start_accuracy = require_usable_mobile_gps_accuracy(
+            start_request.accuracy
+        )
         start_latitude = start_request.latitude
         start_longitude = start_request.longitude
         reported_start_speed_kmh = (
@@ -753,7 +782,6 @@ def start_trip(
             reported_speed_kmh=reported_start_speed_kmh,
             calculated_speed_kmh=None,
         )["speed_kmh"]
-        start_accuracy = start_request.accuracy
         start_timestamp = datetime.now(timezone.utc)
         start_source = "mobile"
 
@@ -962,6 +990,8 @@ def update_location(
             },
         )
 
+    mobile_accuracy = require_usable_mobile_gps_accuracy(request.accuracy)
+
     # ======================================================
     # FIND PREVIOUS GPS LOCATION
     # ======================================================
@@ -1119,7 +1149,7 @@ def update_location(
             validated_speed_kmh,
 
         accuracy =
-            request.accuracy,
+            mobile_accuracy,
 
         recorded_at =
             current_timestamp,
@@ -1140,7 +1170,7 @@ def update_location(
 
     trip.current_speed = validated_speed_kmh
 
-    trip.current_accuracy = request.accuracy
+    trip.current_accuracy = mobile_accuracy
 
     trip.last_location_update = current_timestamp
     trip.current_location_source = "mobile"
@@ -1183,7 +1213,7 @@ def update_location(
             speed_result["reason"],
 
         "accuracy":
-            request.accuracy,
+            mobile_accuracy,
 
         "timestamp":
             current_timestamp,

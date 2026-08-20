@@ -51,6 +51,12 @@ let locationFlushTimer = null;
  */
 const SERVER_UPDATE_INTERVAL = 2000;
 
+// A kilometre-scale iPhone estimate comes from cell/Wi-Fi positioning and is
+// not suitable for stop geofences or a live bus marker. Keep it out of the
+// trip until the device has a usable GPS fix.
+const MOBILE_GPS_MAX_ACCURACY_METERS = 100;
+const MOBILE_GPS_INITIAL_FIX_TIMEOUT_MS = 45_000;
+
 // Used to invalidate old GPS callbacks when leaving the page.
 let trackingSession = 0;
 /* ==========================================================
@@ -825,7 +831,24 @@ async function startTripUsingVehicleGps() {
             credentials: "same-origin",
         });
         const trip = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(trip.detail || "Unable to start trip.");
+        if (!response.ok) {
+            const message = typeof trip.detail === "string"
+                ? trip.detail
+                : trip.detail?.message || "Unable to start trip.";
+
+            // The MVD can cross the 60-second freshness boundary between the
+            // source check and this request. Retry through the authorised
+            // mobile fallback instead of making the driver press Start again.
+            if (
+                response.status === 409
+                && message.includes("Allow phone location to start the mobile fallback")
+            ) {
+                await startTripUsingMobileGpsFallback();
+                return;
+            }
+
+            throw new Error(message);
+        }
         currentTripId = trip.id;
         tracking = true;
         setText("tripBus", trip.bus_number || (trip.bus_id != null ? `BUS-${String(trip.bus_id).padStart(3, "0")}` : "—"));
@@ -873,37 +896,51 @@ export async function sendDriverFeedback(feedbackType, message = "") {
 
 function requestLocationPermission() {
 
-    return new Promise(
-        (resolve, reject) => {
+    return new Promise((resolve, reject) => {
 
-            navigator.geolocation.getCurrentPosition(
+        let accuracyWatchId = null;
+        let completed = false;
 
-                (position) => {
+        const finish = (callback, value) => {
+            if (completed) return;
+            completed = true;
+            window.clearTimeout(timeoutId);
+            if (accuracyWatchId !== null) {
+                navigator.geolocation.clearWatch(accuracyWatchId);
+            }
+            callback(value);
+        };
 
-                    resolve(position);
-
-                },
-
-                (error) => {
-
-                    reject(error);
-
-                },
-
-                {
-
-                    enableHighAccuracy: true,
-
-                    maximumAge: 0,
-
-                    timeout: 15000
-
-                }
-
+        const timeoutId = window.setTimeout(() => {
+            finish(
+                reject,
+                new Error(
+                    `Phone GPS accuracy did not improve to ${MOBILE_GPS_MAX_ACCURACY_METERS} m. ` +
+                    "Move outdoors, enable Precise Location, and try again."
+                )
             );
+        }, MOBILE_GPS_INITIAL_FIX_TIMEOUT_MS);
 
-        }
-    );
+        accuracyWatchId = navigator.geolocation.watchPosition(
+            (position) => {
+                const accuracy = Number(position.coords.accuracy);
+                if (!Number.isFinite(accuracy) || accuracy > MOBILE_GPS_MAX_ACCURACY_METERS) {
+                    setText(
+                        "gpsStatus",
+                        `Improving phone GPS (${Number.isFinite(accuracy) ? Math.round(accuracy) : "unknown"} m)`
+                    );
+                    return;
+                }
+                finish(resolve, position);
+            },
+            (error) => finish(reject, error),
+            {
+                enableHighAccuracy: true,
+                maximumAge: 0,
+                timeout: MOBILE_GPS_INITIAL_FIX_TIMEOUT_MS,
+            }
+        );
+    });
 
 }
 
@@ -1155,6 +1192,19 @@ async function onLocationSuccess(position) {
         speed,
         accuracy
     } = position.coords;
+
+    const accuracyMeters = Number(accuracy);
+    if (!Number.isFinite(accuracyMeters) || accuracyMeters > MOBILE_GPS_MAX_ACCURACY_METERS) {
+        setText(
+            "gpsStatus",
+            `Improving phone GPS (${Number.isFinite(accuracyMeters) ? Math.round(accuracyMeters) : "unknown"} m)`
+        );
+        setText(
+            "accuracy",
+            Number.isFinite(accuracyMeters) ? `${accuracyMeters.toFixed(1)} m · waiting` : "Waiting for GPS"
+        );
+        return;
+    }
 
 
     // ======================================================
