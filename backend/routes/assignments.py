@@ -49,7 +49,12 @@ def get_assignments(
     return {
         "routes": [_route_data(route, db) for route in routes],
         "buses": [
-            {"id": bus.id, "bus_number": bus.bus_number, "status": bus.status}
+            {
+                "id": bus.id,
+                "bus_number": bus.bus_number,
+                "registration_number": bus.registration_number,
+                "status": bus.status,
+            }
             for bus in buses
         ],
         "drivers": [

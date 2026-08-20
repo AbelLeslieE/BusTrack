@@ -51,7 +51,11 @@ function addAssignmentDropdowns(view) {
                 { value: "", label: "No bus assigned" },
                 ...state.data.buses.map(bus => ({
                     value: bus.id,
-                    label: `${bus.bus_number} • ${bus.status}`,
+                    label: [
+                        bus.bus_number,
+                        bus.registration_number || "Registration unavailable",
+                        bus.status,
+                    ].join(" • "),
                 })),
             ],
         });
@@ -141,4 +145,3 @@ export function render() {
     loadAssignments(view);
     return view;
 }
-
