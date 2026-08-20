@@ -165,9 +165,10 @@ def update_route_stop_progression(
             ↓
         next RouteStop
 
-    Only the current route stop controls the state transition.
-    This prevents the bus from accidentally jumping between
-    unrelated stops when it is close to multiple stops.
+    The current stop controls ordinary arrival and departure transitions.
+    If a GPS position is inside a later stop in the same travel direction,
+    the trip may advance to that stop. This handles legitimate shortcuts and
+    delayed position uploads without ever moving backward through the route.
     """
 
     if not route_stops:
@@ -240,13 +241,16 @@ def update_route_stop_progression(
                     (
                         route_index,
                         route_stop,
+                        distance,
                     )
                 )
 
         if stops_inside_radius:
 
             stops_inside_radius.sort(
-                key=lambda item: item[0]
+                # Overlapping radii are possible. Prefer the actual closest
+                # stop, then the earlier one if two distances are identical.
+                key=lambda item: (item[2], item[0])
             )
 
             current_route_stop = (
@@ -265,7 +269,12 @@ def update_route_stop_progression(
 
             trip.current_stop_departed_at = None
 
-            record_stop_event("Arrived", current_route_stop, current_route_stop.stop, None)
+            record_stop_event(
+                "Arrived",
+                current_route_stop,
+                current_route_stop.stop,
+                stops_inside_radius[0][2],
+            )
 
         else:
 
@@ -311,6 +320,80 @@ def update_route_stop_progression(
         current_distance,
         current_stop,
     )
+
+    # ======================================================
+    # LOCATION-BASED FORWARD ADVANCE
+    #
+    # A bus may legally take a shortcut or upload a delayed position. If it
+    # is outside the active stop but inside a later stop in the current travel
+    # order, use the vehicle's real location as the current stop. Only stops
+    # ahead of the active index are eligible, so inaccurate GPS can never
+    # move a trip backward.
+    # ======================================================
+
+    current_index = route_stops.index(current_route_stop)
+    stops_ahead_inside_radius = []
+
+    if not inside_radius:
+        for route_index, route_stop in enumerate(
+            route_stops[current_index + 1:],
+            start=current_index + 1,
+        ):
+            stop = route_stop.stop
+            if stop is None:
+                continue
+            distance = calculate_stop_distance(latitude, longitude, stop)
+            if distance is not None and is_inside_stop_radius(distance, stop):
+                stops_ahead_inside_radius.append((route_index, route_stop, distance))
+
+    if stops_ahead_inside_radius:
+        # Prefer the closest matching stop. This makes a shortcut landing at
+        # a later stop reliable while avoiding a false jump through overlapping
+        # geofences.
+        stops_ahead_inside_radius.sort(key=lambda item: (item[2], item[0]))
+        target_index, target_route_stop, target_distance = stops_ahead_inside_radius[0]
+        target_stop = target_route_stop.stop
+
+        departed_stop = None
+        if trip.current_stop_status == "Arrived":
+            trip.current_stop_departed_at = current_timestamp
+            record_stop_event("Departed", current_route_stop, current_stop, current_distance)
+            departed_stop = {
+                "route_stop_id": current_route_stop.id,
+                "stop_id": current_stop.id,
+                "stop_name": current_stop.stop_name,
+                "sequence": current_route_stop.sequence,
+            }
+
+        trip.current_route_stop_id = target_route_stop.id
+        trip.current_stop_status = "Arrived"
+        trip.current_stop_arrived_at = current_timestamp
+        trip.current_stop_departed_at = None
+        record_stop_event("Arrived", target_route_stop, target_stop, target_distance)
+
+        terminal_reached = len(route_stops) > 1 and target_route_stop == route_stops[-1]
+        completed_direction = trip.route_direction
+        if terminal_reached:
+            trip.route_direction = "reverse" if completed_direction != "reverse" else "forward"
+            trip.terminal_reached_at = current_timestamp
+            trip.terminal_stop_id = target_stop.id
+
+        return {
+            "event": "Arrived",
+            "route_stop_id": target_route_stop.id,
+            "stop_id": target_stop.id,
+            "stop_code": target_stop.stop_code,
+            "stop_name": target_stop.stop_name,
+            "sequence": target_route_stop.sequence,
+            "distance_meters": round(target_distance, 2),
+            "radius_meters": float(target_stop.radius) if target_stop.radius is not None else 50.0,
+            "advanced_from_sequence": current_route_stop.sequence,
+            "skipped_stop_count": target_index - current_index - 1,
+            "departed_stop": departed_stop,
+            "terminal_reached": terminal_reached,
+            "completed_direction": completed_direction if terminal_reached else None,
+            "next_direction": trip.route_direction if terminal_reached else None,
+        }
 
 
     # ======================================================
