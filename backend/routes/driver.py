@@ -8,8 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.models import Driver, Bus, Route, RouteStop, User
-from backend.routes.models_tracking import LiveTrip
+from backend.models import Driver, Bus, FleetNotification, Route, RouteStop, User
+from backend.routes.models_tracking import LiveLocation, LiveTrip, TripStopEvent
 from backend.schemas import (
 
     DriverUpdate,
@@ -238,6 +238,28 @@ def delete_driver(
     )
     db.query(Bus).filter(Bus.driver_id == driver.id).update(
         {Bus.driver_id: None}, synchronize_session=False
+    )
+
+    # Live trips retain required driver references.  The former SQLite path
+    # could delete a driver and leave historic trips pointing at a missing
+    # record; PostgreSQL correctly rejects that corruption.  Delete the
+    # driver's tracking graph explicitly, matching the bus/route deletion
+    # behavior and preserving unrelated feedback after detaching it.
+    trip_ids = db.query(LiveTrip.id).filter(LiveTrip.driver_id == driver.id)
+    db.query(FleetNotification).filter(FleetNotification.trip_id.in_(trip_ids)).update(
+        {FleetNotification.trip_id: None}, synchronize_session=False
+    )
+    db.query(TripStopEvent).filter(TripStopEvent.trip_id.in_(trip_ids)).delete(
+        synchronize_session=False
+    )
+    db.query(LiveLocation).filter(LiveLocation.trip_id.in_(trip_ids)).delete(
+        synchronize_session=False
+    )
+    db.query(LiveTrip).filter(LiveTrip.driver_id == driver.id).delete(
+        synchronize_session=False
+    )
+    db.query(FleetNotification).filter(FleetNotification.driver_id == driver.id).update(
+        {FleetNotification.driver_id: None}, synchronize_session=False
     )
     driver.bus_id = None
     db.flush()

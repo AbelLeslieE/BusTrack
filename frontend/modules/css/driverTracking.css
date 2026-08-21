@@ -130,7 +130,7 @@
 
     display:grid;
 
-    grid-template-columns:1fr 1fr;
+    grid-template-columns:repeat(3, 1fr);
 
     gap:16px;
 
@@ -296,6 +296,24 @@
 .map-placeholder{
 
     opacity:.6;
+
+}
+
+.reverse-route-btn{
+
+    color:#d9f8ff;
+
+    background:linear-gradient(135deg,#255d90,#4c438d);
+
+    box-shadow:0 12px 35px rgba(61,145,222,.2);
+
+}
+
+.reverse-route-btn:hover{
+
+    transform:translateY(-3px);
+
+    box-shadow:0 20px 45px rgba(74,116,225,.35);
 
 }
 

@@ -41,9 +41,9 @@ def _build_stop_visits(
                 "trip_id": event.trip_id,
                 "route_stop_id": event.route_stop_id,
                 "stop_id": event.stop_id,
-                "stop_name": stop.stop_name if stop else "Unknown stop",
-                "stop_code": stop.stop_code if stop else None,
-                "sequence": route_stop.sequence if route_stop else None,
+                "stop_name": stop.stop_name if stop else (event.stop_name_snapshot or "Unknown stop"),
+                "stop_code": stop.stop_code if stop else event.stop_code_snapshot,
+                "sequence": route_stop.sequence if route_stop else event.route_sequence_snapshot,
                 "arrived_at": event.occurred_at,
                 "departed_at": None,
                 "arrival_distance_meters": event.distance_meters,
@@ -72,9 +72,9 @@ def _build_stop_visits(
                 "trip_id": event.trip_id,
                 "route_stop_id": event.route_stop_id,
                 "stop_id": event.stop_id,
-                "stop_name": stop.stop_name if stop else "Unknown stop",
-                "stop_code": stop.stop_code if stop else None,
-                "sequence": route_stop.sequence if route_stop else None,
+                "stop_name": stop.stop_name if stop else (event.stop_name_snapshot or "Unknown stop"),
+                "stop_code": stop.stop_code if stop else event.stop_code_snapshot,
+                "sequence": route_stop.sequence if route_stop else event.route_sequence_snapshot,
                 "arrived_at": None,
                 "departed_at": event.occurred_at,
                 "arrival_distance_meters": None,
@@ -151,10 +151,12 @@ def bus_history(
             route_stop = route_stops.get(event.route_stop_id)
             events.append({"id": event.id, "kind": "stop", "trip_id": event.trip_id,
                            "event_type": event.event_type, "occurred_at": event.occurred_at,
-                           "stop_name": stop.stop_name if stop else "Unknown stop",
-                           "stop_code": stop.stop_code if stop else None,
-                           "sequence": route_stop.sequence if route_stop else None,
-                           "distance_meters": event.distance_meters, "radius_meters": event.radius_meters})
+                           "stop_name": stop.stop_name if stop else (event.stop_name_snapshot or "Unknown stop"),
+                           "stop_code": stop.stop_code if stop else event.stop_code_snapshot,
+                           "sequence": route_stop.sequence if route_stop else event.route_sequence_snapshot,
+                           # Keep the API shape stable while ensuring raw
+                           # distance/coordinate telemetry is never retained.
+                           "distance_meters": None, "radius_meters": None})
     feedback_query = db.query(FleetNotification).filter(FleetNotification.bus_id == bus.id)
     if start: feedback_query = feedback_query.filter(FleetNotification.created_at >= start)
     if end: feedback_query = feedback_query.filter(FleetNotification.created_at <= end)

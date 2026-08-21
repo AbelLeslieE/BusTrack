@@ -20,6 +20,7 @@ from backend.routes.models_tracking import (
 from backend.schemas_tracking import (
     TripStartRequest,
     TripStopRequest,
+    TripDirectionRequest,
     TripAdminStopRequest,
     LocationUpdateRequest,
     LiveTripResponse,
@@ -40,6 +41,10 @@ from backend.services.vehicle_gps import (
     GPS_OFFLINE_GRACE_SECONDS,
     vehicle_gps_expected_interval_seconds,
     vehicle_gps_is_authoritative,
+)
+from backend.services.telemetry_retention import (
+    discard_completed_trip_coordinates,
+    trim_active_trip_location_history,
 )
 from backend.routes.models_tracking import BusGPSState
 
@@ -260,10 +265,9 @@ def update_route_stop_progression(
             stop_id=stop.id,
             event_type=event_type,
             occurred_at=current_timestamp,
-            latitude=latitude,
-            longitude=longitude,
-            distance_meters=distance,
-            radius_meters=float(stop.radius) if stop.radius is not None else 50.0,
+            stop_code_snapshot=stop.stop_code,
+            stop_name_snapshot=stop.stop_name,
+            route_sequence_snapshot=route_stop.sequence,
         ))
 
     def switch_direction_at_terminal(stop) -> tuple[str, str]:
@@ -352,6 +356,39 @@ def update_route_stop_progression(
         current_distance,
         current_stop,
     )
+
+    # Reconcile a terminal that was already marked as arrived before a device
+    # reconnect, server restart, or delayed provider heartbeat. Direction is
+    # normally switched by the arrival transition below, but a parked bus may
+    # keep reporting from inside the terminal without crossing it again.
+    # Once switched, this stop is index 0 in the reverse-ordered list, so the
+    # condition cannot switch the same trip repeatedly.
+    if (
+        len(route_stops) > 1
+        and current_route_stop == route_stops[-1]
+        and trip.current_stop_status == "Arrived"
+        and inside_radius
+    ):
+        completed_direction, next_direction = switch_direction_at_terminal(
+            current_stop
+        )
+        return {
+            "event": "Terminal reached",
+            "route_stop_id": current_route_stop.id,
+            "stop_id": current_stop.id,
+            "stop_code": current_stop.stop_code,
+            "stop_name": current_stop.stop_name,
+            "sequence": current_route_stop.sequence,
+            "distance_meters": round(current_distance, 2),
+            "radius_meters": float(current_stop.radius)
+            if current_stop.radius is not None
+            else 50.0,
+            "terminal_reached": True,
+            "completed_direction": completed_direction,
+            "next_direction": next_direction,
+            "trip_leg_completed": True,
+        }
+
     # Use a wider exit boundary than the arrival geofence.  A noisy GPS fix
     # hovering around the arrival edge must not repeatedly toggle a stop
     # between Arrived and Departed.
@@ -822,6 +859,8 @@ def start_trip(
         recorded_at=start_timestamp,
         source=start_source,
     ))
+    db.flush()
+    trim_active_trip_location_history(db, trip.id)
     trip.current_latitude = start_latitude
     trip.current_longitude = start_longitude
     trip.current_speed = start_speed
@@ -1112,6 +1151,8 @@ def update_location(
     )
 
     db.add(location)
+    db.flush()
+    trim_active_trip_location_history(db, trip.id)
 
     # ======================================================
     # UPDATE CURRENT LIVE POSITION
@@ -1236,10 +1277,56 @@ def stop_trip(
         timezone.utc
     )
 
+    discard_completed_trip_coordinates(db, trip)
+
     db.commit()
 
     return {
         "message": "Trip completed successfully."
+    }
+
+
+@router.post("/direction")
+def change_trip_direction(
+    request: TripDirectionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_driver),
+):
+    """Change the travel order of the authenticated driver's active trip.
+
+    Route-stop sequences are shared route data and must never be rewritten for
+    one bus. The trip stores its own direction, so all live clients redraw
+    from the same backend state on their next refresh.
+    """
+
+    driver = db.query(Driver).filter(Driver.user_id == current_user.id).first()
+    if driver is None:
+        raise HTTPException(status_code=403, detail="Driver access required.")
+
+    trip = db.query(LiveTrip).filter(
+        LiveTrip.id == request.trip_id,
+        LiveTrip.driver_id == driver.id,
+        LiveTrip.ended_at.is_(None),
+    ).first()
+    if trip is None:
+        raise HTTPException(status_code=404, detail="Active trip not found.")
+
+    trip.route_direction = request.direction
+    # A manual direction change is not a terminal-arrival notification. Clear
+    # old terminal metadata so other portals do not show a stale finish banner.
+    trip.terminal_reached_at = None
+    trip.terminal_stop_id = None
+    db.commit()
+    db.refresh(trip)
+
+    return {
+        "trip_id": trip.id,
+        "route_direction": trip.route_direction,
+        "message": (
+            "Route direction changed to return journey."
+            if trip.route_direction == "reverse"
+            else "Route direction changed to outbound journey."
+        ),
     }
 
 
@@ -1253,8 +1340,8 @@ def end_trip_as_admin(
 ):
     """Safely stop or cancel a stuck active trip from the Admin portal.
 
-    Ending a trip removes it from live tracking. Historical locations stay
-    available, and the driver can start a fresh trip immediately afterwards.
+    Ending a trip removes it from live tracking and releases raw coordinate
+    history. Stop arrivals/departures and their timestamps remain available.
     """
 
     trip = db.query(LiveTrip).filter(
@@ -1268,6 +1355,7 @@ def end_trip_as_admin(
     trip.ended_at = datetime.now(timezone.utc)
     trip.ended_by_user_id = current_user.id
     trip.end_reason = payload.reason.strip() if payload.reason and payload.reason.strip() else None
+    discard_completed_trip_coordinates(db, trip)
     bus = db.get(Bus, trip.bus_id)
     record_audit_event(
         db,
@@ -1554,6 +1642,13 @@ def get_live_tracking(
             trip.current_speed,
             next_stop,
         )
+        terminal_reached = bool(
+            trip.terminal_reached_at is not None
+            and trip.current_stop_status == "Arrived"
+            and current_route_stop is not None
+            and current_route_stop.stop is not None
+            and current_route_stop.stop.id == trip.terminal_stop_id
+        )
         # ==================================================
         # RESPONSE
         # ==================================================
@@ -1623,6 +1718,16 @@ def get_live_tracking(
             "gps_freshness": gps_freshness,
 
             "route_direction": trip.route_direction,
+
+            "terminal_reached": terminal_reached,
+
+            "terminal_reached_at": (
+                trip.terminal_reached_at if terminal_reached else None
+            ),
+
+            "terminal_stop_name": (
+                current_route_stop.stop.stop_name if terminal_reached else None
+            ),
             # ------------------------------------------------
             # ROUTE STOP PROGRESSION
             # ------------------------------------------------

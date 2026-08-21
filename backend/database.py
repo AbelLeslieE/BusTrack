@@ -28,6 +28,16 @@ if DATABASE_URL.startswith("postgres://"):
         1
     )
 
+def _positive_integer_setting(name: str, default: int) -> int:
+    """Read a bounded pool setting without making a bad environment value fatal."""
+
+    try:
+        value = int(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+    return value if 1 <= value <= 100 else default
+
+
 engine_options: dict[str, object] = {"pool_pre_ping": True}
 if DATABASE_URL.startswith("sqlite"):
     # SQLite normally gives up after five seconds when another request is
@@ -37,6 +47,17 @@ if DATABASE_URL.startswith("sqlite"):
         "check_same_thread": False,
         "timeout": 30,
     }
+elif DATABASE_URL.startswith("postgresql"):
+    # PostgreSQL is used for the shared deployment, where GPS writes and
+    # portal polling happen concurrently.  A small, bounded pool prevents a
+    # burst of browser polling from exhausting the database connection limit.
+    engine_options.update({
+        "pool_size": _positive_integer_setting("DATABASE_POOL_SIZE", 5),
+        "max_overflow": _positive_integer_setting("DATABASE_MAX_OVERFLOW", 5),
+        "pool_timeout": _positive_integer_setting("DATABASE_POOL_TIMEOUT", 30),
+        "pool_recycle": _positive_integer_setting("DATABASE_POOL_RECYCLE", 1800),
+        "connect_args": {"connect_timeout": 10},
+    })
 
 engine = create_engine(DATABASE_URL, **engine_options)
 
@@ -204,6 +225,34 @@ def initialize_database() -> None:
                 connection.execute(text(
                     "ALTER TABLE live_locations ADD COLUMN source VARCHAR(32) NOT NULL DEFAULT 'mobile'"
                 ))
+
+    # Stop events are the compact historical record retained after coordinate
+    # telemetry is purged. Store a label/order snapshot so past visits remain
+    # readable even if a stop is later renamed or removed from a route.
+    if "trip_stop_events" in inspector.get_table_names():
+        stop_event_columns = {
+            column["name"] for column in inspector.get_columns("trip_stop_events")
+        }
+        with engine.begin() as connection:
+            if "stop_code_snapshot" not in stop_event_columns:
+                connection.execute(text(
+                    "ALTER TABLE trip_stop_events ADD COLUMN stop_code_snapshot VARCHAR(20)"
+                ))
+            if "stop_name_snapshot" not in stop_event_columns:
+                connection.execute(text(
+                    "ALTER TABLE trip_stop_events ADD COLUMN stop_name_snapshot VARCHAR(150)"
+                ))
+            if "route_sequence_snapshot" not in stop_event_columns:
+                connection.execute(text(
+                    "ALTER TABLE trip_stop_events ADD COLUMN route_sequence_snapshot INTEGER"
+                ))
+
+    # ``create_all`` does not add newly declared indexes to tables that
+    # already exist. Ensure upgraded PostgreSQL installations receive the
+    # composite live-trip/GPS indexes as well as fresh installations.
+    for table in Base.metadata.tables.values():
+        for table_index in table.indexes:
+            table_index.create(bind=engine, checkfirst=True)
 
     print(
         "Database schema initialized successfully."

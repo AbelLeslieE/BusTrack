@@ -99,7 +99,14 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
         speed = None
     ignition = _ignition(data.get("ignition"))
     now = datetime.now(timezone.utc)
-    position = {"latitude": latitude, "longitude": longitude, "speed_kmh": speed, "accuracy": None}
+    position = {
+        "latitude": latitude,
+        "longitude": longitude,
+        "speed_kmh": speed,
+        "accuracy": None,
+        "fix_time": fix_time,
+        "valid": True,
+    }
     raw_json = json.dumps(data, separators=(",", ":"), default=str)
     mapping = db.query(GPSDeviceMapping).filter(
         GPSDeviceMapping.external_device_id == imei,

@@ -24,6 +24,12 @@ let tracking = false;
 
 let trackingAccessToken = null;
 
+// The persisted direction belongs to the live trip, not the route itself.
+// Keeping it locally lets the driver UI update at once while other portals
+// receive the same value from their normal polling response.
+let currentRouteDirection = "forward";
+let terminalMessageTimer = null;
+
 // The MVD unit is primary. Phone GPS runs only while that signal is stale.
 let activeTrackingSource = "unavailable";
 let sourcePollTimer = null;
@@ -463,12 +469,12 @@ async function startTripUsingMobileGpsFallback() {
         // after the backend has created the mobile-sourced trip.
         activeTrackingSource = "mobile";
         tracking = true;
+        updateDirectionControls(trip.route_direction || "forward");
 
 
         if (tripStatus) {
 
-            tripStatus.textContent =
-                "🟢 Running";
+            tripStatus.textContent = `🟢 Running · ${directionLabel()}`;
 
         }
 
@@ -643,6 +649,7 @@ export async function stopTrip() {
 
         lastServerUpdateTime = 0;
         previousGpsSample = null;
+        updateDirectionControls("forward");
 
         document.getElementById("tripStatus").textContent =
             "⚫ Ready";
@@ -673,6 +680,45 @@ function setText(id, text) {
     if (element) element.textContent = text;
 }
 
+function directionLabel(direction = currentRouteDirection) {
+    return direction === "reverse" ? "Return journey" : "Outbound journey";
+}
+
+function updateDirectionControls(direction) {
+    if (direction !== "forward" && direction !== "reverse") return;
+    currentRouteDirection = direction;
+    setText("routeDirection", directionLabel());
+
+    const button = document.getElementById("reverseRouteBtn");
+    if (!button) return;
+    button.disabled = !tracking || !currentTripId;
+    const label = button.querySelector("span");
+    if (label) {
+        label.textContent = direction === "reverse"
+            ? "Change to Outbound"
+            : "Change to Return";
+    }
+}
+
+function showTerminalArrival(nextDirection) {
+    updateDirectionControls(nextDirection);
+    setText("tripStatus", `✅ Route finished · ${directionLabel()}`);
+    setText("gpsStatus", "Reached final stop · route order reversed");
+
+    if (terminalMessageTimer !== null) window.clearTimeout(terminalMessageTimer);
+    terminalMessageTimer = window.setTimeout(() => {
+        terminalMessageTimer = null;
+        if (tracking) setText("tripStatus", `🟢 Running · ${directionLabel()}`);
+    }, 4_000);
+}
+
+function showRunningTripStatus(direction = currentRouteDirection) {
+    updateDirectionControls(direction);
+    if (terminalMessageTimer === null) {
+        setText("tripStatus", `🟢 Running · ${directionLabel()}`);
+    }
+}
+
 function stopMobileLocationTracking() {
     // Invalidate callbacks before clearing the browser watcher so an old
     // callback cannot race a vehicle-GPS source change.
@@ -697,6 +743,7 @@ function completeTripInDriverUi() {
     trackingAccessToken = null;
     lastServerUpdateTime = 0;
     previousGpsSample = null;
+    updateDirectionControls("forward");
 
     setText("tripStatus", "✅ Trip completed");
     setText("gpsStatus", "Reached terminal");
@@ -720,6 +767,7 @@ function stopTripBecauseAdminEndedIt() {
     trackingAccessToken = null;
     lastServerUpdateTime = 0;
     pendingLocation = null;
+    updateDirectionControls("forward");
 
     setText("tripStatus", "⏹ Trip stopped by admin");
     setText("gpsStatus", "Tracking stopped by admin");
@@ -755,6 +803,26 @@ function applyTrackingSource(source) {
     const vehicleIsPrimary = source.tracking_source === "vehicle_gps";
     const mobileIsActive = source.tracking_source === "mobile";
     const mobileIsReady = source.tracking_source === "mobile_available";
+    const hasVehiclePosition = Boolean(
+        source.vehicle
+        && Number.isFinite(source.vehicle.latitude)
+        && Number.isFinite(source.vehicle.longitude)
+    );
+    const sourceDirection = source.route_direction;
+    const directionChangedAtTerminal = Boolean(
+        tracking
+        && sourceDirection
+        && sourceDirection !== currentRouteDirection
+    );
+    if (sourceDirection) {
+        if (directionChangedAtTerminal) {
+            // Provider GPS reached the final stop. The driver screen polls
+            // this endpoint, so it can show the transition without reload.
+            showTerminalArrival(sourceDirection);
+        } else {
+            updateDirectionControls(sourceDirection);
+        }
+    }
     // A running trip publishes phone readings even while a vehicle module is
     // fresh. The backend accepts both sources and applies each report as it
     // arrives, so neither source silently suppresses the other.
@@ -786,13 +854,26 @@ function applyTrackingSource(source) {
     setText("trackingSourceReason", source.reason || "Location-source status is unavailable.");
     setText(
         "activeTrackingSource",
-        vehicleIsPrimary ? "🚌 Vehicle GPS + phone" : mobileIsActive ? "📱 Phone GPS" : "⚫ Waiting for GPS"
+        vehicleIsPrimary
+            ? "🚌 Vehicle GPS + phone"
+            : source.vehicle?.ignition === false
+                ? "🚌 Vehicle GPS · ignition off"
+                : mobileIsActive ? "📱 Phone GPS" : "⚫ Waiting for GPS"
     );
     setText(
         "mapTrackingSource",
-        vehicleIsPrimary ? "🚌 Vehicle GPS + phone" : mobileIsActive ? "📱 Phone GPS" : "⚫ GPS unavailable"
+        vehicleIsPrimary
+            ? "🚌 Vehicle GPS + phone"
+            : source.vehicle?.ignition === false
+                ? "🚌 Vehicle GPS · ignition off"
+                : mobileIsActive ? "📱 Phone GPS" : "⚫ GPS unavailable"
     );
     document.getElementById("mapTrackingSource")?.classList.toggle("is-vehicle", vehicleIsPrimary);
+    // An ignition-off MVD heartbeat is still a timestamped last-known point.
+    // Keep it on the driver map while the bus is parked at a stop.
+    if (hasVehiclePosition && !vehicleIsPrimary) {
+        updateVehicleLocation(source.vehicle);
+    }
     if (button) {
         const canStartPhoneTest = mobileIsReady
             && source.mobile_tracking_allowed
@@ -810,13 +891,8 @@ function applyTrackingSource(source) {
                 ? "Vehicle GPS · ignition off (parked heartbeat)"
                 : "Vehicle GPS · ignition on"
         );
-        if (tracking && source.route_direction) {
-            setText(
-                "tripStatus",
-                source.route_direction === "reverse"
-                    ? "🟢 Running · Return journey"
-                    : "🟢 Running · Outbound journey"
-            );
+        if (tracking && sourceDirection) {
+            showRunningTripStatus(sourceDirection);
         }
         if (mobilePublishingEnabled && watchId === null) {
             startLocationTracking();
@@ -825,7 +901,12 @@ function applyTrackingSource(source) {
     }
 
     if (mobileIsActive) {
-        setText("gpsStatus", "Phone GPS fallback · waiting for MVD recovery");
+        setText(
+            "gpsStatus",
+            source.vehicle?.ignition === false
+                ? "Vehicle GPS · ignition off · last known position"
+                : "Phone GPS fallback · waiting for MVD recovery"
+        );
         // Once browser permission has been granted, this begins automatically
         // whenever the fresh MVD signal disappears. Do not recreate the
         // watcher on every two-second source poll.
@@ -863,6 +944,47 @@ export function initializeTrackingSource() {
     }, 2_000);
 }
 
+export async function reverseRouteDirection() {
+    if (!tracking || !currentTripId) return;
+
+    const nextDirection = currentRouteDirection === "reverse"
+        ? "forward"
+        : "reverse";
+    const button = document.getElementById("reverseRouteBtn");
+    if (button) button.disabled = true;
+
+    try {
+        const token = trackingAccessToken || localStorage.getItem("bus_tracker_access_token");
+        const response = await fetch("/api/gps/direction", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ trip_id: currentTripId, direction: nextDirection }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(typeof result.detail === "string"
+                ? result.detail
+                : "Unable to change route direction.");
+        }
+
+        if (terminalMessageTimer !== null) {
+            window.clearTimeout(terminalMessageTimer);
+            terminalMessageTimer = null;
+        }
+        showRunningTripStatus(result.route_direction);
+        setText("gpsStatus", "Route direction changed");
+    } catch (error) {
+        console.error("Unable to change route direction:", error);
+        setText("gpsStatus", "Unable to change route direction");
+        alert(error.message);
+    } finally {
+        updateDirectionControls(currentRouteDirection);
+    }
+}
+
 async function startTripUsingVehicleGps() {
     const startButton = document.getElementById("startTripBtn");
     const stopButton = document.getElementById("stopTripBtn");
@@ -897,13 +1019,14 @@ async function startTripUsingVehicleGps() {
         }
         currentTripId = trip.id;
         tracking = true;
+        updateDirectionControls(trip.route_direction || "forward");
         // Keep the driver's GPS running as a second live source. The module
         // continues to post independently and the server merges both streams.
         activeTrackingSource = "mobile";
         startLocationTracking();
         setText("tripBus", trip.bus_number || (trip.bus_id != null ? `BUS-${String(trip.bus_id).padStart(3, "0")}` : "—"));
         setText("tripRoute", trip.route_name || (trip.route_id != null ? `Route ${trip.route_id}` : "—"));
-        setText("tripStatus", "🟢 Running");
+        showRunningTripStatus(trip.route_direction || "forward");
         setText("gpsStatus", "Vehicle GPS · ignition on");
         if (stopButton) stopButton.disabled = false;
     } catch (error) {
@@ -1474,8 +1597,10 @@ async function flushPendingLocation() {
         const result = await response.json();
         console.log("GPS sent to server successfully:", result);
 
-        if (result.stop_progression_event?.trip_completed) {
-            completeTripInDriverUi();
+        if (result.stop_progression_event?.trip_leg_completed) {
+            showTerminalArrival(
+                result.stop_progression_event.next_direction || currentRouteDirection
+            );
         }
     } catch (error) {
         console.error("Unable to send GPS update:", error);
@@ -1591,6 +1716,7 @@ export async function loadCurrentTrip() {
         }
 
         tracking = true;
+        updateDirectionControls(trip.route_direction || "forward");
 
         const tripStatus =
             document.getElementById("tripStatus");
@@ -1607,8 +1733,7 @@ export async function loadCurrentTrip() {
 
         if (tripStatus) {
 
-            tripStatus.textContent =
-                "🟢 Running";
+            tripStatus.textContent = `🟢 Running · ${directionLabel()}`;
 
         }
 
@@ -1856,6 +1981,10 @@ export function cleanupTracking() {
     if (locationFlushTimer !== null) {
         window.clearTimeout(locationFlushTimer);
         locationFlushTimer = null;
+    }
+    if (terminalMessageTimer !== null) {
+        window.clearTimeout(terminalMessageTimer);
+        terminalMessageTimer = null;
     }
     previousGpsSample = null;
 

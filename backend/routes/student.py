@@ -721,6 +721,7 @@ def get_student_live_tracking(
         route_progress["current_stop"] is None
         and
         tracking_available
+        and location_is_fresh
         and
         tracking_latitude is not None
         and

@@ -12,6 +12,7 @@ from sqlalchemy import (
     String,
     DateTime,
     ForeignKey,
+    Index,
     Text,
 )
 
@@ -30,6 +31,17 @@ from backend.database import Base
 class LiveTrip(Base):
 
     __tablename__ = "live_trips"
+    __table_args__ = (
+        # The student/admin portals select the newest running trip for a bus.
+        # This composite index keeps that lookup fast as GPS history grows.
+        Index(
+            "ix_live_trips_bus_status_ended_location",
+            "bus_id",
+            "status",
+            "ended_at",
+            "last_location_update",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(
         Integer,
@@ -175,6 +187,9 @@ class LiveTrip(Base):
 class LiveLocation(Base):
 
     __tablename__ = "live_locations"
+    __table_args__ = (
+        Index("ix_live_locations_trip_recorded", "trip_id", "recorded_at"),
+    )
 
     id: Mapped[int] = mapped_column(
         Integer,
@@ -220,9 +235,17 @@ class LiveLocation(Base):
 
 
 class TripStopEvent(Base):
-    """Immutable arrival/departure record for a stop served during a trip."""
+    """Immutable arrival/departure record for a stop served during a trip.
+
+    This is the long-term trip audit.  It deliberately stores the stop label
+    and route order but no coordinate history, which keeps completed trips
+    useful after their live telemetry has expired.
+    """
 
     __tablename__ = "trip_stop_events"
+    __table_args__ = (
+        Index("ix_trip_stop_events_trip_occurred", "trip_id", "occurred_at"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     trip_id: Mapped[int] = mapped_column(ForeignKey("live_trips.id"), index=True, nullable=False)
@@ -230,6 +253,11 @@ class TripStopEvent(Base):
     stop_id: Mapped[int] = mapped_column(ForeignKey("stops.id"), index=True, nullable=False)
     event_type: Mapped[str] = mapped_column(String(16), index=True, nullable=False)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True, nullable=False)
+    stop_code_snapshot: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    stop_name_snapshot: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    route_sequence_snapshot: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Kept nullable for compatibility with older databases. New events leave
+    # these blank; retention clears legacy values when a trip completes.
     latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
     distance_meters: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -277,6 +305,16 @@ class ProviderGPSPosition(Base):
     """Immutable provider telemetry history; raw_payload preserves all fields."""
 
     __tablename__ = "provider_gps_positions"
+    __table_args__ = (
+        # Vehicle GPS status reads always need the newest device fix for one
+        # bus; keep both device and receipt times available for ordering.
+        Index(
+            "ix_provider_gps_positions_bus_fix_received",
+            "bus_id",
+            "fix_time",
+            "received_at",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     bus_id: Mapped[int] = mapped_column(ForeignKey("buses.id"), nullable=False, index=True)

@@ -59,7 +59,7 @@ python database/init_database.py --username admin --reset-password
 
 If the development SQLite database is deleted, the server will recreate its tables and print the recovery command instead of inventing a known password. Use `admin` as the username or choose another username, then enter a new password at the secure prompt. For a production deployment, set `BOOTSTRAP_ADMIN_PASSWORD` in the server's secret store before the first start; the application will create the configured administrator once and will not print the password.
 
-For production, set `APP_ENV=production`, `DATABASE_URL` to PostgreSQL, and a random `JWT_SECRET_KEY` of at least 32 characters. Configure `BOOTSTRAP_ADMIN_PASSWORD` only through the hosting provider's secret store if a first administrator must be created at startup. See `.env.example`; never commit a real secret or use a default password.
+For production, set `APP_ENV=production`, `DATABASE_URL` to PostgreSQL, and a random `JWT_SECRET_KEY` of at least 32 characters. Configure `BOOTSTRAP_ADMIN_PASSWORD` only through the hosting provider's secret store if a first administrator must be created at startup. See `.env.example`; never commit a real secret or use a default password. For an existing SQLite installation, follow the verified [SQLite-to-PostgreSQL cutover](docs/postgresql-cutover.md) rather than manually copying database files.
 
 ### Render deployment
 

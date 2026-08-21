@@ -17,6 +17,10 @@ import backend.models
 import backend.routes.models_tracking  # noqa: F401
  # noqa: F401  # Registers SQLAlchemy models before table creation.
 from backend.database import SessionLocal, initialize_database
+from backend.services.telemetry_retention import (
+    run_telemetry_retention,
+    telemetry_retention_enabled,
+)
 from backend.routes.auth import router as authentication_router
 from database.create_default_admin import create_default_admin
 from backend.routes.buses import router as bus_router
@@ -63,14 +67,48 @@ async def _airotrack_poll_loop() -> None:
         await asyncio.sleep(interval)
 
 
+async def _telemetry_retention_loop() -> None:
+    """Periodically bound raw GPS storage without interrupting live tracking."""
+
+    try:
+        interval = max(60, int(os.getenv("TELEMETRY_RETENTION_INTERVAL_SECONDS", "300")))
+    except ValueError:
+        interval = 300
+    while True:
+        database_session = SessionLocal()
+        try:
+            await asyncio.to_thread(run_telemetry_retention, database_session)
+            database_session.commit()
+        except Exception as error:  # A cleanup failure must never stop GPS ingest.
+            database_session.rollback()
+            print(f"Telemetry retention error: {error}")
+        finally:
+            database_session.close()
+        await asyncio.sleep(interval)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     validate_security_configuration()
     initialize_database()
     create_default_admin()
     poll_task = None
+    retention_task = None
     if os.getenv("AIROTRACK_API_TOKEN", "").strip():
         poll_task = asyncio.create_task(_airotrack_poll_loop())
+    if telemetry_retention_enabled():
+        # Run once at PostgreSQL startup so migration-era coordinate history is
+        # reduced immediately; the periodic task keeps it bounded afterwards.
+        database_session = SessionLocal()
+        try:
+            await asyncio.to_thread(run_telemetry_retention, database_session)
+            database_session.commit()
+        except Exception as error:
+            database_session.rollback()
+            print(f"Initial telemetry retention error: {error}")
+        finally:
+            database_session.close()
+        retention_task = asyncio.create_task(_telemetry_retention_loop())
     try:
         yield
     finally:
@@ -78,6 +116,10 @@ async def lifespan(_: FastAPI):
             poll_task.cancel()
             with suppress(asyncio.CancelledError):
                 await poll_task
+        if retention_task is not None:
+            retention_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await retention_task
 
 
 is_production = os.getenv("APP_ENV", "development").strip().casefold() == "production"

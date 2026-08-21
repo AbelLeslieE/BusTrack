@@ -1687,9 +1687,9 @@ function updateFleet(trips, buses = []) {
         const updateLabel =
             getDisplayUpdateTime(trip);
 
-        const currentStopLabel =
-            trip.current_stop?.stop_name ||
-            "Awaiting stop position";
+        const currentStopLabel = trip.terminal_reached
+            ? `${trip.terminal_stop_name || trip.current_stop?.stop_name || "Final stop"} · Final stop reached`
+            : (trip.current_stop?.stop_name || "Awaiting stop position");
 
         const nextStopLabel =
             trip.next_stop?.stop_name ||

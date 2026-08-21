@@ -90,7 +90,9 @@ const state = {
 
     routeDefinitionKey: null,
 
-    terminalNoticeKey: null
+    terminalNoticeKey: null,
+
+    terminalNoticeTimer: null
 
 };
 
@@ -373,6 +375,9 @@ function vehicleTravelStatus() {
     const telemetry = getTelemetry();
 
     if (!state.liveTrip) return "Not live";
+    if (state.liveTrip.terminal_reached) {
+        return telemetry.is_fresh ? "Final stop reached" : "Final stop · last known";
+    }
     if (!telemetry.is_fresh) return "Last known location";
     if (telemetry.moving === true) return "Moving";
     if (telemetry.ignition_on === false) return "Parked";
@@ -412,6 +417,20 @@ function getTrackingStatus() {
 
             className:
                 "student-tracking-status-warning"
+
+        };
+
+    }
+
+    if (state.liveTrip.terminal_reached) {
+
+        return {
+
+            label:
+                "Final stop reached",
+
+            className:
+                "student-tracking-status-neutral"
 
         };
 
@@ -1431,28 +1450,38 @@ function showTerminalArrivalNotice() {
 
     state.terminalNoticeKey = noticeKey;
     const stopName = escapeHTML(trip.terminal_stop_name || "the final stop");
+    if (state.terminalNoticeTimer !== null) {
+        window.clearTimeout(state.terminalNoticeTimer);
+        state.terminalNoticeTimer = null;
+    }
     Modal.open({
-        eyebrow: "Trip leg completed",
-        title: "Bus reached the terminal",
-        subtitle: "The saved final position remains visible until the return journey starts.",
+        eyebrow: "Trip finished",
+        title: "Final stop reached",
+        subtitle: "The bus is at the terminal. Preparing the return journey…",
         content: `
             <div class="student-terminal-notice">
                 <i class="fa-solid fa-flag-checkered" aria-hidden="true"></i>
-                <p><strong>${stopName}</strong> is the end of this route leg.</p>
-                <p>When the bus moves again, the same route progresses in reverse order for the return journey.</p>
+                <p><strong>${stopName}</strong> is the final stop for this trip leg.</p>
+                <p>The live stop order will reverse automatically.</p>
             </div>`,
-        actions: [{
-            text: "OK",
-            style: "primary",
-            close: true,
-            onClick: async () => {
-                // Re-read the student-specific provider projection after the
-                // acknowledgement so the reversed route and terminal GPS
-                // heartbeat are rendered from the backend source of truth.
-                await refreshTracking();
-            },
-        }],
+        actions: [],
     });
+
+    state.terminalNoticeTimer = window.setTimeout(() => {
+        if (state.terminalNoticeKey !== noticeKey) return;
+        Modal.close();
+        Modal.open({
+            eyebrow: "Route reversed",
+            title: "Return journey is ready",
+            subtitle: "The terminal is now stop 1 and the remaining stops follow the return direction.",
+            content: `<div class="student-terminal-notice"><i class="fa-solid fa-repeat" aria-hidden="true"></i><p>The map and railway tracker now use the reversed, live route order.</p></div>`,
+            actions: [],
+        });
+        state.terminalNoticeTimer = window.setTimeout(() => {
+            Modal.close();
+            state.terminalNoticeTimer = null;
+        }, 3_500);
+    }, 3_500);
 }
 
 /* ==========================================================
@@ -3127,6 +3156,11 @@ function cleanupTracking() {
     state.terminalNoticeKey =
         null;
 
+    if (state.terminalNoticeTimer !== null) {
+        window.clearTimeout(state.terminalNoticeTimer);
+        state.terminalNoticeTimer = null;
+    }
+
 }
 /* ==========================================================
    ROUTE TIMELINE
@@ -3596,9 +3630,13 @@ function renderStopInformation() {
                     ${
                         currentStop
                             ? escapeHTML(
-                                currentStop.stop_name
+                                state.liveTrip?.terminal_reached
+                                    ? `${currentStop.stop_name} · Final stop reached`
+                                    : currentStop.stop_name
                             )
-                            : "Location updating"
+                            : (!getTelemetry().is_fresh
+                                ? "Last known location"
+                                : "Location updating")
                     }
 
                 </strong>
@@ -4595,6 +4633,11 @@ export function render() {
 
     state.routeDirection =
         null;
+
+    if (state.terminalNoticeTimer !== null) {
+        window.clearTimeout(state.terminalNoticeTimer);
+        state.terminalNoticeTimer = null;
+    }
 
 
     /*

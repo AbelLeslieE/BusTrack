@@ -10,6 +10,8 @@ import {
 
     stopTrip,
 
+    reverseRouteDirection,
+
     loadCurrentTrip,
 
     cleanupTracking,
@@ -148,6 +150,14 @@ export function render() {
 
                         <div class="tracking-row">
 
+                            <span>Route Direction</span>
+
+                            <strong id="routeDirection">Outbound journey</strong>
+
+                        </div>
+
+                        <div class="tracking-row">
+
                             <span>Last Update</span>
 
                             <strong id="lastUpdate">
@@ -180,6 +190,17 @@ export function render() {
                             <i data-lucide="square"></i>
 
                             <span>Stop Trip</span>
+
+                        </button>
+
+                        <button
+                            id="reverseRouteBtn"
+                            class="reverse-route-btn"
+                            disabled>
+
+                            <i data-lucide="repeat-2"></i>
+
+                            <span>Change Direction</span>
 
                         </button>
 
@@ -304,12 +325,18 @@ export function render() {
 
         const stopButton = document.getElementById("stopTripBtn");
 
+        const reverseButton = document.getElementById("reverseRouteBtn");
+
         if (startButton) {
             startButton.addEventListener("click", startTrip);
         }
 
         if (stopButton) {
             stopButton.addEventListener("click", stopTrip);
+        }
+
+        if (reverseButton) {
+            reverseButton.addEventListener("click", reverseRouteDirection);
         }
 
     }, 100);

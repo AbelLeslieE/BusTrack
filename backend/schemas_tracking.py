@@ -62,6 +62,13 @@ class TripStopRequest(BaseModel):
     trip_id: int
 
 
+class TripDirectionRequest(BaseModel):
+    """Driver request to change an active trip's travel direction."""
+
+    trip_id: int
+    direction: Literal["forward", "reverse"]
+
+
 class TripAdminStopRequest(BaseModel):
     """Administrator recovery action for an active driver trip."""
 

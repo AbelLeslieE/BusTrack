@@ -46,6 +46,7 @@ from backend.services.vehicle_gps import (
 )
 from backend.routes.gps import update_route_stop_progression
 from backend.services.trip_direction import direction_from_start_position, ordered_route_stops
+from backend.services.telemetry_retention import trim_active_trip_location_history
 from backend.models import RouteStop
 
 
@@ -310,8 +311,10 @@ def _update_active_trip_from_vehicle(db: Session, position: dict[str, Any], bus_
     # Some installed modules do not send an ignition attribute. A valid
     # coordinate must still progress the active trip even while phone data is
     # also arriving. Explicitly invalid fixes remain in provider history only.
-    if position["valid"] is False:
+    if position.get("valid") is False:
         return trip.id
+
+    position_timestamp = position.get("fix_time") or received_at
 
     previous_location = db.query(LiveLocation).filter(
         LiveLocation.trip_id == trip.id,
@@ -335,7 +338,7 @@ def _update_active_trip_from_vehicle(db: Session, position: dict[str, Any], bus_
         latitude=position["latitude"],
         longitude=position["longitude"],
         previous_location=previous_location,
-        current_timestamp=position["fix_time"] or received_at,
+        current_timestamp=position_timestamp,
         db=db,
     )
 
@@ -343,13 +346,18 @@ def _update_active_trip_from_vehicle(db: Session, position: dict[str, Any], bus_
         trip_id=trip.id,
         latitude=position["latitude"], longitude=position["longitude"],
         speed=position["speed_kmh"], accuracy=position["accuracy"],
-        recorded_at=received_at, source="vehicle_gps",
+        recorded_at=position_timestamp, source="vehicle_gps",
     ))
+    db.flush()
+    trim_active_trip_location_history(db, trip.id)
     trip.current_latitude = position["latitude"]
     trip.current_longitude = position["longitude"]
     trip.current_speed = position["speed_kmh"]
     trip.current_accuracy = position["accuracy"]
-    trip.last_location_update = received_at
+    # Freshness must reflect when the GPS device fixed this position, not when
+    # a polling job happened to receive it. This keeps old coordinates visibly
+    # last-known instead of making them appear live again.
+    trip.last_location_update = position_timestamp
     trip.current_location_source = "vehicle_gps"
     return trip.id
 
