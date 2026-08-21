@@ -37,6 +37,7 @@ from backend.services.trip_direction import (
 from backend.security import require_driver, require_management
 from backend.audit import record_audit_event
 from backend.services.vehicle_gps import (
+    GPS_OFFLINE_GRACE_SECONDS,
     vehicle_gps_expected_interval_seconds,
     vehicle_gps_is_authoritative,
 )
@@ -85,7 +86,7 @@ def build_gps_freshness(
         0,
         int((datetime.now(timezone.utc) - timestamp).total_seconds()),
     )
-    is_fresh = age_seconds <= expected_interval * 3
+    is_fresh = age_seconds <= GPS_OFFLINE_GRACE_SECONDS
 
     return {
         "age_seconds": age_seconds,
@@ -938,23 +939,9 @@ def update_location(
         timezone.utc
     )
 
-    # A working ignition-on vehicle device is more accurate and cannot be
-    # accidentally overwritten by a driver's phone. Phone tracking remains
-    # available automatically when the provider signal is absent, stale, or
-    # reports ignition off.
-    vehicle_state = (
-        db.query(BusGPSState)
-        .filter(BusGPSState.bus_id == trip.bus_id)
-        .first()
-    )
-    if vehicle_gps_is_authoritative(vehicle_state, current_timestamp):
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "message": "Vehicle GPS is currently active; mobile tracking is disabled.",
-                "tracking_source": "vehicle_gps",
-            },
-        )
+    # Phone and installed-module positions are both accepted. Each source
+    # updates the active-trip snapshot when it reports, so a driver phone can
+    # fill gaps while module-only devices still advance the route normally.
 
     mobile_accuracy = request.accuracy
 

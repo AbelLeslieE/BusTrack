@@ -109,8 +109,8 @@ to the configured device mapping. The latest internal position is visible to
 administrators at `/api/integrations/gps/status`; its complete vendor payload is
 available per bus at `/api/integrations/gps/status/{bus_id}`. The receiver
 expects the provider's 20-second ignition-on updates and two-minute ignition-off
-heartbeats. Fresh ignition-on vehicle GPS is authoritative; it disables driver
-phone updates until the vehicle stream is stale, off, or invalid.
+heartbeats. Fresh vehicle GPS and driver-phone GPS are both recorded for an
+active trip, so either source can keep the map and route progression current.
 
 Administrators can create a **Technician** account from Users. Technician
 accounts have a separate GPS Integration portal; they can rotate or disable

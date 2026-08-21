@@ -5,11 +5,13 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 
-# The MVD vendor publishes a moving bus fix every 20 seconds and a parked
-# (ignition-off) heartbeat every two minutes. Three missed reports marks the
-# signal stale while still allowing normal delivery jitter.
+# The MVD vendor normally publishes a moving bus fix every 20 seconds and a
+# parked (ignition-off) heartbeat every two minutes. Regardless of the
+# ignition state reported by the vendor, keep the last-known location visible
+# for three minutes before declaring the tracker offline.
 VEHICLE_GPS_IGNITION_ON_INTERVAL_SECONDS = 20
 VEHICLE_GPS_IGNITION_OFF_INTERVAL_SECONDS = 120
+GPS_OFFLINE_GRACE_SECONDS = 180
 
 
 def vehicle_gps_expected_interval_seconds(ignition: bool | None) -> int:
@@ -33,5 +35,5 @@ def vehicle_gps_is_authoritative(state, now: datetime | None = None) -> bool:
         position_time = position_time.replace(tzinfo=timezone.utc)
 
     return position_time >= (now or datetime.now(timezone.utc)) - timedelta(
-        seconds=vehicle_gps_expected_interval_seconds(state.ignition) * 3
+        seconds=GPS_OFFLINE_GRACE_SECONDS
     )

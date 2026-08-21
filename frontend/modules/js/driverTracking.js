@@ -86,7 +86,7 @@ export function render() {
                                 <span id="trackingSourcePill" class="tracking-source-pill">Checking</span>
                             </div>
                             <p id="trackingSourceReason">Vehicle GPS is preferred whenever its ignition-on signal is fresh.</p>
-                            <p class="tracking-source-policy"><i data-lucide="shield-check" aria-hidden="true"></i> Phone tracking is kept off while vehicle GPS is active.</p>
+                            <p class="tracking-source-policy"><i data-lucide="shield-check" aria-hidden="true"></i> Vehicle and phone GPS updates are combined to keep the trip continuous.</p>
                             <button type="button" id="mobileFallbackBtn" class="mobile-fallback-btn" hidden>Start with phone GPS (testing)</button>
                         </div>
 

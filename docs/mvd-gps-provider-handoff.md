@@ -76,9 +76,9 @@ payload format.
 - `422`: payload is malformed or lacks valid latitude/longitude.
 - `429`: retry with backoff; do not burst resend requests.
 
-Fresh valid ignition-on vehicle GPS is the primary source. It automatically
-stops driver-phone tracking for that bus. Mobile location is used only when the
-vehicle feed is unavailable, stale, invalid, or ignition is off.
+Fresh valid vehicle GPS and driver-phone GPS are both recorded for an active
+trip. Either source can keep the map and route progression current if the
+other device temporarily has no reading.
 
 ## Final MVD confirmation checklist
 

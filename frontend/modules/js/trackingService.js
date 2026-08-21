@@ -755,10 +755,16 @@ function applyTrackingSource(source) {
     const vehicleIsPrimary = source.tracking_source === "vehicle_gps";
     const mobileIsActive = source.tracking_source === "mobile";
     const mobileIsReady = source.tracking_source === "mobile_available";
-    activeTrackingSource = vehicleIsPrimary
-        ? "vehicle_gps"
-        : mobileIsActive
-            ? "mobile"
+    // A running trip publishes phone readings even while a vehicle module is
+    // fresh. The backend accepts both sources and applies each report as it
+    // arrives, so neither source silently suppresses the other.
+    const mobilePublishingEnabled = Boolean(
+        tracking && currentTripId && source.mobile_tracking_allowed
+    );
+    activeTrackingSource = mobilePublishingEnabled || mobileIsActive
+        ? "mobile"
+        : vehicleIsPrimary
+            ? "vehicle_gps"
             : "unavailable";
     const card = document.getElementById("trackingSourceCard");
     const button = document.getElementById("mobileFallbackBtn");
@@ -768,23 +774,23 @@ function applyTrackingSource(source) {
         vehicleIsPrimary
             ? "Vehicle GPS (MVD)"
             : mobileIsActive
-                ? "Phone GPS fallback"
+                ? "Phone GPS"
                 : mobileIsReady
                     ? "Phone GPS fallback ready"
                     : "Vehicle GPS offline"
     );
     setText(
         "trackingSourcePill",
-        vehicleIsPrimary ? "PRIMARY" : mobileIsActive ? "FALLBACK" : "WAITING"
+        vehicleIsPrimary ? "LIVE" : mobileIsActive ? "LIVE" : "WAITING"
     );
     setText("trackingSourceReason", source.reason || "Location-source status is unavailable.");
     setText(
         "activeTrackingSource",
-        vehicleIsPrimary ? "🚌 Vehicle GPS" : mobileIsActive ? "📱 Phone GPS fallback" : "⚫ Waiting for GPS"
+        vehicleIsPrimary ? "🚌 Vehicle GPS + phone" : mobileIsActive ? "📱 Phone GPS" : "⚫ Waiting for GPS"
     );
     setText(
         "mapTrackingSource",
-        vehicleIsPrimary ? "🚌 Vehicle GPS" : mobileIsActive ? "📱 Phone GPS fallback" : "⚫ GPS unavailable"
+        vehicleIsPrimary ? "🚌 Vehicle GPS + phone" : mobileIsActive ? "📱 Phone GPS" : "⚫ GPS unavailable"
     );
     document.getElementById("mapTrackingSource")?.classList.toggle("is-vehicle", vehicleIsPrimary);
     if (button) {
@@ -797,7 +803,6 @@ function applyTrackingSource(source) {
 
     if (vehicleIsPrimary) {
         // Refresh the driver map from the latest translated provider position.
-        stopMobileLocationTracking();
         updateVehicleLocation(source.vehicle);
         setText(
             "gpsStatus",
@@ -812,6 +817,9 @@ function applyTrackingSource(source) {
                     ? "🟢 Running · Return journey"
                     : "🟢 Running · Outbound journey"
             );
+        }
+        if (mobilePublishingEnabled && watchId === null) {
+            startLocationTracking();
         }
         return;
     }
@@ -889,6 +897,10 @@ async function startTripUsingVehicleGps() {
         }
         currentTripId = trip.id;
         tracking = true;
+        // Keep the driver's GPS running as a second live source. The module
+        // continues to post independently and the server merges both streams.
+        activeTrackingSource = "mobile";
+        startLocationTracking();
         setText("tripBus", trip.bus_number || (trip.bus_id != null ? `BUS-${String(trip.bus_id).padStart(3, "0")}` : "—"));
         setText("tripRoute", trip.route_name || (trip.route_id != null ? `Route ${trip.route_id}` : "—"));
         setText("tripStatus", "🟢 Running");

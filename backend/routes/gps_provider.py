@@ -41,6 +41,7 @@ from backend.schemas_gps_provider import (
 from backend.security import require_driver, require_gps_technician
 from backend.models import Driver
 from backend.services.vehicle_gps import (
+    GPS_OFFLINE_GRACE_SECONDS,
     vehicle_gps_expected_interval_seconds,
 )
 from backend.routes.gps import update_route_stop_progression
@@ -236,7 +237,7 @@ def _serialize_state(state: BusGPSState, bus: Bus, *, include_raw: bool = False)
     if position_time.tzinfo is None:
         position_time = position_time.replace(tzinfo=timezone.utc)
     age_seconds = max(0, int((now - position_time).total_seconds()))
-    fresh = age_seconds <= expected_interval_seconds * 3
+    fresh = age_seconds <= GPS_OFFLINE_GRACE_SECONDS
     result = {
         "bus_id": bus.id,
         "bus_number": bus.bus_number,
@@ -306,11 +307,10 @@ def _update_active_trip_from_vehicle(db: Session, position: dict[str, Any], bus_
     if trip is None:
         return None
 
-    # A parked/invalid tracker heartbeat is stored in provider history, but it
-    # must not replace the phone while that phone is the active fallback.
-    # The very next fresh ignition-on MVD point *does* take over automatically.
-    vehicle_is_primary = position["ignition"] is True and position["valid"] is not False
-    if trip.current_location_source == "mobile" and not vehicle_is_primary:
+    # Some installed modules do not send an ignition attribute. A valid
+    # coordinate must still progress the active trip even while phone data is
+    # also arriving. Explicitly invalid fixes remain in provider history only.
+    if position["valid"] is False:
         return trip.id
 
     previous_location = db.query(LiveLocation).filter(
@@ -726,10 +726,13 @@ def ingest_positions(
                 else state.fix_time.astimezone(timezone.utc)
             )
         should_apply = (
-            state is None
-            or state_fix_time is None
-            or position["fix_time"] is None
-            or position["fix_time"] >= state_fix_time
+            position["valid"] is not False
+            and (
+                state is None
+                or state_fix_time is None
+                or position["fix_time"] is None
+                or position["fix_time"] >= state_fix_time
+            )
         )
         active_trip_id = None
         if should_apply:
@@ -806,11 +809,11 @@ def get_driver_tracking_source(current_user: User = Depends(require_driver), db:
         and state.valid is not False
     )
     if vehicle_is_primary:
-        return {"tracking_source": "vehicle_gps", "mobile_tracking_allowed": False,
+        return {"tracking_source": "vehicle_gps", "mobile_tracking_allowed": True,
                 "reason": (
-                    "Fresh ignition-on vehicle GPS is being received."
+                    "Vehicle GPS is live; phone GPS is also recorded to keep the trip continuous."
                     if state.ignition is True
-                    else "Fresh parked-vehicle GPS heartbeat is being received."
+                    else "Fresh vehicle GPS is being received; phone GPS is also recorded."
                 ), "vehicle": vehicle,
                 "route_direction": active_trip.route_direction if active_trip else None,
                 "active_trip_id": active_trip.id if active_trip else None}
