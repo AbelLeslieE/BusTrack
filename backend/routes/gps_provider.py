@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.audit import record_audit_event
-from backend.models import APIRequestLog, AuditEvent, Bus, User
+from backend.models import APIRequestLog, AuditEvent, Bus, Driver, Route, User
 from backend.routes.models_tracking import (
     BusGPSState,
     GPSDeviceMapping,
@@ -39,7 +39,6 @@ from backend.schemas_gps_provider import (
     GPSTranslationConfigUpdate,
 )
 from backend.security import require_driver, require_gps_technician
-from backend.models import Driver
 from backend.services.vehicle_gps import (
     GPS_OFFLINE_GRACE_SECONDS,
     vehicle_gps_expected_interval_seconds,
@@ -297,14 +296,77 @@ def _serialize_audit_event(event: AuditEvent) -> dict[str, Any]:
     }
 
 
-def _update_active_trip_from_vehicle(db: Session, position: dict[str, Any], bus_id: int, received_at: datetime) -> int | None:
-    """Mirror vehicle GPS and geofence progression into the active trip."""
+def _ensure_vehicle_tracking_session(
+    db: Session,
+    position: dict[str, Any],
+    bus_id: int,
+    received_at: datetime,
+) -> LiveTrip | None:
+    """Create the GPS-owned tracking session for an assigned moving bus.
+
+    Browser actions must never be required for vehicle tracking.  The driver
+    phone may add a secondary location source later, but a fresh valid module
+    coordinate creates the server-side session and its stop progression.
+    """
 
     trip = db.query(LiveTrip).filter(
         LiveTrip.bus_id == bus_id,
         LiveTrip.status == "Running",
         LiveTrip.ended_at.is_(None),
     ).order_by(LiveTrip.last_location_update.desc(), LiveTrip.started_at.desc()).first()
+    if trip is not None:
+        return trip
+
+    # An ignition-off heartbeat is only a parked last-known position. Do not
+    # create a new journey from it, while providers that omit ignition can
+    # still begin tracking from a valid coordinate.
+    if position.get("valid") is False or position.get("ignition") is False:
+        return None
+
+    route = db.query(Route).filter(
+        Route.bus_id == bus_id,
+        Route.status == "Active",
+    ).order_by(Route.id.asc()).first()
+    if route is None:
+        return None
+
+    # A route assignment is normally authoritative. Keep compatibility with
+    # older bus assignments by falling back to the driver linked to the bus.
+    driver_id = route.driver_id
+    if driver_id is None:
+        driver_id = db.query(Driver.id).filter(Driver.bus_id == bus_id).scalar()
+    if driver_id is None:
+        legacy_bus = db.get(Bus, bus_id)
+        driver_id = legacy_bus.driver_id if legacy_bus is not None else None
+    if driver_id is None or db.get(Driver, driver_id) is None:
+        return None
+
+    route_stops = db.query(RouteStop).filter(
+        RouteStop.route_id == route.id,
+    ).order_by(RouteStop.sequence.asc()).all()
+    started_at = position.get("fix_time") or received_at
+    trip = LiveTrip(
+        driver_id=driver_id,
+        bus_id=bus_id,
+        route_id=route.id,
+        status="Running",
+        route_direction=direction_from_start_position(
+            route_stops,
+            position["latitude"],
+            position["longitude"],
+        ),
+        started_at=started_at,
+        current_location_source="vehicle_gps",
+    )
+    db.add(trip)
+    db.flush()
+    return trip
+
+
+def _update_active_trip_from_vehicle(db: Session, position: dict[str, Any], bus_id: int, received_at: datetime) -> int | None:
+    """Mirror vehicle GPS and geofence progression into its GPS-owned session."""
+
+    trip = _ensure_vehicle_tracking_session(db, position, bus_id, received_at)
     if trip is None:
         return None
 
@@ -826,12 +888,15 @@ def get_driver_tracking_source(current_user: User = Depends(require_driver), db:
                 "route_direction": active_trip.route_direction if active_trip else None,
                 "active_trip_id": active_trip.id if active_trip else None}
     return {
-            "tracking_source": "mobile" if active_trip else "mobile_available",
+            # A running GPS-owned session does not mean the driver has enabled
+            # phone sharing. The browser owns that opt-in, so do not report a
+            # phone source merely because a vehicle session is active.
+            "tracking_source": "vehicle_gps_offline",
             "mobile_tracking_allowed": True,
             "reason": (
-                "Vehicle GPS is unavailable; phone GPS fallback is active."
+                "Vehicle GPS is unavailable; the bus remains on its last known module position."
                 if active_trip
-                else "Vehicle GPS is unavailable; phone GPS fallback is ready."
+                else "Vehicle GPS is unavailable; waiting for the module to report."
             ), "vehicle": vehicle,
             "route_direction": active_trip.route_direction if active_trip else None,
             "active_trip_id": active_trip.id if active_trip else None}

@@ -7,7 +7,7 @@ The currently authenticated user is obtained from the JWT.
 The browser never supplies a student ID for these endpoints.
 """
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -23,6 +23,7 @@ from backend.models import (
     Driver,
     RouteStop,
     Stop,
+    BusPass,
 )
 
 from backend.routes.models_tracking import (
@@ -256,6 +257,117 @@ def get_current_student(
             if stop
             else None
         ),
+    }
+
+
+# ==========================================================
+# CURRENT STUDENT BUS PASS
+# ==========================================================
+
+def _effective_pass_status(bus_pass: BusPass) -> str:
+    """Return the status a student should see without mutating pass history."""
+
+    stored_status = (bus_pass.status or "Pending").strip().title()
+    today = date.today()
+    if stored_status == "Active" and bus_pass.valid_until and bus_pass.valid_until < today:
+        return "Expired"
+    if stored_status == "Active" and bus_pass.valid_from and bus_pass.valid_from > today:
+        return "Pending"
+    return stored_status
+
+
+@router.get("/me/bus-pass")
+def get_current_student_bus_pass(
+    current_user: Annotated[User, Depends(require_user)],
+    db: Session = Depends(get_db),
+):
+    """Return only the authenticated student's pass and authoritative assignment."""
+
+    student = db.query(Student).filter(Student.user_id == current_user.id).first()
+    if student is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Student profile not found.",
+        )
+
+    # This is the same resolution path used by /me and /me/tracking.  A pass
+    # never stores a competing bus or route assignment.
+    route = student.route or (
+        db.query(Route).filter(Route.bus_id == student.bus_id).first()
+        if student.bus_id else None
+    )
+    bus = db.get(Bus, route.bus_id) if route and route.bus_id else (
+        student.bus if route is None else None
+    )
+    stop = student.stop
+    bus_pass = db.query(BusPass).filter(BusPass.student_id == student.id).first()
+
+    effective_status = _effective_pass_status(bus_pass) if bus_pass else None
+    days_until_expiry = (
+        (bus_pass.valid_until - date.today()).days
+        if bus_pass and bus_pass.valid_until else None
+    )
+    alerts = []
+    if (
+        effective_status == "Active"
+        and days_until_expiry is not None
+        and 0 <= days_until_expiry <= 30
+    ):
+        alerts.append({
+            "type": "bus_pass_expiring",
+            "title": "Bus pass expires soon",
+            "message": f"Your bus pass expires in {days_until_expiry} day{'s' if days_until_expiry != 1 else ''}. Please contact the transport office to renew it.",
+            "days_until_expiry": days_until_expiry,
+        })
+    return {
+        "student": {
+            "id": student.id,
+            "name": current_user.full_name,
+            "student_code": student.student_code,
+        },
+        "bus_pass": (
+            {
+                "id": bus_pass.id,
+                "pass_number": bus_pass.pass_number,
+                "status": bus_pass.status,
+                "effective_status": effective_status,
+                "is_valid": effective_status == "Active",
+                "valid_from": bus_pass.valid_from,
+                "valid_until": bus_pass.valid_until,
+                "validity_period": bus_pass.validity_period,
+                "academic_year": bus_pass.academic_year,
+                "issued_at": bus_pass.issued_at,
+                "days_until_expiry": days_until_expiry,
+            }
+            if bus_pass else None
+        ),
+        "alerts": alerts,
+        "transport": {
+            "bus": (
+                {
+                    "id": bus.id,
+                    "bus_number": bus.bus_number,
+                    "registration_number": bus.registration_number,
+                }
+                if bus else None
+            ),
+            "route": (
+                {
+                    "id": route.id,
+                    "route_code": route.route_code,
+                    "route_name": route.route_name,
+                }
+                if route else None
+            ),
+            "boarding_stop": (
+                {
+                    "id": stop.id,
+                    "stop_code": stop.stop_code,
+                    "stop_name": stop.stop_name,
+                }
+                if stop else None
+            ),
+        },
     }
 # ==========================================================
 # CURRENT STUDENT LIVE TRACKING

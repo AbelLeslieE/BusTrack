@@ -15,21 +15,15 @@ import { logoutSession } from "/static/common/auth.js";
 const studentItems = [
 
     [
-        "studentDashboard",
-        "Dashboard",
-        "⌂"
-    ],
-
-    [
-        "myBuses",
-        "My Buses",
-        "▣"
-    ],
-
-    [
         "studentTracking",
         "Live Tracking",
         "◎"
+    ],
+
+    [
+        "busPass",
+        "Bus Pass",
+        "▤"
     ],
 
     [
@@ -122,7 +116,7 @@ export function createStudentSidebar(
 
             <a
                 class="brand"
-                href="#studentDashboard">
+                href="#studentTracking">
 
                 <span class="brand-mark">
                     🚌

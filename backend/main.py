@@ -10,7 +10,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from backend.routes.driver import router as driver_router
 import backend.models 
@@ -38,6 +38,7 @@ from backend.routes.settings import router as settings_router
 from backend.routes.active_users import router as active_users_router
 from backend.routes.trip_history import router as trip_history_router
 from backend.routes.admin import router as admin_router
+from backend.routes.bus_passes import router as bus_pass_router
 from backend.security import RequestSecurityMiddleware
 from backend.request_audit import RequestAuditMiddleware
 from backend.utils.jwt_handler import validate_security_configuration
@@ -163,6 +164,7 @@ app.include_router(settings_router)
 app.include_router(active_users_router)
 app.include_router(trip_history_router)
 app.include_router(admin_router)
+app.include_router(bus_pass_router)
 
 
 
@@ -182,3 +184,12 @@ async def dashboard_page() -> FileResponse:
     """Return the protected SPA host; feature modules are loaded by the client router."""
 
     return FileResponse(FRONTEND_DIR / "dashboard.html")
+
+
+@app.get("/student", include_in_schema=False)
+@app.get("/student/dashboard", include_in_schema=False)
+@app.get("/student/live-tracking", include_in_schema=False)
+async def student_live_tracking_redirect() -> RedirectResponse:
+    """Keep historic student links working after Live Tracking became home."""
+
+    return RedirectResponse(url="/dashboard#studentTracking", status_code=307)

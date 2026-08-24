@@ -239,7 +239,7 @@ form?.addEventListener("submit", async (event) => {
         case ROLE_USER:
 
             window.location.assign(
-                "/dashboard#studentDashboard"
+                "/dashboard#studentTracking"
             );
 
             break;

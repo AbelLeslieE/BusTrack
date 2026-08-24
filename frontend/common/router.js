@@ -92,6 +92,11 @@ const adminModules = {
         load: () => import("../modules/js/students.js")
     },
 
+    busPasses: {
+        title: "Bus Passes",
+        load: () => import("../modules/js/busPasses.js")
+    },
+
     users: {
         title: "Users",
         load: () => import("../modules/js/users.js")
@@ -172,20 +177,14 @@ const driverModules = {
 // ==========================================================
 
 const studentModules = {
-
-    studentDashboard: {
-        title: "Where Is My Bus?",
-        load: () => import("../modules/js/studentDashboard.js")
-    },
-
-    myBuses: {
-        title: "My Buses",
-        load: () => import("../modules/js/studentBuses.js")
-    },
-
     studentTracking: {
         title: "Live Tracking",
         load: () => import("../modules/js/studentTracking.js")
+    },
+
+    busPass: {
+        title: "Bus Pass",
+        load: () => import("../modules/js/busPass.js")
     },
 
     notifications: {
@@ -540,7 +539,7 @@ export async function loadModule(requestedRoute) {
         isDriver
             ? "driverDashboard"
             : isStudent
-                ? "studentDashboard"
+                ? "studentTracking"
                 : isTechnician
                     ? "technicianDashboard"
                 : "dashboard";
@@ -670,7 +669,7 @@ window.addEventListener(
             isDriver
                 ? "driverDashboard"
                 : isStudent
-                    ? "studentDashboard"
+                    ? "studentTracking"
                     : isTechnician
                         ? "technicianDashboard"
                     : "dashboard";

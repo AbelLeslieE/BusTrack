@@ -23,8 +23,12 @@ switch (role) {
         moduleName = "driverDashboard";
         break;
     case ROLE_USER:
-        if (!window.location.hash) window.location.hash = "studentDashboard";
-        moduleName = "studentDashboard";
+        // The student dashboard was retired.  Bookmarked dashboard hashes are
+        // normalised before the shell is created so Live Tracking is active.
+        if (!window.location.hash || window.location.hash === "#studentDashboard") {
+            window.location.hash = "studentTracking";
+        }
+        moduleName = window.location.hash.slice(1);
         break;
     case ROLE_TECHNICIAN:
         if (!window.location.hash) window.location.hash = "technicianDashboard";

@@ -3,7 +3,7 @@
 TODO: Add fleet, route, student, and tracking models through versioned migrations.
 """
 
-from datetime import datetime, timezone, time
+from datetime import date, datetime, timezone, time
 
 from sqlalchemy import (
     Boolean,
@@ -526,9 +526,79 @@ class Student(Base):
         lazy="joined",
     )
 
+    bus_pass = relationship(
+        "BusPass",
+        back_populates="student",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
     # ======================================================
     # AUDIT
     # ======================================================
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+
+# ==========================================================
+# BUS PASS MODEL
+# ==========================================================
+
+class BusPass(Base):
+    """A student's issued transport pass.
+
+    Transport assignments deliberately remain on ``Student``.  Keeping this
+    record limited to pass-specific fields means the pass, live tracking, and
+    the Students workspace always resolve the same route, bus, and stop.
+    """
+
+    __tablename__ = "bus_passes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    student_id: Mapped[int] = mapped_column(
+        ForeignKey("students.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+
+    pass_number: Mapped[str] = mapped_column(
+        String(40),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(20),
+        default="Pending",
+        nullable=False,
+        index=True,
+    )
+
+    valid_from: Mapped[date | None] = mapped_column(Date, nullable=True)
+    valid_until: Mapped[date | None] = mapped_column(Date, nullable=True)
+    validity_period: Mapped[str] = mapped_column(
+        String(20),
+        default="One Year",
+        nullable=False,
+    )
+    academic_year: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    issued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    student = relationship("Student", back_populates="bus_pass", lazy="joined")
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

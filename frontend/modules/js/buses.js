@@ -121,33 +121,6 @@ const elements = {
 
 
 /* =============================================================================
-   ICONS
-============================================================================= */
-
-const icons = {
-
-    bus: "🚌",
-
-    active: "🟢",
-
-    maintenance: "🟠",
-
-    inactive: "🔴",
-
-    refresh: "↻",
-
-    search: "🔍",
-
-    add: "+",
-
-    edit: "✏",
-
-    delete: "🗑",
-
-    view: "👁"
-
-};
-/* =============================================================================
    API FUNCTIONS
 ============================================================================= */
 
@@ -428,10 +401,8 @@ function renderStatistics() {
 
                 </div>
 
-                <div class="stat-icon blue">
-
-                    🚌
-
+                <div class="stat-icon blue" aria-hidden="true">
+                    <i class="fa-solid fa-bus-simple"></i>
                 </div>
 
             </article>
@@ -469,10 +440,8 @@ function renderStatistics() {
 
                 </div>
 
-                <div class="stat-icon green">
-
-                    🟢
-
+                <div class="stat-icon green" aria-hidden="true">
+                    <i class="fa-solid fa-circle-check"></i>
                 </div>
 
             </article>
@@ -510,10 +479,8 @@ function renderStatistics() {
 
                 </div>
 
-                <div class="stat-icon orange">
-
-                    🛠
-
+                <div class="stat-icon orange" aria-hidden="true">
+                    <i class="fa-solid fa-screwdriver-wrench"></i>
                 </div>
 
             </article>
@@ -551,10 +518,8 @@ function renderStatistics() {
 
                 </div>
 
-                <div class="stat-icon red">
-
-                    ⛔
-
+                <div class="stat-icon red" aria-hidden="true">
+                    <i class="fa-solid fa-ban"></i>
                 </div>
 
             </article>
@@ -734,10 +699,8 @@ function renderTableRows() {
 
                 <div class="bus-info">
 
-                    <div class="bus-avatar">
-
-                        🚌
-
+                    <div class="bus-avatar" aria-hidden="true">
+                        <i class="fa-solid fa-bus-simple"></i>
                     </div>
 
                     <div>
@@ -799,12 +762,8 @@ function renderTableRows() {
                         data-id="${bus.id}"
 
                         title="View Bus"
-
-                    >
-
-                        👁
-
-                    </button>
+                        aria-label="View ${escapeHtml(bus.bus_number)}"
+                    ><i class="fa-solid fa-eye" aria-hidden="true"></i></button>
 
                     <button
 
@@ -813,12 +772,8 @@ function renderTableRows() {
                         data-id="${bus.id}"
 
                         title="Edit Bus"
-
-                    >
-
-                        ✏
-
-                    </button>
+                        aria-label="Edit ${escapeHtml(bus.bus_number)}"
+                    ><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i></button>
 
                     <button
 
@@ -827,12 +782,8 @@ function renderTableRows() {
                         data-id="${bus.id}"
 
                         title="Delete Bus"
-
-                    >
-
-                        🗑
-
-                    </button>
+                        aria-label="Delete ${escapeHtml(bus.bus_number)}"
+                    ><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button>
 
                 </div>
 
@@ -872,10 +823,8 @@ function renderEmptyState() {
 
                 <div class="empty-state">
 
-                    <div class="empty-icon">
-
-                        🚌
-
+                    <div class="empty-icon" aria-hidden="true">
+                        <i class="fa-solid fa-bus-simple"></i>
                     </div>
 
                     <h3>

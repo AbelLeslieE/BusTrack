@@ -12,6 +12,8 @@ import {
 
     reverseRouteDirection,
 
+    sendDriverFeedback,
+
     loadCurrentTrip,
 
     cleanupTracking,
@@ -49,7 +51,7 @@ export function render() {
 
                 <p class="tracking-subtitle">
 
-                    Start your assigned trip and share your live location.
+                    Vehicle GPS tracks the bus automatically. Enable phone GPS only when you want to share the driver's location too.
 
                 </p>
 
@@ -106,7 +108,7 @@ export function render() {
 
                         <div class="tracking-row">
 
-                            <span>Current Bus</span>
+                            <span>Tracked Bus</span>
 
                             <strong id="tripBus">
                                 --
@@ -116,7 +118,7 @@ export function render() {
 
                         <div class="tracking-row">
 
-                            <span>Current Route</span>
+                            <span>Assigned Route</span>
 
                             <strong id="tripRoute">
                                 --
@@ -126,7 +128,7 @@ export function render() {
 
                         <div class="tracking-row">
 
-                            <span>GPS</span>
+                            <span>Location Source</span>
 
                             <strong id="gpsStatus">
 
@@ -138,7 +140,7 @@ export function render() {
 
                         <div class="tracking-row tracking-active-source-row">
 
-                            <span>Tracked by</span>
+                            <span>Active Tracking</span>
 
                             <strong id="activeTrackingSource">
 
@@ -158,7 +160,7 @@ export function render() {
 
                         <div class="tracking-row">
 
-                            <span>Last Update</span>
+                            <span>Module Update</span>
 
                             <strong id="lastUpdate">
 
@@ -178,7 +180,7 @@ export function render() {
 
                             <i data-lucide="play"></i>
 
-                            <span>Start Trip</span>
+                            <span>Enable Mobile GPS</span>
 
                         </button>
 
@@ -189,7 +191,7 @@ export function render() {
 
                             <i data-lucide="square"></i>
 
-                            <span>Stop Trip</span>
+                            <span>Disable Mobile GPS</span>
 
                         </button>
 
@@ -207,6 +209,30 @@ export function render() {
                     </div>
 
                 </div>
+
+                <section class="tracking-card glass-panel driver-feedback-card" aria-labelledby="driverFeedbackHeading">
+
+                    <div class="feedback-heading">
+                        <div>
+                            <p class="tracking-title">SAFETY &amp; OPERATIONS</p>
+                            <h3 id="driverFeedbackHeading">Send feedback</h3>
+                        </div>
+                        <span id="feedbackStatus" class="feedback-status" role="status" aria-live="polite"></span>
+                    </div>
+
+                    <p class="feedback-help">Send an immediate alert to the transport admin. Your assigned bus and route are included automatically.</p>
+
+                    <label class="feedback-message-label" for="driverFeedbackMessage">Optional details</label>
+                    <textarea id="driverFeedbackMessage" rows="3" maxlength="500" placeholder="Add location, delay details, or assistance needed…"></textarea>
+
+                    <div class="feedback-actions" role="group" aria-label="Send operational feedback">
+                        <button type="button" class="feedback-button feedback-high" data-feedback-type="traffic"><i data-lucide="traffic-cone" aria-hidden="true"></i>Traffic</button>
+                        <button type="button" class="feedback-button feedback-medium" data-feedback-type="delay"><i data-lucide="clock-3" aria-hidden="true"></i>Delay</button>
+                        <button type="button" class="feedback-button feedback-critical" data-feedback-type="breakdown"><i data-lucide="wrench" aria-hidden="true"></i>Breakdown</button>
+                        <button type="button" class="feedback-button feedback-critical" data-feedback-type="medical"><i data-lucide="heart-pulse" aria-hidden="true"></i>Emergency</button>
+                    </div>
+
+                </section>
 
 
                 <div class="tracking-card glass-panel">
@@ -338,6 +364,34 @@ export function render() {
         if (reverseButton) {
             reverseButton.addEventListener("click", reverseRouteDirection);
         }
+
+        const feedbackButtons = page.querySelectorAll("[data-feedback-type]");
+        const feedbackStatus = page.querySelector("#feedbackStatus");
+        const feedbackMessage = page.querySelector("#driverFeedbackMessage");
+
+        feedbackButtons.forEach(button => {
+            button.addEventListener("click", async () => {
+                const feedbackType = button.dataset.feedbackType;
+                feedbackButtons.forEach(item => { item.disabled = true; });
+                feedbackStatus.textContent = "Sending alert…";
+                feedbackStatus.className = "feedback-status";
+
+                try {
+                    const result = await sendDriverFeedback(
+                        feedbackType,
+                        feedbackMessage?.value || "",
+                    );
+                    if (feedbackMessage) feedbackMessage.value = "";
+                    feedbackStatus.textContent = result.message || "Alert sent to the admin team.";
+                    feedbackStatus.className = "feedback-status is-success";
+                } catch (error) {
+                    feedbackStatus.textContent = error.message || "Unable to send alert.";
+                    feedbackStatus.className = "feedback-status is-error";
+                } finally {
+                    feedbackButtons.forEach(item => { item.disabled = false; });
+                }
+            });
+        });
 
     }, 100);
 

@@ -1,0 +1,26 @@
+@import url("/static/modules/css/portalPages.css");
+
+.bus-pass-layout { display: grid; grid-template-columns: minmax(0, .95fr) minmax(340px, 1.05fr); gap: 24px; align-items: stretch; }
+.digital-bus-pass { position: relative; overflow: hidden; min-height: 420px; padding: 29px; border: 1px solid rgba(175, 232, 255, .32); border-radius: 25px; background: linear-gradient(138deg, #092d59 0%, #155c8e 48%, #523d9f 110%); box-shadow: 0 28px 55px rgba(0, 9, 31, .36), inset 0 1px rgba(255,255,255,.22); color: #eff9ff; }
+.digital-bus-pass::after { position: absolute; right: -115px; bottom: -125px; width: 330px; height: 330px; border: 1px solid rgba(203,245,255,.2); border-radius: 50%; box-shadow: 0 0 0 40px rgba(170,230,255,.05), 0 0 0 82px rgba(170,230,255,.04); content: ""; pointer-events: none; }
+.digital-bus-pass.status-expired { background: linear-gradient(138deg, #452f45, #6b3847 55%, #874844 110%); }
+.digital-bus-pass.status-suspended { background: linear-gradient(138deg, #51351e, #7a4d21 55%, #825a27 110%); }
+.bus-pass-card-top,.bus-pass-person,.bus-pass-validity { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.bus-pass-card-top p,.bus-pass-card-top strong,.bus-pass-person p { margin: 0; }
+.bus-pass-card-top p { color: rgba(231,249,255,.75); font-size: .67rem; font-weight: 800; letter-spacing: .17em; }
+.bus-pass-card-top strong { display: block; margin-top: 5px; font-size: 1.35rem; letter-spacing: -.03em; }
+.bus-pass-chip { width: 46px; height: 34px; border: 1px solid rgba(255,235,180,.58); border-radius: 8px; background: repeating-linear-gradient(90deg, rgba(255,241,191,.76) 0 2px, transparent 2px 11px), linear-gradient(135deg, #d4a936, #ffe192); box-shadow: inset 0 0 0 1px rgba(121,80,15,.24); }
+.bus-pass-person { justify-content: flex-start; margin: 43px 0 28px; }
+.bus-pass-avatar { display: grid; flex: 0 0 68px; width: 68px; height: 68px; place-items: center; border: 1px solid rgba(241,255,255,.48); border-radius: 21px; background: linear-gradient(135deg, rgba(222,249,255,.45), rgba(183,190,255,.34)); box-shadow: inset 0 1px rgba(255,255,255,.45); color: white; font-size: 1.65rem; font-weight: 800; }
+.bus-pass-person h2 { max-width: 260px; margin: 0; overflow-wrap: anywhere; font-size: clamp(1.35rem, 3vw, 1.85rem); line-height: 1.05; }
+.bus-pass-person p { margin-top: 7px; color: rgba(230,246,255,.79); font-size: .86rem; }
+.bus-pass-card-details { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; border-top: 1px solid rgba(234,252,255,.23); }
+.bus-pass-card-details div { min-width: 0; padding: 17px 13px 13px 0; }
+.bus-pass-card-details div:nth-child(even) { padding-left: 13px; border-left: 1px solid rgba(234,252,255,.16); }
+.bus-pass-card-details dt,.bus-pass-validity span { color: rgba(232,249,255,.68); font-size: .64rem; font-weight: 800; letter-spacing: .12em; }
+.bus-pass-card-details dd { margin: 7px 0 0; overflow-wrap: anywhere; color: #fff; font-size: .94rem; font-weight: 700; }
+.bus-pass-validity { margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(234,252,255,.23); }
+.bus-pass-validity div { display: grid; gap: 6px; }.bus-pass-validity strong { font-size: 1.05rem; }.bus-pass-status { padding: 8px 10px; border: 1px solid rgba(226,255,239,.48); border-radius: 9px; background: rgba(70,205,134,.2); color: #effff4 !important; }.status-expired .bus-pass-status,.status-suspended .bus-pass-status { border-color: rgba(255,220,211,.47); background: rgba(186,68,51,.27); }
+.bus-pass-details { display: flex; flex-direction: column; justify-content: center; }.bus-pass-details .portal-details { margin-top: 24px; }.bus-pass-expiry-alert,.bus-pass-assignment-notice { margin: 18px 0 0; padding: 12px 14px; border-radius: 12px; font-weight: 700; line-height: 1.45; }.bus-pass-expiry-alert { border: 1px solid rgba(255, 210, 126, .3); background: rgba(166, 103, 22, .16); color: #ffe1a2; }.bus-pass-expiry-alert i { margin-right: 8px; }.bus-pass-assignment-notice { border: 1px solid rgba(255, 210, 126, .3); background: rgba(166, 103, 22, .16); color: #ffe1a2; }.bus-pass-empty { display: flex; align-items: center; gap: 18px; }.bus-pass-empty > i { color: var(--portal-cyan); font-size: 2rem; }.bus-pass-empty h2 { margin: 0 0 7px; }.bus-pass-empty p { margin: 0; }
+@media (max-width: 980px) { .bus-pass-layout { grid-template-columns: 1fr; }.digital-bus-pass { min-height: 0; } }
+@media (max-width: 520px) { .digital-bus-pass { padding: 22px; border-radius: 21px; }.bus-pass-person { margin: 32px 0 21px; }.bus-pass-card-details { grid-template-columns: 1fr; }.bus-pass-card-details div,.bus-pass-card-details div:nth-child(even) { padding: 13px 0; border-right: 0; border-left: 0; border-bottom: 1px solid rgba(234,252,255,.14); }.bus-pass-validity { align-items: flex-start; flex-direction: column; } }

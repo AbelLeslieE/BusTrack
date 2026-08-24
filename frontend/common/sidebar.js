@@ -18,6 +18,7 @@ const primaryItems = [
 const managementItems = [
   ["drivers", "Drivers", "◒"],
   ["students", "Students", "◉"],
+  ["busPasses", "Bus Passes", "▤"],
   ["users", "Users", "♙"],
   ["activeUsers", "Active users", "◉"],
   ["notifications", "Notifications", "♧"],

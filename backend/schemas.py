@@ -155,6 +155,27 @@ class StudentAssignmentUpdate(BaseModel):
     stop_id: int | None = None
 
 
+class BusPassIssue(BaseModel):
+    """Admin-only request for issuing a student's first transport pass."""
+
+    student_id: int
+    valid_from: date
+    valid_until: date | None = None
+    validity_period: Literal["One Day", "One Year", "Two Semesters", "Custom Dates"] = "One Year"
+    academic_year: str | None = Field(default=None, max_length=30)
+    status: Literal["Active", "Pending"] = "Active"
+
+
+class BusPassUpdate(BaseModel):
+    """Admin-only pass renewal or status change request."""
+
+    valid_from: date | None = None
+    valid_until: date | None = None
+    validity_period: Literal["One Day", "One Year", "Two Semesters", "Custom Dates"] | None = None
+    academic_year: str | None = Field(default=None, max_length=30)
+    status: Literal["Active", "Pending", "Suspended"]
+
+
 class UserListResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)

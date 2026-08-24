@@ -22,6 +22,10 @@ let watchId = null;
 
 let tracking = false;
 
+// Phone sharing is independent from the GPS-module tracking session. Turning
+// it on or off must never start or stop the bus's server-side tracking.
+let mobileTrackingEnabled = false;
+
 let trackingAccessToken = null;
 
 // The persisted direction belongs to the live trip, not the route itself.
@@ -228,30 +232,36 @@ export function updateMarker(latitude, longitude, label = "Current Bus") {
 
 export async function startTrip() {
 
-    if (tracking) return;
-
-    // Ask once from the driver's button click, when browsers are permitted to
-    // show a location prompt. No phone coordinate is sent while MVD is live;
-    // this merely makes an automatic outage fallback possible later.
-    prepareMobileFallbackPermission();
+    if (mobileTrackingEnabled) return;
 
     try {
         const source = await refreshTrackingSource();
-        if (source.tracking_source === "vehicle_gps") {
-            await startTripUsingVehicleGps();
-            return;
+        if (!source.active_trip_id) {
+            throw new Error("Waiting for the vehicle GPS module to begin tracking this bus.");
         }
 
-        if (source.mobile_tracking_allowed) {
-            await startTripUsingMobileGpsFallback();
-            return;
-        }
+        // The vehicle module creates the session. Enabling phone GPS only
+        // attaches an additional location source to that existing session.
+        currentTripId = source.active_trip_id;
+        tracking = true;
+        trackingAccessToken = localStorage.getItem("bus_tracker_access_token");
+        updateDirectionControls(source.route_direction || "forward");
 
-        setText("gpsStatus", "Waiting for a GPS source");
-        alert("Neither vehicle GPS nor the approved phone fallback is available.");
+        const initialPosition = await requestLocationPermission();
+        mobileTrackingEnabled = true;
+        activeTrackingSource = "mobile";
+        previousGpsSample = null;
+        startLocationTracking();
+        onLocationSuccess(initialPosition);
+
+        setText("gpsStatus", "Phone GPS sharing enabled");
+        const startButton = document.getElementById("startTripBtn");
+        const stopButton = document.getElementById("stopTripBtn");
+        if (startButton) startButton.disabled = true;
+        if (stopButton) stopButton.disabled = false;
     } catch (error) {
-        console.error("Unable to start trip:", error);
-        setText("gpsStatus", "Unable to read GPS source");
+        console.error("Unable to enable phone GPS:", error);
+        setText("gpsStatus", "Phone GPS unavailable");
         alert(error.message);
     }
 }
@@ -579,99 +589,23 @@ async function startTripUsingMobileGpsFallback() {
 
 export async function stopTrip() {
 
-    if (!tracking || !currentTripId) return;
+    if (!mobileTrackingEnabled) return;
 
-    try {
+    mobileTrackingEnabled = false;
+    stopMobileLocationTracking();
+    pendingLocation = null;
+    lastServerUpdateTime = 0;
+    activeTrackingSource = "vehicle_gps";
 
-        const token = localStorage.getItem(
-            "bus_tracker_access_token"
-        );
+    setText("gpsStatus", "Phone GPS sharing paused · vehicle GPS continues");
+    const startButton = document.getElementById("startTripBtn");
+    const stopButton = document.getElementById("stopTripBtn");
+    if (startButton) startButton.disabled = false;
+    if (stopButton) stopButton.disabled = true;
 
-
-
-        const response = await fetch(
-
-            "/api/gps/stop",
-
-            {
-
-                method: "POST",
-
-                headers: {
-
-                    "Authorization": `Bearer ${token}`,
-
-                    "Content-Type": "application/json"
-
-                },
-
-                body: JSON.stringify({
-
-                    trip_id: currentTripId
-
-                })
-
-            }
-
-        );
-
-        if (!response.ok) {
-
-            const error = await response.json();
-
-            throw new Error(error.detail);
-
-        }
-
-        // Stop browser GPS
-
-        if (watchId !== null) {
-
-            navigator.geolocation.clearWatch(watchId);
-
-            watchId = null;
-
-        }
-        // Remove the bus marker when the trip ends.
-        if (marker && map) {
-
-            map.removeLayer(marker);
-
-            marker = null;
-
-        }
-
-        tracking = false;
-
-        currentTripId = null;
-
-        trackingAccessToken = null;
-
-        lastServerUpdateTime = 0;
-        previousGpsSample = null;
-        updateDirectionControls("forward");
-
-        document.getElementById("tripStatus").textContent =
-            "⚫ Ready";
-
-        document.getElementById("gpsStatus").textContent =
-            "Stopped";
-
-        document.getElementById("startTripBtn").disabled = false;
-
-        document.getElementById("stopTripBtn").disabled = true;
-
-        console.log("Trip Stopped");
-
-    }
-
-    catch (error) {
-
-        console.error(error);
-
-        alert(error.message);
-
-    }
+    // The map, current bus, route direction, and stop progression remain
+    // owned by the installed vehicle GPS after phone sharing is disabled.
+    void refreshTrackingSource().catch(() => {});
 
 }
 
@@ -732,6 +666,7 @@ function stopMobileLocationTracking() {
 
 function completeTripInDriverUi() {
     stopMobileLocationTracking();
+    mobileTrackingEnabled = false;
 
     if (marker && map) {
         map.removeLayer(marker);
@@ -756,6 +691,7 @@ function completeTripInDriverUi() {
 
 function stopTripBecauseAdminEndedIt() {
     stopMobileLocationTracking();
+    mobileTrackingEnabled = false;
 
     if (marker && map) {
         map.removeLayer(marker);
@@ -789,6 +725,16 @@ function updateVehicleLocation(vehicle) {
 
 function applyTrackingSource(source) {
     if (!source) return;
+
+    // A GPS module may begin reporting after the driver portal has already
+    // opened. Adopt that server-created session immediately; no driver button
+    // click is needed for the live map or direction controls to work.
+    if (!tracking && source.active_trip_id) {
+        currentTripId = source.active_trip_id;
+        tracking = true;
+        updateDirectionControls(source.route_direction || "forward");
+        setText("tripStatus", `🟢 Running · ${directionLabel()}`);
+    }
 
     // Admin stop/cancel actions end the server trip. Stop the local phone
     // watcher too, so it cannot continue posting a location after that.
@@ -827,9 +773,12 @@ function applyTrackingSource(source) {
     // fresh. The backend accepts both sources and applies each report as it
     // arrives, so neither source silently suppresses the other.
     const mobilePublishingEnabled = Boolean(
-        tracking && currentTripId && source.mobile_tracking_allowed
+        mobileTrackingEnabled
+        && tracking
+        && currentTripId
+        && source.mobile_tracking_allowed
     );
-    activeTrackingSource = mobilePublishingEnabled || mobileIsActive
+    activeTrackingSource = mobilePublishingEnabled || (mobileIsActive && mobileTrackingEnabled)
         ? "mobile"
         : vehicleIsPrimary
             ? "vehicle_gps"
@@ -854,19 +803,23 @@ function applyTrackingSource(source) {
     setText("trackingSourceReason", source.reason || "Location-source status is unavailable.");
     setText(
         "activeTrackingSource",
-        vehicleIsPrimary
+        vehicleIsPrimary && mobilePublishingEnabled
             ? "🚌 Vehicle GPS + phone"
+            : vehicleIsPrimary
+                ? "🚌 Vehicle GPS"
             : source.vehicle?.ignition === false
                 ? "🚌 Vehicle GPS · ignition off"
-                : mobileIsActive ? "📱 Phone GPS" : "⚫ Waiting for GPS"
+                : mobileIsActive && mobileTrackingEnabled ? "📱 Phone GPS" : "⚫ Waiting for vehicle GPS"
     );
     setText(
         "mapTrackingSource",
-        vehicleIsPrimary
+        vehicleIsPrimary && mobilePublishingEnabled
             ? "🚌 Vehicle GPS + phone"
+            : vehicleIsPrimary
+                ? "🚌 Vehicle GPS"
             : source.vehicle?.ignition === false
                 ? "🚌 Vehicle GPS · ignition off"
-                : mobileIsActive ? "📱 Phone GPS" : "⚫ GPS unavailable"
+                : mobilePublishingEnabled ? "📱 Phone GPS" : "⚫ GPS unavailable"
     );
     document.getElementById("mapTrackingSource")?.classList.toggle("is-vehicle", vehicleIsPrimary);
     // An ignition-off MVD heartbeat is still a timestamped last-known point.
@@ -874,13 +827,7 @@ function applyTrackingSource(source) {
     if (hasVehiclePosition && !vehicleIsPrimary) {
         updateVehicleLocation(source.vehicle);
     }
-    if (button) {
-        const canStartPhoneTest = mobileIsReady
-            && source.mobile_tracking_allowed
-            && !tracking;
-        button.hidden = !canStartPhoneTest;
-        button.disabled = !canStartPhoneTest;
-    }
+    if (button) button.hidden = true;
 
     if (vehicleIsPrimary) {
         // Refresh the driver map from the latest translated provider position.
@@ -900,17 +847,17 @@ function applyTrackingSource(source) {
         return;
     }
 
-    if (mobileIsActive) {
+    if (mobilePublishingEnabled) {
         setText(
             "gpsStatus",
             source.vehicle?.ignition === false
                 ? "Vehicle GPS · ignition off · last known position"
-                : "Phone GPS fallback · waiting for MVD recovery"
+                : "Phone GPS sharing · waiting for vehicle GPS"
         );
         // Once browser permission has been granted, this begins automatically
         // whenever the fresh MVD signal disappears. Do not recreate the
         // watcher on every two-second source poll.
-        if (tracking && currentTripId && watchId === null) {
+        if (mobilePublishingEnabled && watchId === null) {
             startLocationTracking();
         }
         return;
@@ -934,9 +881,6 @@ async function refreshTrackingSource() {
 export function initializeTrackingSource() {
     const fallbackButton = document.getElementById("mobileFallbackBtn");
     if (fallbackButton) fallbackButton.hidden = true;
-    fallbackButton?.addEventListener("click", () => {
-        void startTripUsingMobileGpsFallback();
-    });
     void refreshTrackingSource().catch(error => setText("trackingSourceReason", error.message));
     if (sourcePollTimer !== null) window.clearInterval(sourcePollTimer);
     sourcePollTimer = window.setInterval(() => {
@@ -983,6 +927,36 @@ export async function reverseRouteDirection() {
     } finally {
         updateDirectionControls(currentRouteDirection);
     }
+}
+
+/**
+ * Raise a driver-facing operational alert. The server attaches the active
+ * trip or the driver's current assignment, so the management portal receives
+ * the bus and route context without the driver having to enter it.
+ */
+export async function sendDriverFeedback(feedbackType, message = "") {
+    const token = trackingAccessToken || localStorage.getItem("bus_tracker_access_token");
+    const response = await fetch("/api/notifications/feedback", {
+        method: "POST",
+        headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json",
+        },
+        credentials: "same-origin",
+        body: JSON.stringify({
+            feedback_type: feedbackType,
+            message: message.trim() || null,
+        }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        throw new Error(
+            typeof result.detail === "string"
+                ? result.detail
+                : "Unable to send feedback to the admin team."
+        );
+    }
+    return result;
 }
 
 async function startTripUsingVehicleGps() {
@@ -1746,13 +1720,13 @@ export async function loadCurrentTrip() {
 
         if (startButton) {
 
-            startButton.disabled = true;
+            startButton.disabled = mobileTrackingEnabled;
 
         }
 
         if (stopButton) {
 
-            stopButton.disabled = false;
+            stopButton.disabled = !mobileTrackingEnabled;
 
         }
 
@@ -1970,6 +1944,8 @@ export function cleanupTracking() {
     ====================================================== */
 
     tracking = false;
+
+    mobileTrackingEnabled = false;
 
     currentTripId = null;
 

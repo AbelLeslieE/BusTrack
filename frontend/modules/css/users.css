@@ -656,6 +656,13 @@
 
 }
 
+.stat-icon i{
+
+    font-size:25px;
+
+    line-height:1;
+}
+
 
 .stat-card:hover .stat-icon{
 
@@ -1269,6 +1276,28 @@
 
     transition:.28s;
 
+}
+
+.table-action-btn i{
+
+    font-size:15px;
+
+    line-height:1;
+}
+
+.view-user i{
+
+    color:#9bdcff;
+}
+
+.edit-user i{
+
+    color:#bdb0ff;
+}
+
+.delete-user i{
+
+    color:#ffadb6;
 }
 
 

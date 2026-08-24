@@ -658,7 +658,7 @@ def update_route_stop_progression(
 
     return None
 # ==========================================================
-# START TRIP
+# ENABLE MOBILE GPS
 # ==========================================================
 
 @router.post(
@@ -709,175 +709,26 @@ def start_trip(
             detail="No bus assigned.",
         )
 
-    # ------------------------------------------------------
-    # Find Assigned Route
-    # ------------------------------------------------------
-
-    route = (
-        db.query(Route)
-        .filter(
-            Route.driver_id == driver.id
-        )
-        .first()
-    )
-
-    if route is None:
-
-        raise HTTPException(
-            status_code=400,
-            detail="No route assigned.",
-        )
-
-    # ------------------------------------------------------
-    # Check if driver already has an active trip
-    # ------------------------------------------------------
-
-    running = (
+    # Vehicle GPS owns the live session. This endpoint is retained for
+    # compatible clients, but it now only returns the GPS-created session to
+    # which the driver may attach mobile location sharing.
+    trip = (
         db.query(LiveTrip)
         .filter(
             LiveTrip.driver_id == driver.id,
+            LiveTrip.bus_id == driver.bus_id,
+            LiveTrip.status == "Running",
             LiveTrip.ended_at.is_(None),
         )
+        .order_by(LiveTrip.last_location_update.desc(), LiveTrip.started_at.desc())
         .first()
     )
-
-    if running:
-
+    if trip is None:
         raise HTTPException(
-            status_code=400,
-            detail="Trip already running.",
+            status_code=409,
+            detail="Vehicle GPS tracking has not started for this bus yet.",
         )
-
-    route_stops = (
-        db.query(RouteStop)
-        .filter(RouteStop.route_id == route.id)
-        .order_by(RouteStop.sequence.asc())
-        .all()
-    )
-    vehicle_state = (
-        db.query(BusGPSState)
-        .filter(BusGPSState.bus_id == driver.bus_id)
-        .first()
-    )
-    # The installed MVD device is always preferred. A driver phone may start
-    # a trip only while that device is missing, stale, invalid, or ignition
-    # off. This is the same source arbitration used by /update below.
-    vehicle_is_primary = vehicle_gps_is_authoritative(vehicle_state)
-    if vehicle_is_primary:
-        start_latitude = vehicle_state.latitude
-        start_longitude = vehicle_state.longitude
-        start_speed = vehicle_state.speed_kmh
-        start_accuracy = vehicle_state.accuracy
-        start_timestamp = vehicle_state.received_at
-        start_source = "vehicle_gps"
-    else:
-        if start_request is None:
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    "Vehicle GPS is unavailable. Allow phone location to "
-                    "start the mobile fallback."
-                ),
-            )
-        start_accuracy = start_request.accuracy
-        start_latitude = start_request.latitude
-        start_longitude = start_request.longitude
-        reported_start_speed_kmh = (
-            float(start_request.speed) * 3.6
-            if start_request.speed is not None
-            else None
-        )
-        start_speed = validate_speed(
-            reported_speed_kmh=reported_start_speed_kmh,
-            calculated_speed_kmh=None,
-        )["speed_kmh"]
-        start_timestamp = datetime.now(timezone.utc)
-        start_source = "mobile"
-
-    # A trip may start anywhere. Starting near the final terminal selects the
-    # return direction; every other location begins in the saved route order.
-    # Stop arrival and departure remain entirely coordinate/geofence driven.
-    route_direction = direction_from_start_position(
-        route_stops,
-        start_latitude,
-        start_longitude,
-    )
-
-    # ------------------------------------------------------
-    # Create Trip
-    # ------------------------------------------------------
-
-    trip = LiveTrip(
-
-        driver_id=driver.id,
-
-        bus_id=driver.bus_id,
-
-        route_id=route.id,
-
-        status="Running",
-
-        route_direction=route_direction,
-
-        started_at=datetime.now(
-            timezone.utc
-        ),
-
-    )
-
-    # ------------------------------------------------------
-    # Save Trip
-    # ------------------------------------------------------
-
-    db.add(trip)
-
-    db.commit()
-
-    db.refresh(trip)
-
-    # Seed the trip from the selected source. MVD replaces the mobile fallback
-    # automatically as soon as a fresh ignition-on provider fix arrives.
-    update_route_stop_progression(
-        trip=trip,
-        route_stops=ordered_route_stops(route_stops, trip.route_direction),
-        latitude=start_latitude,
-        longitude=start_longitude,
-        previous_location=None,
-        current_timestamp=(
-            vehicle_state.fix_time or start_timestamp
-            if vehicle_is_primary
-            else start_timestamp
-        ),
-        db=db,
-    )
-    db.add(LiveLocation(
-        trip_id=trip.id,
-        latitude=start_latitude,
-        longitude=start_longitude,
-        speed=start_speed,
-        accuracy=start_accuracy,
-        recorded_at=start_timestamp,
-        source=start_source,
-    ))
-    db.flush()
-    trim_active_trip_location_history(db, trip.id)
-    trip.current_latitude = start_latitude
-    trip.current_longitude = start_longitude
-    trip.current_speed = start_speed
-    trip.current_accuracy = start_accuracy
-    trip.last_location_update = start_timestamp
-    trip.current_location_source = start_source
-    db.commit()
-    db.refresh(trip)
-
-    # ------------------------------------------------------
-    # Return standard response
-    # ------------------------------------------------------
-
-    return build_live_trip_response(
-        trip,
-        db,
-    )
+    return build_live_trip_response(trip, db)
 
 
 # ==========================================================
@@ -1229,7 +1080,7 @@ def update_location(
     }
 
 # ==========================================================
-# STOP TRIP
+# DISABLE MOBILE GPS
 # ==========================================================
 
 @router.post("/stop")
@@ -1267,22 +1118,8 @@ def stop_trip(
             detail="Active trip not found.",
         )
 
-    # ------------------------------------------------------
-    # Complete Trip
-    # ------------------------------------------------------
-
-    trip.status = "Completed"
-
-    trip.ended_at = datetime.now(
-        timezone.utc
-    )
-
-    discard_completed_trip_coordinates(db, trip)
-
-    db.commit()
-
     return {
-        "message": "Trip completed successfully."
+        "message": "Mobile location sharing stopped. Vehicle GPS tracking continues."
     }
 
 

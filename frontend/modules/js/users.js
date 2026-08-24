@@ -419,10 +419,8 @@ function renderStatistics() {
 
             <article class="stat-card glass-card">
 
-                <div class="stat-icon">
-
-                    👥
-
+                <div class="stat-icon" aria-hidden="true">
+                    <i class="fa-solid fa-users"></i>
                 </div>
 
                 <div class="stat-content">
@@ -458,10 +456,8 @@ function renderStatistics() {
 
             <article class="stat-card glass-card">
 
-                <div class="stat-icon success">
-
-                    ✅
-
+                <div class="stat-icon success" aria-hidden="true">
+                    <i class="fa-solid fa-circle-check"></i>
                 </div>
 
                 <div class="stat-content">
@@ -497,10 +493,8 @@ function renderStatistics() {
 
             <article class="stat-card glass-card">
 
-                <div class="stat-icon primary">
-
-                    🛡
-
+                <div class="stat-icon primary" aria-hidden="true">
+                    <i class="fa-solid fa-user-shield"></i>
                 </div>
 
                 <div class="stat-content">
@@ -536,10 +530,8 @@ function renderStatistics() {
 
             <article class="stat-card glass-card">
 
-                <div class="stat-icon warning">
-
-                    🚍
-
+                <div class="stat-icon warning" aria-hidden="true">
+                    <i class="fa-solid fa-car-side"></i>
                 </div>
 
                 <div class="stat-content">
@@ -815,31 +807,22 @@ function renderTableRows() {
                         class="table-action-btn view-user"
                         data-id="${user.id}"
                         title="View User"
-                    >
-
-                        👁
-
-                    </button>
+                        aria-label="View ${escapeHtml(user.full_name)}"
+                    ><i class="fa-solid fa-eye" aria-hidden="true"></i></button>
 
                     <button
                         class="table-action-btn edit-user"
                         data-id="${user.id}"
                         title="Edit User"
-                    >
-
-                        ✏
-
-                    </button>
+                        aria-label="Edit ${escapeHtml(user.full_name)}"
+                    ><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i></button>
 
                     <button
                         class="table-action-btn delete-user"
                         data-id="${user.id}"
                         title="Delete User"
-                    >
-
-                        🗑
-
-                    </button>
+                        aria-label="Delete ${escapeHtml(user.full_name)}"
+                    ><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button>
 
                 </div>
 

@@ -187,6 +187,18 @@ def initialize_database() -> None:
                     {"canonical": canonical, "legacy_role": legacy_role},
                 )
 
+    # Bus passes were introduced after the initial schema. Fresh databases
+    # receive the table through metadata.create_all; existing installations
+    # only need this one non-destructive compatibility column.
+    if "bus_passes" in inspector.get_table_names():
+        pass_columns = {column["name"] for column in inspector.get_columns("bus_passes")}
+        if "validity_period" not in pass_columns:
+            with engine.begin() as connection:
+                connection.execute(text(
+                    "ALTER TABLE bus_passes "
+                    "ADD COLUMN validity_period VARCHAR(20) NOT NULL DEFAULT 'One Year'"
+                ))
+
     # Lightweight compatibility migrations for the external GPS provider
     # integration. New provider tables are created by metadata.create_all;
     # these two columns are added for existing installations.

@@ -575,6 +575,13 @@
     transition:.35s;
 }
 
+.stat-icon i{
+
+    font-size:23px;
+
+    line-height:1;
+}
+
 .stat-card:hover .stat-icon{
 
     transform:
@@ -1316,6 +1323,13 @@
 
 }
 
+.bus-avatar i{
+
+    color:#66d7ff;
+
+    font-size:19px;
+}
+
 .bus-info strong{
 
     display:block;
@@ -1414,6 +1428,28 @@
 
 }
 
+.icon-btn i{
+
+    font-size:15px;
+
+    line-height:1;
+}
+
+.view-btn i{
+
+    color:#9bdcff;
+}
+
+.edit-btn i{
+
+    color:#bdb0ff;
+}
+
+.delete-btn i{
+
+    color:#ffadb6;
+}
+
 .icon-btn:hover{
 
     transform:translateY(-2px);
@@ -1482,6 +1518,11 @@
             rgba(124,92,255,.12)
         );
 
+}
+
+.empty-icon i{
+
+    color:#65d8ff;
 }
 
 .empty-state h3{
