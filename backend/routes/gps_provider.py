@@ -317,10 +317,10 @@ def _ensure_vehicle_tracking_session(
     if trip is not None:
         return trip
 
-    # An ignition-off heartbeat is only a parked last-known position. Do not
-    # create a new journey from it, while providers that omit ignition can
-    # still begin tracking from a valid coordinate.
-    if position.get("valid") is False or position.get("ignition") is False:
+    # GPS state is continuous. A valid parked/ignition-off heartbeat must be
+    # able to establish the same route-state session as an ignition-on fix so
+    # students retain a current marker, direction, and stop progress.
+    if position.get("valid") is False:
         return None
 
     route = db.query(Route).filter(
@@ -377,6 +377,22 @@ def _update_active_trip_from_vehicle(db: Session, position: dict[str, Any], bus_
         return trip.id
 
     position_timestamp = position.get("fix_time") or received_at
+
+    # A provider packet may be preserved in raw history even when it is old,
+    # but it must never regress the student-visible trip state.
+    if trip.last_location_update is not None:
+        latest_trip_time = (
+            trip.last_location_update.replace(tzinfo=timezone.utc)
+            if trip.last_location_update.tzinfo is None
+            else trip.last_location_update.astimezone(timezone.utc)
+        )
+        latest_position_time = (
+            position_timestamp.replace(tzinfo=timezone.utc)
+            if position_timestamp.tzinfo is None
+            else position_timestamp.astimezone(timezone.utc)
+        )
+        if latest_position_time <= latest_trip_time:
+            return trip.id
 
     previous_location = db.query(LiveLocation).filter(
         LiveLocation.trip_id == trip.id,
@@ -788,20 +804,21 @@ def ingest_positions(
         db.add(history)
         db.flush()
         state = db.query(BusGPSState).filter(BusGPSState.bus_id == bus.id).first()
-        state_fix_time = None
-        if state is not None and state.fix_time is not None:
-            state_fix_time = (
-                state.fix_time.replace(tzinfo=timezone.utc)
-                if state.fix_time.tzinfo is None
-                else state.fix_time.astimezone(timezone.utc)
+        state_time = None
+        if state is not None:
+            stored_time = state.fix_time or state.received_at
+            state_time = (
+                stored_time.replace(tzinfo=timezone.utc)
+                if stored_time.tzinfo is None
+                else stored_time.astimezone(timezone.utc)
             )
         should_apply = (
             position["valid"] is not False
+            and position["fix_time"] is not None
             and (
                 state is None
-                or state_fix_time is None
-                or position["fix_time"] is None
-                or position["fix_time"] >= state_fix_time
+                or state_time is None
+                or position["fix_time"] > state_time
             )
         )
         active_trip_id = None

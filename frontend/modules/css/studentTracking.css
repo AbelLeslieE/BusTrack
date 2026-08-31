@@ -3029,6 +3029,58 @@ span {
 
 
 /* ==========================================================
+   APPROACHING STOP
+========================================================== */
+
+.student-route-stop-approaching
+.student-route-stop-marker {
+
+    border-color:
+        rgba(
+            82,
+            220,
+            255,
+            0.60
+        );
+
+    background:
+        rgba(
+            61,
+            179,
+            225,
+            0.18
+        );
+
+    color: #62ddff;
+
+}
+
+
+.student-route-stop-approaching
+.student-route-stop-status {
+
+    border-color:
+        rgba(
+            74,
+            211,
+            255,
+            0.20
+        );
+
+    background:
+        rgba(
+            74,
+            211,
+            255,
+            0.08
+        );
+
+    color: #62d9ff;
+
+}
+
+
+/* ==========================================================
    REACHED TERMINAL
 ========================================================== */
 

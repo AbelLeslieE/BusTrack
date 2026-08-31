@@ -92,6 +92,91 @@ def _build_stop_visits(
     )
 
 
+def _build_trip_legs(
+    trips: list[LiveTrip],
+    events: list[TripStopEvent],
+    *,
+    routes: dict[int, Route],
+    drivers: dict[int, Driver],
+    stops: dict[int, Stop],
+    route_stops: dict[int, RouteStop],
+) -> list[dict]:
+    """Reconstruct forward/return legs from immutable terminal events.
+
+    A LiveTrip remains open while the vehicle changes direction at either
+    terminal.  One database trip can therefore contain several completed
+    journeys.  ``Leg completed`` is recorded exactly at the terminal arrival,
+    which gives the history view an accurate start and terminal-reached time
+    for each direction without mutating the original route definition.
+    """
+
+    events_by_trip: dict[int, list[TripStopEvent]] = {}
+    for event in events:
+        events_by_trip.setdefault(event.trip_id, []).append(event)
+
+    route_endpoints: dict[int, tuple[int | None, int | None]] = {}
+    for route_id in {trip.route_id for trip in trips}:
+        ordered = sorted(
+            (item for item in route_stops.values() if item.route_id == route_id),
+            key=lambda item: (item.sequence, item.id),
+        )
+        route_endpoints[route_id] = (
+            ordered[0].id if ordered else None,
+            ordered[-1].id if ordered else None,
+        )
+
+    legs: list[dict] = []
+    for trip in trips:
+        route = routes.get(trip.route_id)
+        driver = drivers.get(trip.driver_id)
+        start_terminal_id, end_terminal_id = route_endpoints.get(trip.route_id, (None, None))
+        leg_started_at = trip.started_at
+
+        for event in sorted(events_by_trip.get(trip.id, []), key=lambda item: (item.occurred_at, item.id)):
+            if event.event_type.strip().casefold() != "leg completed":
+                continue
+
+            if event.route_stop_id == end_terminal_id:
+                direction = "forward"
+            elif event.route_stop_id == start_terminal_id:
+                direction = "reverse"
+            else:
+                # Retain a useful label for legacy/malformed records while
+                # never inferring a new direction from mutable route order.
+                direction = trip.route_direction
+
+            stop = stops.get(event.stop_id)
+            legs.append({
+                "trip_id": trip.id,
+                "route_name": route.route_name if route else None,
+                "route_code": route.route_code if route else None,
+                "driver_name": driver.user.full_name if driver and driver.user else None,
+                "direction": direction,
+                "started_at": leg_started_at,
+                "terminal_reached_at": event.occurred_at,
+                "terminal_stop_name": stop.stop_name if stop else (event.stop_name_snapshot or "Unknown stop"),
+                "terminal_stop_code": stop.stop_code if stop else event.stop_code_snapshot,
+                "status": "Completed",
+            })
+            leg_started_at = event.occurred_at
+
+        if trip.ended_at is None and trip.status.casefold() == "running":
+            legs.append({
+                "trip_id": trip.id,
+                "route_name": route.route_name if route else None,
+                "route_code": route.route_code if route else None,
+                "driver_name": driver.user.full_name if driver and driver.user else None,
+                "direction": trip.route_direction,
+                "started_at": leg_started_at,
+                "terminal_reached_at": None,
+                "terminal_stop_name": None,
+                "terminal_stop_code": None,
+                "status": "Running",
+            })
+
+    return sorted(legs, key=lambda leg: leg["started_at"], reverse=True)
+
+
 @router.get("/buses")
 def list_history_buses(
     search: str = Query(default="", max_length=100),
@@ -180,6 +265,14 @@ def bus_history(
                    "direction": trip.route_direction, "end_reason": trip.end_reason} for trip in trips],
         "stop_visits": _build_stop_visits(
             stop_event_models,
+            stops=stops,
+            route_stops=route_stops,
+        ),
+        "trip_legs": _build_trip_legs(
+            trips,
+            stop_event_models,
+            routes=routes,
+            drivers=drivers,
             stops=stops,
             route_stops=route_stops,
         ),

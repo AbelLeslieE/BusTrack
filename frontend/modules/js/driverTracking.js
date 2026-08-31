@@ -195,16 +195,10 @@ export function render() {
 
                         </button>
 
-                        <button
-                            id="reverseRouteBtn"
-                            class="reverse-route-btn"
-                            disabled>
-
-                            <i data-lucide="repeat-2"></i>
-
-                            <span>Change Direction</span>
-
-                        </button>
+                        <p class="tracking-source-policy">
+                            <i data-lucide="route" aria-hidden="true"></i>
+                            Route direction changes automatically when the bus reaches an original terminal.
+                        </p>
 
                     </div>
 

@@ -33,6 +33,8 @@ from backend.services.tracking_engine import (
 )
 from backend.services.trip_direction import (
     direction_from_start_position,
+    direction_from_terminal_position,
+    original_route_stops,
     ordered_route_stops,
 )
 from backend.security import require_driver, require_management
@@ -258,6 +260,12 @@ def update_route_stop_progression(
     if not route_stops:
         return None
 
+    # ``route_stops`` is the direction-specific travel/display order. Keep a
+    # separately reconstructed original order for all terminal decisions. A
+    # return list has the start terminal at its end, but that must still set
+    # FORWARD rather than being treated as a new return terminal.
+    original_stops = original_route_stops(route_stops)
+
     def record_stop_event(event_type: str, route_stop: RouteStop, stop, distance: float | None):
         db.add(TripStopEvent(
             trip_id=trip.id,
@@ -279,12 +287,26 @@ def update_route_stop_progression(
         """
 
         completed_direction = trip.route_direction
-        trip.route_direction = (
-            "reverse" if completed_direction != "reverse" else "forward"
-        )
+        original_start = original_stops[0].stop if original_stops else None
+        original_end = original_stops[-1].stop if original_stops else None
+
+        # Direction is determined from the immutable original endpoints, not
+        # by toggling the current/displayed direction. This also makes a
+        # replayed terminal fix idempotent.
+        if original_start is not None and stop.id == original_start.id:
+            next_direction = "forward"
+        elif original_end is not None and stop.id == original_end.id:
+            next_direction = "reverse"
+        else:
+            # This is defensive only: callers invoke this helper solely for a
+            # terminal in travel order. Do not invent a direction for a
+            # malformed route or a non-terminal stop.
+            next_direction = completed_direction
+
+        trip.route_direction = next_direction
         trip.terminal_reached_at = current_timestamp
         trip.terminal_stop_id = stop.id
-        return completed_direction, trip.route_direction
+        return completed_direction, next_direction
 
 
     # ======================================================
@@ -369,6 +391,10 @@ def update_route_stop_progression(
         and trip.current_stop_status == "Arrived"
         and inside_radius
     ):
+        # Preserve a separate, immutable audit event for the completed leg.
+        # The direction is switched immediately below, so this record is the
+        # reliable point-in-time marker for the direction that just finished.
+        record_stop_event("Leg completed", current_route_stop, current_stop, current_distance)
         completed_direction, next_direction = switch_direction_at_terminal(
             current_stop
         )
@@ -400,11 +426,13 @@ def update_route_stop_progression(
     )
     outside_exit_radius = current_distance > exit_radius
 
-    # A vehicle can legitimately take a shortcut. When its next provider GPS
-    # report lands inside a later stop, advance to that stop in the current
-    # travel order. Only later stops are examined, so a delayed reading can
-    # never move the trip backward or change its direction.
-    if outside_exit_radius:
+    # A vehicle can legitimately take a shortcut. Inspect *every* later stop
+    # on every accepted GPS update, rather than waiting for departure from the
+    # current stop. This lets an update at Stop 3 correctly pass a missed Stop
+    # 2 even when geofences overlap or the current radius is unusually large.
+    # Only later stops are examined, so a delayed reading can never move the
+    # trip backward or change its direction.
+    if current_route_stop in route_stops:
         current_index = route_stops.index(current_route_stop)
         stops_ahead_inside_radius = []
         for route_index, route_stop in enumerate(
@@ -446,6 +474,7 @@ def update_route_stop_progression(
             completed_direction = None
             next_direction = None
             if terminal_reached:
+                record_stop_event("Leg completed", target_route_stop, target_stop, target_distance)
                 completed_direction, next_direction = switch_direction_at_terminal(
                     target_stop
                 )
@@ -494,6 +523,7 @@ def update_route_stop_progression(
         completed_direction = None
         next_direction = None
         if terminal_reached:
+            record_stop_event("Leg completed", current_route_stop, current_stop, current_distance)
             completed_direction, next_direction = switch_direction_at_terminal(
                 current_stop
             )
@@ -1148,22 +1178,36 @@ def change_trip_direction(
     if trip is None:
         raise HTTPException(status_code=404, detail="Active trip not found.")
 
-    trip.route_direction = request.direction
-    # A manual direction change is not a terminal-arrival notification. Clear
-    # old terminal metadata so other portals do not show a stale finish banner.
-    trip.terminal_reached_at = None
-    trip.terminal_stop_id = None
+    route_stops = db.query(RouteStop).filter(
+        RouteStop.route_id == trip.route_id,
+    ).order_by(RouteStop.sequence.asc()).all()
+    automatic_direction = direction_from_terminal_position(
+        route_stops,
+        trip.current_latitude,
+        trip.current_longitude,
+    )
+    if automatic_direction is None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Route direction changes automatically only when the bus is "
+                "inside an original route terminal."
+            ),
+        )
+
+    # Retain the endpoint for legacy clients, but never allow it to override
+    # the GPS-derived state. The requested value is intentionally ignored.
+    trip.route_direction = automatic_direction
+    trip.terminal_reached_at = datetime.now(timezone.utc)
+    terminal = route_stops[0] if automatic_direction == "forward" else route_stops[-1]
+    trip.terminal_stop_id = terminal.stop_id
     db.commit()
     db.refresh(trip)
 
     return {
         "trip_id": trip.id,
         "route_direction": trip.route_direction,
-        "message": (
-            "Route direction changed to return journey."
-            if trip.route_direction == "reverse"
-            else "Route direction changed to outbound journey."
-        ),
+        "message": "Route direction was synchronized from the original terminal GPS position.",
     }
 
 

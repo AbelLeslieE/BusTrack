@@ -605,15 +605,28 @@ def get_student_live_tracking(
         and provider_state.longitude is not None
     )
 
-    # A fresh ignition-on vehicle fix is the authoritative location, even if
-    # an earlier in-app trip has not received a coordinate yet.  Without this
-    # preference, students can be left with an empty map while the GPS company
-    # is already supplying a valid position for their assigned bus.
+    # Select the newest accepted state across vehicle and mobile telemetry.
+    # Freshness alone is insufficient: an older-but-fresh provider heartbeat
+    # must not move the map backwards after a later trip update has already
+    # advanced the stop timeline.
+    provider_timestamp = (
+        (provider_state.fix_time or provider_state.received_at)
+        if provider_state is not None
+        else None
+    )
+    trip_timestamp = trip.last_location_update if trip is not None else None
+    if provider_timestamp is not None and provider_timestamp.tzinfo is None:
+        provider_timestamp = provider_timestamp.replace(tzinfo=timezone.utc)
+    if trip_timestamp is not None and trip_timestamp.tzinfo is None:
+        trip_timestamp = trip_timestamp.replace(tzinfo=timezone.utc)
     use_provider_position = provider_has_position and (
         trip is None
-        or provider_is_fresh
         or trip.current_latitude is None
         or trip.current_longitude is None
+        or (
+            provider_timestamp is not None
+            and (trip_timestamp is None or provider_timestamp >= trip_timestamp)
+        )
     )
 
     # Keep a stale module fix visible as the last-known bus location; the
@@ -901,6 +914,39 @@ def get_student_live_tracking(
             "next_stop"
         )
 
+    # Build a server-authoritative visual state for every displayed stop. The
+    # frontend must not guess whether a bus is at a stop or travelling between
+    # two stops from array indexes alone. After leaving Stop 2, for example,
+    # Stop 2 is completed and Stop 3 is explicitly approaching until its
+    # geofence is entered. The same ordered list is used for forward and
+    # return directions.
+    terminal_reached = bool(
+        trip is not None
+        and trip.terminal_reached_at is not None
+        and trip.current_stop_status == "Arrived"
+        and current_stop is not None
+        and current_stop.stop is not None
+        and current_stop.stop.id == trip.terminal_stop_id
+    )
+    current_index = route_progress["current_index"]
+    for stop_data in stops:
+        display_index = int(stop_data["sequence"]) - 1
+        if current_index < 0:
+            stop_data["tracking_status"] = "pending"
+        elif display_index < current_index:
+            stop_data["tracking_status"] = "completed"
+        elif display_index == current_index:
+            if terminal_reached:
+                stop_data["tracking_status"] = "terminal_completed"
+            elif trip is not None and trip.current_stop_status == "Arrived":
+                stop_data["tracking_status"] = "reached"
+            elif route_progress["current_inside_radius"]:
+                stop_data["tracking_status"] = "reached"
+            else:
+                stop_data["tracking_status"] = "approaching"
+        else:
+            stop_data["tracking_status"] = "pending"
+
     current_stop_data = None
 
     if current_stop is not None:
@@ -1012,15 +1058,6 @@ def get_student_live_tracking(
     trip_data = None
 
     if tracking_available:
-
-        terminal_reached = bool(
-            trip is not None
-            and trip.terminal_reached_at is not None
-            and trip.current_stop_status == "Arrived"
-            and current_stop is not None
-            and current_stop.stop is not None
-            and current_stop.stop.id == trip.terminal_stop_id
-        )
 
         trip_data = {
 

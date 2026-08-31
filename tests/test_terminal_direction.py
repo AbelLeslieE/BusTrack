@@ -94,6 +94,56 @@ class TerminalDirectionTest(unittest.TestCase):
         self.assertEqual(self.trip.route_direction, "forward")
         self.assertEqual(self.trip.terminal_stop_id, self.start.id)
 
+        # The first terminal is now index 0 in the restored forward view.
+        # Another parked heartbeat cannot flip this completed return leg.
+        final_duplicate_event = update_route_stop_progression(
+            self.trip,
+            self.forward_stops,
+            self.start.latitude,
+            self.start.longitude,
+            previous_location=None,
+            current_timestamp=self.now,
+            db=self.database,
+        )
+        self.assertIsNone(final_duplicate_event)
+        self.assertEqual(self.trip.route_direction, "forward")
+
+    def test_skipped_stop_advances_in_both_original_directions(self) -> None:
+        middle_one = SimpleNamespace(id=103, stop_code="MID-1", stop_name="Middle one", latitude=10.02, longitude=76.02, radius=200)
+        middle_two = SimpleNamespace(id=104, stop_code="MID-2", stop_name="Middle two", latitude=10.04, longitude=76.04, radius=200)
+        original_stops = [
+            SimpleNamespace(id=1, sequence=1, stop=self.start),
+            SimpleNamespace(id=2, sequence=2, stop=middle_one),
+            SimpleNamespace(id=3, sequence=3, stop=middle_two),
+            SimpleNamespace(id=4, sequence=4, stop=self.end),
+        ]
+        forward_trip = SimpleNamespace(
+            id=100, route_direction="forward", current_route_stop_id=1,
+            current_stop_status="Arrived", current_stop_arrived_at=None,
+            current_stop_departed_at=None, terminal_reached_at=None,
+            terminal_stop_id=None,
+        )
+        forward_event = update_route_stop_progression(
+            forward_trip, original_stops, middle_two.latitude, middle_two.longitude,
+            previous_location=None, current_timestamp=self.now, db=self.database,
+        )
+        self.assertEqual(forward_event["skipped_stop_count"], 1)
+        self.assertEqual(forward_trip.current_route_stop_id, 3)
+
+        reverse_trip = SimpleNamespace(
+            id=101, route_direction="reverse", current_route_stop_id=4,
+            current_stop_status="Arrived", current_stop_arrived_at=None,
+            current_stop_departed_at=None, terminal_reached_at=None,
+            terminal_stop_id=None,
+        )
+        reverse_event = update_route_stop_progression(
+            reverse_trip, list(reversed(original_stops)), middle_one.latitude,
+            middle_one.longitude, previous_location=None,
+            current_timestamp=self.now, db=self.database,
+        )
+        self.assertEqual(reverse_event["skipped_stop_count"], 1)
+        self.assertEqual(reverse_trip.current_route_stop_id, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

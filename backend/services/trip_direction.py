@@ -22,6 +22,21 @@ def ordered_route_stops(route_stops: list, direction: str | None) -> list:
     return ordered
 
 
+def original_route_stops(route_stops: list) -> list:
+    """Return the route's saved, canonical order.
+
+    Callers may be holding a reversed display list while a bus is on its
+    return leg.  Direction decisions must never depend on that presentation
+    order, so recover the original sequence from the persisted RouteStop
+    sequence every time.
+    """
+
+    return sorted(
+        list(route_stops),
+        key=lambda route_stop: (getattr(route_stop, "sequence", 0), getattr(route_stop, "id", 0)),
+    )
+
+
 def direction_from_terminal_position(
     route_stops: list,
     latitude: float | None,
@@ -33,6 +48,8 @@ def direction_from_terminal_position(
     ``None`` for every other position prevents an accidental mid-route start
     from being silently treated as an outbound journey.
     """
+
+    route_stops = original_route_stops(route_stops)
 
     if len(route_stops) < 2 or latitude is None or longitude is None:
         return None

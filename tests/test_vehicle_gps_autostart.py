@@ -87,10 +87,24 @@ class VehicleGpsAutostartTest(unittest.TestCase):
             self.assertIn("Vehicle GPS tracking continues", stop_result["message"])
             self.assertIsNone(trip.ended_at)
 
-    def test_ignition_off_heartbeat_does_not_create_a_tracking_session(self) -> None:
+    def test_ignition_off_heartbeat_creates_continuous_tracking_state(self) -> None:
         with self.session_factory() as database_session:
+            user = User(username="parked-module-driver", password_hash="unused", full_name="Parked Module Driver", role="Driver", status="Active")
             bus = Bus(bus_number="GPS-02", registration_number="GPS-REG-02", capacity=40, manufacturer="Test", model="Coach", year=2026, fuel_type="Diesel", status="Active")
-            database_session.add(bus)
+            database_session.add_all([user, bus])
+            database_session.flush()
+            driver = Driver(user_id=user.id, driver_code="GPS-PARKED", license_number="GPS-PARKED-LIC", license_expiry=date(2030, 1, 1), status="Available", bus_id=bus.id)
+            database_session.add(driver)
+            database_session.flush()
+            route = Route(route_code="GPS-PARKED", route_name="Parked GPS Route", bus_id=bus.id, driver_id=driver.id, status="Active", total_stops=2)
+            start = Stop(stop_code="GPS-PARKED-A", stop_name="Parked Start", latitude=10.0, longitude=76.0, radius=100, status="Active")
+            end = Stop(stop_code="GPS-PARKED-B", stop_name="Parked End", latitude=10.1, longitude=76.1, radius=100, status="Active")
+            database_session.add_all([route, start, end])
+            database_session.flush()
+            database_session.add_all([
+                RouteStop(route_id=route.id, stop_id=start.id, sequence=1),
+                RouteStop(route_id=route.id, stop_id=end.id, sequence=2),
+            ])
             database_session.commit()
             timestamp = datetime(2026, 8, 24, 8, 30, tzinfo=timezone.utc)
 
@@ -101,8 +115,13 @@ class VehicleGpsAutostartTest(unittest.TestCase):
                 timestamp,
             )
 
-            self.assertIsNone(trip_id)
-            self.assertEqual(database_session.query(LiveTrip).filter(LiveTrip.bus_id == bus.id).count(), 0)
+            database_session.commit()
+
+            trip = database_session.get(LiveTrip, trip_id)
+            self.assertIsNotNone(trip)
+            self.assertEqual(trip.current_location_source, "vehicle_gps")
+            self.assertEqual(trip.current_route_stop_id, route.route_stops[0].id)
+            self.assertEqual(trip.current_stop_status, "Arrived")
 
 
 if __name__ == "__main__":

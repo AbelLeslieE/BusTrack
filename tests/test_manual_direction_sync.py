@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from fastapi import HTTPException
 
 import backend.models  # noqa: F401
 from backend.database import Base
@@ -34,7 +35,7 @@ class ManualDirectionSyncTest(unittest.TestCase):
         cls.engine.dispose()
         cls.test_database.unlink(missing_ok=True)
 
-    def test_driver_direction_change_reorders_the_student_route(self) -> None:
+    def test_legacy_direction_endpoint_only_syncs_at_an_original_terminal(self) -> None:
         with self.session_factory() as database_session:
             driver_user = User(username="direction-driver", password_hash="unused", full_name="Direction Driver", role="Driver", status="Active")
             student_user = User(username="direction-student", password_hash="unused", full_name="Direction Student", role="User", status="Active")
@@ -61,16 +62,49 @@ class ManualDirectionSyncTest(unittest.TestCase):
             database_session.add(trip)
             database_session.commit()
 
+            with self.assertRaises(HTTPException) as rejected_change:
+                change_trip_direction(
+                    TripDirectionRequest(trip_id=trip.id, direction="reverse"),
+                    database_session,
+                    driver_user,
+                )
+            self.assertEqual(rejected_change.exception.status_code, 409)
+
+            # A legacy client can only synchronize at an actual original
+            # terminal. Its requested direction is ignored in favour of the
+            # GPS-derived return direction.
+            trip.current_latitude = terminal.latitude
+            trip.current_longitude = terminal.longitude
+            database_session.commit()
             result = change_trip_direction(
-                TripDirectionRequest(trip_id=trip.id, direction="reverse"),
+                TripDirectionRequest(trip_id=trip.id, direction="forward"),
                 database_session,
                 driver_user,
             )
+
+            # The tracking response now gives the timeline explicit states,
+            # rather than asking the browser to infer a current stop from an
+            # index. At the terminal it is a completed leg; after departure,
+            # the terminal is completed and the next return stop is only
+            # approaching until its geofence is entered.
+            trip.current_route_stop_id = route.route_stops[1].id
+            trip.current_stop_status = "Arrived"
+            database_session.commit()
             student_tracking = get_student_live_tracking(student_user, database_session)
 
             self.assertEqual(result["route_direction"], "reverse")
             self.assertEqual(student_tracking["trip"]["route_direction"], "reverse")
             self.assertEqual(student_tracking["stops"][0]["stop_code"], "DIR-B")
+            self.assertEqual(student_tracking["stops"][0]["tracking_status"], "terminal_completed")
+
+            trip.current_route_stop_id = route.route_stops[0].id
+            trip.current_stop_status = "Approaching"
+            database_session.commit()
+            travelling_tracking = get_student_live_tracking(student_user, database_session)
+            self.assertEqual(
+                [stop["tracking_status"] for stop in travelling_tracking["stops"]],
+                ["completed", "approaching"],
+            )
 
 
 if __name__ == "__main__":

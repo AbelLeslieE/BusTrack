@@ -376,7 +376,7 @@ function vehicleTravelStatus() {
 
     if (!state.liveTrip) return "Not live";
     if (state.liveTrip.terminal_reached) {
-        return telemetry.is_fresh ? "Final stop reached" : "Final stop · last known";
+        return telemetry.is_fresh ? "Trip completed at terminal" : "Completed trip · last known";
     }
     if (!telemetry.is_fresh) return "Last known location";
     if (telemetry.moving === true) return "Moving";
@@ -427,7 +427,7 @@ function getTrackingStatus() {
         return {
 
             label:
-                "Final stop reached",
+                "Trip completed",
 
             className:
                 "student-tracking-status-neutral"
@@ -3254,14 +3254,24 @@ function renderTrackTimeline() {
                     progress.currentIndex;
 
 
+            // When the backend says the bus is approaching Stop 3, Stop 3 is
+            // already the active destination. Do not misleadingly label the
+            // following stop as "Next" until Stop 3 has actually been reached.
             const isNext =
-                index ===
-                progress.nextIndex;
+                index === progress.nextIndex &&
+                String(progress.status || "").toLowerCase() !== "approaching";
 
+
+                const serverStatus =
+                    String(stop.tracking_status || "").toLowerCase();
 
                 const isReachedTerminal =
-                    isCurrent &&
-                    state.liveTrip?.terminal_reached === true;
+                    serverStatus === "terminal_completed" ||
+                    (
+                        !serverStatus &&
+                        isCurrent &&
+                        state.liveTrip?.terminal_reached === true
+                    );
 
 
                 let stateClass =
@@ -3282,7 +3292,7 @@ function renderTrackTimeline() {
                         "terminal";
 
                     statusText =
-                        "Reached terminal";
+                        "Trip completed";
 
                     icon =
                         "fa-check";
@@ -3290,7 +3300,10 @@ function renderTrackTimeline() {
                 }
 
 
-                else if (isPassed) {
+                else if (
+                    serverStatus === "completed" ||
+                    (!serverStatus && isPassed)
+                ) {
 
                     stateClass =
                         "passed";
@@ -3304,7 +3317,33 @@ function renderTrackTimeline() {
                 }
 
 
-                else if (isCurrent) {
+                else if (serverStatus === "reached") {
+
+                    stateClass =
+                        "current";
+
+                    statusText =
+                        "Reached";
+
+                    icon =
+                        "fa-bus";
+
+                }
+
+                else if (serverStatus === "approaching") {
+
+                    stateClass =
+                        "approaching";
+
+                    statusText =
+                        "Approaching";
+
+                    icon =
+                        "fa-route";
+
+                }
+
+                else if (!serverStatus && isCurrent) {
 
                     stateClass =
                         "current";
