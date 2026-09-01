@@ -4,7 +4,12 @@ Bus Management API
 Handles CRUD operations for school buses.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from io import BytesIO
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import StreamingResponse
+from openpyxl import Workbook, load_workbook
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -75,6 +80,20 @@ router = APIRouter(
 )
 
 
+BUS_EXPORT_HEADERS = [
+    "Index",
+    "Bus Number",
+    "Registration Number",
+    "Capacity",
+    "Manufacturer",
+    "Model",
+    "Year",
+    "Fuel Type",
+    "GPS Device ID",
+    "Status",
+]
+
+
 @router.get("/", response_model=list[BusResponse])
 def get_buses(
     db: Session = Depends(get_db),
@@ -90,6 +109,153 @@ def get_buses(
         for bus in buses
 
     ]
+
+
+@router.get("/export")
+def export_buses(
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
+):
+    """Export every field maintained by the Add Bus form to Excel."""
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Buses"
+    sheet.append(BUS_EXPORT_HEADERS)
+
+    buses = db.query(Bus).order_by(Bus.bus_number.asc()).all()
+    for index, bus in enumerate(buses, start=1):
+        sheet.append([
+            index,
+            bus.bus_number,
+            bus.registration_number,
+            bus.capacity,
+            bus.manufacturer,
+            bus.model,
+            bus.year,
+            bus.fuel_type,
+            bus.device_id,
+            bus.status,
+        ])
+
+    output = BytesIO()
+    workbook.save(output)
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="Buses.xlsx"'},
+    )
+
+
+@router.post("/import")
+async def import_buses(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
+):
+    """Import an exported Bus workbook without duplicating fleet records."""
+
+    try:
+        workbook = load_workbook(BytesIO(await file.read()), data_only=True)
+    except Exception as error:
+        raise HTTPException(status_code=400, detail="Please upload a valid Excel (.xlsx) file.") from error
+
+    sheet = workbook.active
+    headers = {
+        str(cell.value).strip().casefold(): index
+        for index, cell in enumerate(sheet[1])
+        if cell.value is not None and str(cell.value).strip()
+    }
+    required_headers = {header.casefold() for header in BUS_EXPORT_HEADERS[1:]}
+    missing_headers = sorted(required_headers - headers.keys())
+    if missing_headers:
+        raise HTTPException(
+            status_code=400,
+            detail="The Excel sheet is missing required Bus export columns.",
+        )
+
+    def value_for(row: tuple, header: str):
+        index = headers[header.casefold()]
+        return row[index] if index < len(row) else None
+
+    def clean_text(value) -> str:
+        return "" if value is None else str(value).strip()
+
+    buses = db.query(Bus).all()
+    buses_by_number = {bus.bus_number.strip().casefold(): bus for bus in buses}
+    buses_by_registration = {bus.registration_number.strip().casefold(): bus for bus in buses}
+    imported_buses: list[dict] = []
+    skipped_buses: list[dict] = []
+
+    for row_number, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
+        if not any(value is not None and clean_text(value) for value in row):
+            continue
+
+        payload = {
+            "bus_number": clean_text(value_for(row, "Bus Number")),
+            "registration_number": clean_text(value_for(row, "Registration Number")),
+            "capacity": value_for(row, "Capacity"),
+            "manufacturer": clean_text(value_for(row, "Manufacturer")),
+            "model": clean_text(value_for(row, "Model")),
+            "year": value_for(row, "Year"),
+            "fuel_type": clean_text(value_for(row, "Fuel Type")),
+            "device_id": clean_text(value_for(row, "GPS Device ID")) or None,
+            "status": clean_text(value_for(row, "Status")) or "Active",
+        }
+        try:
+            validated = BusCreate.model_validate(payload)
+        except ValidationError as error:
+            skipped_buses.append({
+                "row": row_number,
+                "bus_number": payload["bus_number"] or None,
+                "registration_number": payload["registration_number"] or None,
+                "reason": error.errors()[0]["msg"],
+            })
+            continue
+
+        number_match = buses_by_number.get(validated.bus_number.casefold())
+        registration_match = buses_by_registration.get(validated.registration_number.casefold())
+        if number_match is not None and registration_match is not None and number_match.id != registration_match.id:
+            skipped_buses.append({
+                "row": row_number,
+                "bus_number": validated.bus_number,
+                "registration_number": validated.registration_number,
+                "reason": "Bus number and registration number match different existing buses",
+            })
+            continue
+        existing_bus = number_match or registration_match
+        if existing_bus is not None:
+            skipped_buses.append({
+                "row": row_number,
+                "bus_number": existing_bus.bus_number,
+                "registration_number": existing_bus.registration_number,
+                "reason": "Bus already exists",
+            })
+            continue
+
+        bus = Bus(**validated.model_dump())
+        db.add(bus)
+        db.flush()
+        buses_by_number[bus.bus_number.casefold()] = bus
+        buses_by_registration[bus.registration_number.casefold()] = bus
+        imported_buses.append({
+            "row": row_number,
+            "bus_number": bus.bus_number,
+            "registration_number": bus.registration_number,
+        })
+
+    db.commit()
+    return {
+        "success": True,
+        "imported": len(imported_buses),
+        "skipped": len(skipped_buses),
+        "summary": {
+            "imported_buses": imported_buses,
+            "skipped_buses": skipped_buses,
+        },
+        "message": "Bus import completed.",
+    }
 
 @router.post(
     "/",

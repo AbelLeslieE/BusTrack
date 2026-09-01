@@ -357,14 +357,39 @@ function bindEvents(root){
 
                     await StopsAPI.importStops(file);
 
-                alert(
+                const importedStops = result.summary?.imported_stops
+                    ?.map(stop => `${stop.stop_code} · ${stop.stop_name}`)
+                    .join("\n") || "None";
+                const skippedStops = result.summary?.skipped_stops
+                    ?.map(stop => `${stop.stop_code || "No code"} · ${stop.stop_name} (${stop.reason})`)
+                    .join("\n") || "None";
+                const linkedRouteStops = result.summary?.linked_route_stops
+                    ?.map(item => `${item.route_code} · ${item.stop_name} (sequence ${item.sequence})`)
+                    .join("\n") || "None";
+                const skippedRouteStops = result.summary?.skipped_route_stops
+                    ?.map(item => `${item.route_code || "No route"} · ${item.stop_name} (${item.reason})`)
+                    .join("\n") || "None";
 
+                alert(
 `Import Completed
 
-Imported : ${result.imported}
+Stops imported: ${result.imported}
+Stops skipped: ${result.skipped}
+Routes created: ${result.routes_created || 0}
+Route stops linked: ${result.route_stops_linked || 0}
+Existing route links skipped: ${result.route_stops_skipped || 0}
 
-Skipped : ${result.skipped}`
+Imported stops:
+${importedStops}
 
+Skipped stops:
+${skippedStops}
+
+Route stops linked:
+${linkedRouteStops}
+
+Skipped route links:
+${skippedRouteStops}`
                 );
 
                 await refresh(root);

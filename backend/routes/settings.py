@@ -9,17 +9,22 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timedelta, timezone
+from io import BytesIO
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from backend.audit import record_audit_event
 from backend.auth import SESSION_COOKIE_NAME, get_password_hash, normalize_username, verify_password
-from backend.database import get_db
+from backend.database import engine, get_db
 from backend.models import User, UserSession
 from backend.schemas import AccountProfileUpdate, PasswordChangeRequest, TokenResponse, UserResponse
-from backend.security import require_authenticated
+from backend.security import require_authenticated, require_management
+from backend.services.database_backup import create_database_backup_archive, restore_database_backup_archive
+from backend.services.restore_state import begin_restore, end_restore
 from backend.utils.jwt_handler import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, get_token_identity
 
 
@@ -170,3 +175,90 @@ def change_account_password(
     db.commit()
     db.refresh(current_user)
     return _issue_session(response, request, db, current_user)
+
+
+@router.get("/backup/download")
+def download_database_backup(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_management),
+):
+    """Download an admin-authorized ZIP backup from SQLite or PostgreSQL."""
+
+    record_audit_event(
+        db,
+        category="security",
+        action="database_backup_downloaded",
+        actor=current_user,
+        subject_type="database_backup",
+        subject_label=f"{engine.dialect.name} ZIP backup",
+        request=request,
+    )
+    db.commit()
+
+    try:
+        archive = create_database_backup_archive(engine)
+    except Exception as error:
+        raise HTTPException(status_code=500, detail="Unable to create the database backup.") from error
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return StreamingResponse(
+        BytesIO(archive),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="BusTrack-backup-{timestamp}.zip"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@router.post("/backup/restore")
+async def restore_database_backup(
+    request: Request,
+    file: UploadFile = File(...),
+    confirmation: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_management),
+):
+    """Replace all BusTrack data with a validated administrator backup.
+
+    A restore is intentionally destructive. It is held behind an explicit
+    confirmation phrase, validates the full archive before writes begin, and
+    performs the data replacement in one database transaction.
+    """
+
+    if confirmation != "RESTORE":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Type RESTORE to confirm database recovery.")
+    if not file.filename or not file.filename.casefold().endswith(".zip"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Please upload a BusTrack backup ZIP file.")
+    archive = await file.read()
+    if not begin_restore():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Another database recovery is already in progress.")
+
+    actor_username = current_user.username
+    actor_role = current_user.role
+    db.commit()
+    try:
+        restore_database_backup_archive(engine, archive)
+        # The restored archive may no longer contain the administrator who
+        # began this request. Keep a detached audit snapshot so recovery
+        # itself remains traceable without assuming the old user ID exists.
+        db.expire_all()
+        record_audit_event(
+            db,
+            category="security",
+            action="database_backup_restored",
+            actor_username=actor_username,
+            actor_role=actor_role,
+            subject_type="database_backup",
+            subject_label=file.filename,
+            request=request,
+        )
+        db.commit()
+        return {"success": True, "message": "Backup restored. Sign in again to continue."}
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)) from error
+    except Exception as error:
+        raise HTTPException(status_code=500, detail="Database recovery could not be completed; existing data was not replaced.") from error
+    finally:
+        end_restore()

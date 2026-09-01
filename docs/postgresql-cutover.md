@@ -79,6 +79,27 @@ No GPS point, account, trip, or audit payload is silently dropped. Valid route
 history, locations, GPS provider positions, and current bus states remain in
 their normal application tables.
 
+## In-app backup and recovery
+
+The Settings **Download backup** action produces a compressed, logical
+BusTrack ZIP archive. It is deliberately database-engine independent: a
+backup taken from SQLite can be restored after moving to PostgreSQL/Supabase,
+and a PostgreSQL/Supabase backup can be restored by a BusTrack instance with
+the same application schema. It contains BusTrack's application tables, not a
+raw SQLite file or a PostgreSQL server dump.
+
+Only an administrator can restore a ZIP. Restore requires typing `RESTORE`,
+fully validates the archive before making writes, replaces all BusTrack data
+inside one transaction, pauses API writes in the running application, and
+signs the administrator out when it succeeds. The portal's normal file
+download/upload controls work in Android browsers and WebViews too; Android
+does not need its own SQLite database.
+
+Supabase-managed services are outside the BusTrack application schema. If the
+deployment uses Supabase Storage objects or Supabase Auth identities in
+addition to BusTrack's own tables, back those up with Supabase's facilities as
+well; this ZIP restores the application data tracked by BusTrack.
+
 ## GPS data handling after cutover
 
 All application timestamps are stored as UTC-aware PostgreSQL timestamps. The

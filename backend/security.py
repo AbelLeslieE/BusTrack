@@ -22,6 +22,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from backend.auth import get_current_user
 from backend.models import User
 from backend.roles import ROLE_ADMIN, ROLE_DRIVER, ROLE_TECHNICIAN, ROLE_USER, canonical_role
+from backend.services.restore_state import restore_in_progress
 
 
 class _RequestTooLarge(Exception):
@@ -153,6 +154,7 @@ class RequestSecurityMiddleware:
 
     MAX_REQUEST_BYTES = 2 * 1024 * 1024
     MAX_UPLOAD_BYTES = 15 * 1024 * 1024
+    MAX_BACKUP_UPLOAD_BYTES = 100 * 1024 * 1024
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
@@ -250,6 +252,14 @@ class RequestSecurityMiddleware:
         method = str(scope.get("method", "GET")).upper()
         client_key = self._client_key(scope)
 
+        if (
+            restore_in_progress()
+            and path.startswith("/api/")
+            and path != "/api/settings/backup/restore"
+        ):
+            await self._reject(send, 503, "Database recovery is in progress. Please try again shortly.", retry_after=30)
+            return
+
         if path.startswith("/api/"):
             limiter = self.general_limiter
             if path == "/api/integrations/gps/ingest":
@@ -273,12 +283,24 @@ class RequestSecurityMiddleware:
             except (TypeError, ValueError):
                 await self._reject(send, 400, "Invalid Content-Length header.", retry_after=1)
                 return
-            max_size = self.MAX_UPLOAD_BYTES if path.endswith("/import") or path.endswith("/preview") else self.MAX_REQUEST_BYTES
+            max_size = (
+                self.MAX_BACKUP_UPLOAD_BYTES
+                if path == "/api/settings/backup/restore"
+                else self.MAX_UPLOAD_BYTES
+                if path.endswith("/import") or path.endswith("/preview")
+                else self.MAX_REQUEST_BYTES
+            )
             if request_size > max_size:
                 await self._reject(send, 413, "Request body is too large.", retry_after=1)
                 return
 
-        max_size = self.MAX_UPLOAD_BYTES if path.endswith("/import") or path.endswith("/preview") else self.MAX_REQUEST_BYTES
+        max_size = (
+            self.MAX_BACKUP_UPLOAD_BYTES
+            if path == "/api/settings/backup/restore"
+            else self.MAX_UPLOAD_BYTES
+            if path.endswith("/import") or path.endswith("/preview")
+            else self.MAX_REQUEST_BYTES
+        )
         received_bytes = 0
 
         async def limited_receive() -> Message:

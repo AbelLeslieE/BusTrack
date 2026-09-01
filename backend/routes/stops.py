@@ -16,6 +16,7 @@ Routes reference stops through the RouteStop table.
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 import io
+import math
 from fastapi import (
     APIRouter,
     Depends,
@@ -23,12 +24,13 @@ from fastapi import (
     UploadFile,
     File,
 )
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from openpyxl import load_workbook
 from io import BytesIO
 from backend.database import get_db
 from backend.models import (
     Stop,
+    Route,
     RouteStop,
 )
 from backend.security import require_management
@@ -105,9 +107,10 @@ def export_stops(
     """
     Export all master stops to an Excel file.
 
-    Format:
-
-    Index | Place
+    Each row represents one master stop and includes its geofence settings.
+    Stops are reusable across routes, so all linked route codes, names, and
+    stop sequences are collected into the same row rather than duplicating
+    the stop for every route assignment.
     """
 
     workbook = Workbook()
@@ -121,11 +124,16 @@ def export_stops(
     # ======================================================
 
     sheet.append([
-
         "Index",
-
-        "Place"
-
+        "Stop Code",
+        "Stop Name",
+        "Latitude",
+        "Longitude",
+        "Geofence Radius (m)",
+        "Status",
+        "Route Number(s)",
+        "Route Name(s)",
+        "Route Stop Sequence(s)",
     ])
 
     # ======================================================
@@ -135,21 +143,39 @@ def export_stops(
     stops = (
 
         db.query(Stop)
-
+        .options(
+            selectinload(Stop.route_stops).selectinload(RouteStop.route),
+        )
         .order_by(Stop.stop_name.asc())
-
         .all()
 
     )
 
     for index, stop in enumerate(stops, start=1):
 
+        route_assignments = sorted(
+            (
+                route_stop
+                for route_stop in stop.route_stops
+                if route_stop.route is not None
+            ),
+            key=lambda route_stop: (
+                route_stop.route.route_code,
+                route_stop.sequence,
+            ),
+        )
+
         sheet.append([
-
             index,
-
-            stop.stop_name
-
+            stop.stop_code,
+            stop.stop_name,
+            stop.latitude,
+            stop.longitude,
+            stop.radius,
+            stop.status,
+            "; ".join(route_stop.route.route_code for route_stop in route_assignments),
+            "; ".join(route_stop.route.route_name for route_stop in route_assignments),
+            "; ".join(str(route_stop.sequence) for route_stop in route_assignments),
         ])
 
     # ======================================================
@@ -510,155 +536,254 @@ async def import_stops(
     _current_user = Depends(require_management),
 
 ):
+    """Import either the legacy two-column sheet or the complete Stops export.
+
+    The complete export is safe to re-import: matching stop codes or names
+    are not duplicated. Existing stops can still be connected to the routes
+    listed in the upload, preserving the export's route-stop configuration.
     """
-    Imports master stops from an Excel file.
-
-    Expected format:
-
-    Column A : Index (ignored)
-
-    Column B : Place
-    """
-
-    workbook = load_workbook(
-
-        BytesIO(await file.read()),
-
-        data_only=True
-
-    )
+    try:
+        workbook = load_workbook(BytesIO(await file.read()), data_only=True)
+    except Exception as error:
+        raise HTTPException(status_code=400, detail="Please upload a valid Excel (.xlsx) file.") from error
 
     sheet = workbook.active
-
-    imported = 0
-
-    skipped = 0
-    # ======================================================
-    # EXISTING STOP NAMES
-    # ======================================================
-
-    existing_stop_names = {
-
-        stop.stop_name.strip().lower()
-
-        for stop in db.query(Stop).all()
-
+    headers = {
+        str(cell.value).strip().casefold(): index
+        for index, cell in enumerate(sheet[1])
+        if cell.value is not None and str(cell.value).strip()
     }
-    last_stop = (
+    is_complete_export = "stop code" in headers and "stop name" in headers
+    if not is_complete_export and "place" not in headers:
+        raise HTTPException(
+            status_code=400,
+            detail="The Excel sheet must contain either Place or Stop Code and Stop Name headers.",
+        )
 
-        db.query(Stop)
+    def get_value(row: tuple, header: str):
+        index = headers.get(header.casefold())
+        return row[index] if index is not None and index < len(row) else None
 
-        .order_by(Stop.id.desc())
+    def text_value(value) -> str:
+        return "" if value is None else str(value).strip()
 
-        .first()
+    def split_values(value) -> list[str]:
+        return [part.strip() for part in text_value(value).split(";") if part.strip()]
 
-    )
-
-    if last_stop:
-
+    def optional_coordinate(value, label: str) -> float | None:
+        if value is None or text_value(value) == "":
+            return None
         try:
+            coordinate = float(value)
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"{label} is not a number") from error
+        if not math.isfinite(coordinate):
+            raise ValueError(f"{label} is not valid")
+        if label == "Latitude" and not -90 <= coordinate <= 90:
+            raise ValueError("Latitude must be between -90 and 90")
+        if label == "Longitude" and not -180 <= coordinate <= 180:
+            raise ValueError("Longitude must be between -180 and 180")
+        return coordinate
 
-            next_stop_number = int(last_stop.stop_code.replace("ST", "")) + 1
+    def optional_radius(value) -> int:
+        if value is None or text_value(value) == "":
+            return 50
+        try:
+            radius = int(value)
+        except (TypeError, ValueError) as error:
+            raise ValueError("Geofence Radius (m) must be a whole number") from error
+        if not 10 <= radius <= 500:
+            raise ValueError("Geofence Radius (m) must be between 10 and 500")
+        return radius
 
-        except Exception:
+    existing_stops = db.query(Stop).all()
+    stops_by_code = {stop.stop_code.strip().casefold(): stop for stop in existing_stops}
+    stops_by_name = {stop.stop_name.strip().casefold(): stop for stop in existing_stops}
+    routes = db.query(Route).all()
+    routes_by_code = {route.route_code.strip().casefold(): route for route in routes}
+    routes_by_name = {route.route_name.strip().casefold(): route for route in routes}
+    existing_route_stops = {
+        (route_stop.route_id, route_stop.stop_id)
+        for route_stop in db.query(RouteStop).all()
+    }
 
-            next_stop_number = last_stop.id + 1
+    highest_generated_stop_number = 0
+    for stop in existing_stops:
+        code = stop.stop_code.strip().upper()
+        if code.startswith("ST") and code[2:].isdigit():
+            highest_generated_stop_number = max(highest_generated_stop_number, int(code[2:]))
 
-    else:
+    imported_stops: list[dict] = []
+    skipped_stops: list[dict] = []
+    created_routes: list[dict] = []
+    linked_route_stops: list[dict] = []
+    skipped_route_stops: list[dict] = []
+    affected_route_ids: set[int] = set()
 
-        next_stop_number = 1
-
-    for row in sheet.iter_rows(min_row=2, values_only=True):
-
-        stop_name = row[1]
-
-        if stop_name is None:
-
+    for row_number, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
+        stop_name = text_value(get_value(row, "Stop Name" if is_complete_export else "Place"))
+        if not stop_name:
             continue
 
-        stop_name = str(stop_name).strip()
-
-        if stop_name == "":
-
+        stop_code = text_value(get_value(row, "Stop Code")) if is_complete_export else ""
+        try:
+            latitude = optional_coordinate(get_value(row, "Latitude"), "Latitude")
+            longitude = optional_coordinate(get_value(row, "Longitude"), "Longitude")
+            if (latitude is None) != (longitude is None):
+                raise ValueError("Latitude and Longitude must both be provided")
+            radius = optional_radius(get_value(row, "Geofence Radius (m)"))
+        except ValueError as error:
+            skipped_stops.append({
+                "row": row_number,
+                "stop_code": stop_code or None,
+                "stop_name": stop_name,
+                "reason": str(error),
+            })
             continue
 
-        normalized_name = stop_name.lower()
-
-        if normalized_name in existing_stop_names:
-
-            skipped += 1
-
+        by_code = stops_by_code.get(stop_code.casefold()) if stop_code else None
+        by_name = stops_by_name.get(stop_name.casefold())
+        if by_code is not None and by_name is not None and by_code.id != by_name.id:
+            skipped_stops.append({
+                "row": row_number,
+                "stop_code": stop_code or None,
+                "stop_name": stop_name,
+                "reason": "Stop code and stop name match different existing stops",
+            })
             continue
 
-        existing_stop_names.add(normalized_name)
-
-        # ======================================================
-        # GENERATE NEXT AVAILABLE STOP CODE
-        # ======================================================
-
-        last_stop = (
-
-            db.query(Stop)
-
-            .order_by(Stop.id.desc())
-
-            .first()
-
-        )
-
-        if last_stop:
-
-            try:
-
-                last_number = int(last_stop.stop_code.replace("ST", ""))
-
-            except Exception:
-
-                last_number = last_stop.id
-
+        stop = by_code or by_name
+        if stop is not None:
+            skipped_stops.append({
+                "row": row_number,
+                "stop_code": stop.stop_code,
+                "stop_name": stop.stop_name,
+                "reason": "Stop already exists",
+            })
         else:
+            if not stop_code:
+                highest_generated_stop_number += 1
+                stop_code = f"ST{highest_generated_stop_number:04d}"
+            if len(stop_code) > 20 or len(stop_name) > 150:
+                skipped_stops.append({
+                    "row": row_number,
+                    "stop_code": stop_code,
+                    "stop_name": stop_name,
+                    "reason": "Stop code or stop name is too long",
+                })
+                continue
+            stop = Stop(
+                stop_code=stop_code,
+                stop_name=stop_name,
+                latitude=latitude,
+                longitude=longitude,
+                radius=radius,
+                status=text_value(get_value(row, "Status")) or "Active",
+            )
+            db.add(stop)
+            db.flush()
+            stops_by_code[stop.stop_code.casefold()] = stop
+            stops_by_name[stop.stop_name.casefold()] = stop
+            imported_stops.append({"row": row_number, "stop_code": stop.stop_code, "stop_name": stop.stop_name})
 
-            last_number = 0
+        if not is_complete_export:
+            continue
 
+        route_codes = split_values(get_value(row, "Route Number(s)"))
+        route_names = split_values(get_value(row, "Route Name(s)"))
+        route_sequences = split_values(get_value(row, "Route Stop Sequence(s)"))
+        if not route_codes and not route_names and not route_sequences:
+            continue
+        if not (len(route_codes) == len(route_names) == len(route_sequences)):
+            skipped_route_stops.append({
+                "row": row_number,
+                "stop_name": stop.stop_name,
+                "reason": "Route number, name, and sequence counts must match",
+            })
+            continue
 
-        stop_code = f"ST{last_number + imported + 1:04d}"
+        for route_code, route_name, sequence_value in zip(route_codes, route_names, route_sequences):
+            try:
+                sequence = int(sequence_value)
+                if sequence < 1:
+                    raise ValueError
+            except (TypeError, ValueError):
+                skipped_route_stops.append({
+                    "row": row_number,
+                    "stop_name": stop.stop_name,
+                    "route_code": route_code,
+                    "reason": "Route stop sequence must be a positive whole number",
+                })
+                continue
 
-        # ======================================================
-        # CREATE STOP
-        # ======================================================
+            route_by_code = routes_by_code.get(route_code.casefold())
+            route_by_name = routes_by_name.get(route_name.casefold())
+            if route_by_code is not None and route_by_name is not None and route_by_code.id != route_by_name.id:
+                skipped_route_stops.append({
+                    "row": row_number,
+                    "stop_name": stop.stop_name,
+                    "route_code": route_code,
+                    "reason": "Route number and route name match different existing routes",
+                })
+                continue
+            route = route_by_code or route_by_name
+            if route is None:
+                if not route_code or not route_name or len(route_code) > 20 or len(route_name) > 100:
+                    skipped_route_stops.append({
+                        "row": row_number,
+                        "stop_name": stop.stop_name,
+                        "route_code": route_code or None,
+                        "reason": "A valid route number and route name are required to create a route",
+                    })
+                    continue
+                route = Route(route_code=route_code, route_name=route_name, status="Active")
+                db.add(route)
+                db.flush()
+                routes_by_code[route.route_code.casefold()] = route
+                routes_by_name[route.route_name.casefold()] = route
+                created_routes.append({"route_code": route.route_code, "route_name": route.route_name})
 
-        stop = Stop(
+            route_stop_key = (route.id, stop.id)
+            if route_stop_key in existing_route_stops:
+                skipped_route_stops.append({
+                    "row": row_number,
+                    "stop_name": stop.stop_name,
+                    "route_code": route.route_code,
+                    "reason": "Stop is already linked to this route",
+                })
+                continue
 
-            stop_code=stop_code,
+            db.add(RouteStop(route_id=route.id, stop_id=stop.id, sequence=sequence))
+            existing_route_stops.add(route_stop_key)
+            affected_route_ids.add(route.id)
+            linked_route_stops.append({
+                "row": row_number,
+                "stop_name": stop.stop_name,
+                "route_code": route.route_code,
+                "sequence": sequence,
+            })
 
-            stop_name=stop_name,
-
-            latitude=None,
-
-            longitude=None,
-
-            radius=50,
-
-            status="Active"
-
-        )
-
-        db.add(stop)
-
-        imported += 1
-
+    db.flush()
+    for route_id in affected_route_ids:
+        route = db.get(Route, route_id)
+        route.total_stops = db.query(RouteStop).filter(RouteStop.route_id == route_id).count()
     db.commit()
 
     return {
-
         "success": True,
-
-        "imported": imported,
-
-        "skipped": skipped,
-
-        "message": "Stops imported successfully."
-
+        "imported": len(imported_stops),
+        "skipped": len(skipped_stops),
+        "routes_created": len(created_routes),
+        "route_stops_linked": len(linked_route_stops),
+        "route_stops_skipped": len(skipped_route_stops),
+        "summary": {
+            "imported_stops": imported_stops,
+            "skipped_stops": skipped_stops,
+            "created_routes": created_routes,
+            "linked_route_stops": linked_route_stops,
+            "skipped_route_stops": skipped_route_stops,
+        },
+        "message": "Stops import completed.",
     }
 # ==========================================================
 # DELETE STOP

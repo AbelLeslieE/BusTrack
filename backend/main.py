@@ -21,6 +21,7 @@ from backend.services.telemetry_retention import (
     run_telemetry_retention,
     telemetry_retention_enabled,
 )
+from backend.services.restore_state import restore_in_progress
 from backend.routes.auth import router as authentication_router
 from database.create_default_admin import create_default_admin
 from backend.routes.buses import router as bus_router
@@ -57,6 +58,9 @@ async def _airotrack_poll_loop() -> None:
     except ValueError:
         interval = 20
     while True:
+        if restore_in_progress():
+            await asyncio.sleep(1)
+            continue
         database_session = SessionLocal()
         try:
             from backend.services.airotrack import refresh_airotrack
@@ -76,6 +80,9 @@ async def _telemetry_retention_loop() -> None:
     except ValueError:
         interval = 300
     while True:
+        if restore_in_progress():
+            await asyncio.sleep(1)
+            continue
         database_session = SessionLocal()
         try:
             await asyncio.to_thread(run_telemetry_retention, database_session)

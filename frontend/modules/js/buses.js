@@ -268,6 +268,38 @@ async function deleteBus(busId) {
     return true;
 
 }
+
+function exportBuses() {
+
+    const link = document.createElement("a");
+    link.href = `${API.BUSES}export`;
+    link.download = "Buses.xlsx";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+}
+
+async function importBuses(file) {
+
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetch(`${API.BUSES}import`, {
+        method: "POST",
+        body: formData,
+    });
+
+    if (!response.ok) {
+        const contentType = response.headers.get("content-type") || "";
+        const error = contentType.includes("application/json")
+            ? await response.json()
+            : { detail: await response.text() };
+        throw new Error(error.detail || "Unable to import buses.");
+    }
+
+    return response.json();
+
+}
 /* =============================================================================
    UI RENDERING
 ============================================================================= */
@@ -581,6 +613,26 @@ function renderToolbar() {
             =========================================================== -->
 
             <div class="toolbar-actions">
+
+                <input id="bus-import-file" type="file" accept=".xlsx" hidden>
+
+                <button
+                    id="import-bus-btn"
+                    class="secondary-btn"
+                >
+
+                    ⇧ Import Buses
+
+                </button>
+
+                <button
+                    id="export-bus-btn"
+                    class="secondary-btn export-btn"
+                >
+
+                    ⇩ Export Buses
+
+                </button>
 
                 <button
                     id="refresh-btn"
@@ -967,6 +1019,49 @@ function bindEvents(root) {
  * Toolbar Events
  */
 function bindToolbarEvents(root) {
+
+    const exportButton = root.querySelector("#export-bus-btn");
+    if (exportButton) {
+        exportButton.addEventListener("click", exportBuses);
+    }
+
+    const importButton = root.querySelector("#import-bus-btn");
+    const importFile = root.querySelector("#bus-import-file");
+    if (importButton && importFile) {
+        importButton.addEventListener("click", () => importFile.click());
+        importFile.addEventListener("change", async () => {
+            const file = importFile.files?.[0];
+            if (!file) return;
+
+            try {
+                const result = await importBuses(file);
+                await loadBuses();
+                refreshUI(root);
+                const imported = result.summary?.imported_buses
+                    ?.map(bus => `${bus.bus_number} · ${bus.registration_number}`)
+                    .join("\n") || "None";
+                const skipped = result.summary?.skipped_buses
+                    ?.map(bus => `${bus.bus_number || "No bus number"} · ${bus.registration_number || "No registration"} (${bus.reason})`)
+                    .join("\n") || "None";
+                alert(
+`Import Completed
+
+Buses imported: ${result.imported}
+Buses skipped: ${result.skipped}
+
+Imported buses:
+${imported}
+
+Skipped buses:
+${skipped}`
+                );
+            } catch (error) {
+                showNotification(error.message || "Unable to import buses.", "error");
+            } finally {
+                importFile.value = "";
+            }
+        });
+    }
 
     const refreshButton = root.querySelector("#refresh-btn");
 
