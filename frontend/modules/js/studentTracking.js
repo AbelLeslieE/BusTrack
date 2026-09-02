@@ -2963,6 +2963,11 @@ function setTrackingView(
 
         initializeMap();
 
+        // The GPS poll continues while the Track panel is visible. Apply the
+        // newest already-fetched position before revealing the map so the
+        // marker can never resume at the coordinate from the last tab switch.
+        updateBusPosition();
+
         requestAnimationFrame(
             () => {
 
@@ -4473,17 +4478,14 @@ function updateTrackingInterface() {
 
 
     /*
-     * Update the geographical map.
+     * Keep Leaflet's internal route and marker state synchronized even while
+     * the railway-style Track panel is visible. The map panel is merely
+     * hidden, not destroyed, so its marker must consume every accepted GPS
+     * update in the background rather than waiting for the student to switch
+     * back to Map.
      */
-    if (
-        currentView === "map"
-    ) {
-
-        initializeMap();
-
-        updateBusPosition();
-
-    }
+    initializeMap();
+    updateBusPosition();
 
 }
 /* ==========================================================

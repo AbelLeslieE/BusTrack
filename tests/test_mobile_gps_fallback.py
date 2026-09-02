@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 import tempfile
 import unittest
@@ -16,9 +16,9 @@ import backend.routes.models_tracking  # noqa: F401
 from backend.database import Base
 from backend.models import Bus, Driver, Route, RouteStop, Stop, User
 from backend.routes.gps import start_trip, update_location
-from backend.routes.gps_provider import get_driver_tracking_source
+from backend.routes.gps_provider import _update_active_trip_from_vehicle, get_driver_tracking_source
 from backend.routes.models_tracking import LiveLocation, LiveTrip
-from backend.schemas_tracking import LocationUpdateRequest, TripStartRequest
+from backend.schemas_tracking import TripStartRequest
 
 
 class MobileGpsFallbackTest(unittest.TestCase):
@@ -73,19 +73,27 @@ class MobileGpsFallbackTest(unittest.TestCase):
             self.assertEqual(source["tracking_source"], "mobile")
             self.assertEqual(source["active_trip_id"], trip.id)
 
-            update_location(
-                LocationUpdateRequest(
-                    trip_id=trip.id,
-                    latitude=end.latitude,
-                    longitude=end.longitude,
-                    accuracy=8.0,
-                ),
-                user,
+            # A newer coordinate from the installed provider must take over
+            # the same trip rather than creating a competing route state.
+            provider_timestamp = trip.last_location_update + timedelta(seconds=20)
+            _update_active_trip_from_vehicle(
                 db,
+                {
+                    "latitude": end.latitude,
+                    "longitude": end.longitude,
+                    "speed_kmh": 0.0,
+                    "accuracy": 8.0,
+                    "fix_time": provider_timestamp,
+                    "valid": True,
+                    "ignition": True,
+                },
+                bus.id,
+                provider_timestamp,
             )
+            db.commit()
             db.refresh(trip)
             self.assertEqual(trip.route_direction, "reverse")
-            self.assertEqual(trip.current_location_source, "mobile")
+            self.assertEqual(trip.current_location_source, "vehicle_gps")
 
 
 if __name__ == "__main__":
