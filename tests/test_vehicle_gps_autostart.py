@@ -184,10 +184,11 @@ class VehicleGpsAutostartTest(unittest.TestCase):
                 )
             )
 
-            # Simulate a restart after the final coordinate was saved but
-            # before its route transition committed. The first repeated
-            # ignition-off heartbeat must reconcile immediately; it must not
-            # wait for a second/newer coordinate.
+            # Simulate an interrupted state update. A repeated provider
+            # packet with the same device timestamp is a replay, not a new
+            # observation, so it must not alter route direction or stop
+            # progress. The next strictly newer parked heartbeat will be
+            # accepted normally.
             trip.route_direction = "forward"
             trip.terminal_reached_at = None
             trip.terminal_stop_id = None
@@ -210,6 +211,26 @@ class VehicleGpsAutostartTest(unittest.TestCase):
                 },
                 bus.id,
                 final_fix,
+            )
+            database_session.commit()
+            database_session.refresh(trip)
+            self.assertEqual(trip.route_direction, "forward")
+            self.assertIsNone(trip.terminal_stop_id)
+
+            newer_heartbeat = final_fix + timedelta(minutes=2)
+            _update_active_trip_from_vehicle(
+                database_session,
+                {
+                    "latitude": end.latitude,
+                    "longitude": end.longitude,
+                    "speed_kmh": 0.0,
+                    "accuracy": 8.0,
+                    "fix_time": newer_heartbeat,
+                    "valid": True,
+                    "ignition": False,
+                },
+                bus.id,
+                newer_heartbeat,
             )
             database_session.commit()
             database_session.refresh(trip)

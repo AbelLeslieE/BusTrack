@@ -377,12 +377,12 @@ def _update_active_trip_from_vehicle(db: Session, position: dict[str, Any], bus_
 
     position_timestamp = position.get("fix_time") or received_at
 
-    # A provider packet may be preserved in raw history even when it is old,
-    # but it must never regress the student-visible trip state. An exact replay
-    # of the current coordinate is intentionally allowed through: this lets the
-    # first/next terminal heartbeat reconcile a trip after a restart without
-    # waiting for the device to produce a different position or timestamp.
-    replayed_current_position = False
+    # Provider history is intentionally retained even when a packet is old,
+    # but the current trip snapshot is a strict device-time state machine.
+    # A packet at the same recorded time is not a newer GPS observation,
+    # regardless of whether its coordinates happen to match.  Letting it run
+    # progression again would allow a replayed morning packet to mutate the
+    # student-visible direction or stop list after a restart.
     if trip.last_location_update is not None:
         latest_trip_time = (
             trip.last_location_update.replace(tzinfo=timezone.utc)
@@ -394,17 +394,8 @@ def _update_active_trip_from_vehicle(db: Session, position: dict[str, Any], bus_
             if position_timestamp.tzinfo is None
             else position_timestamp.astimezone(timezone.utc)
         )
-        if latest_position_time < latest_trip_time:
+        if latest_position_time <= latest_trip_time:
             return trip.id
-        if latest_position_time == latest_trip_time:
-            replayed_current_position = bool(
-                trip.current_latitude is not None
-                and trip.current_longitude is not None
-                and math.isclose(float(trip.current_latitude), float(position["latitude"]), abs_tol=1e-7)
-                and math.isclose(float(trip.current_longitude), float(position["longitude"]), abs_tol=1e-7)
-            )
-            if not replayed_current_position:
-                return trip.id
 
     previous_location = db.query(LiveLocation).filter(
         LiveLocation.trip_id == trip.id,
@@ -432,15 +423,14 @@ def _update_active_trip_from_vehicle(db: Session, position: dict[str, Any], bus_
         db=db,
     )
 
-    if not replayed_current_position:
-        db.add(LiveLocation(
-            trip_id=trip.id,
-            latitude=position["latitude"], longitude=position["longitude"],
-            speed=position["speed_kmh"], accuracy=position["accuracy"],
-            recorded_at=position_timestamp, source="vehicle_gps",
-        ))
-        db.flush()
-        trim_active_trip_location_history(db, trip.id)
+    db.add(LiveLocation(
+        trip_id=trip.id,
+        latitude=position["latitude"], longitude=position["longitude"],
+        speed=position["speed_kmh"], accuracy=position["accuracy"],
+        recorded_at=position_timestamp, source="vehicle_gps",
+    ))
+    db.flush()
+    trim_active_trip_location_history(db, trip.id)
     trip.current_latitude = position["latitude"]
     trip.current_longitude = position["longitude"]
     trip.current_speed = position["speed_kmh"]
@@ -826,22 +816,14 @@ def ingest_positions(
                 else stored_time.astimezone(timezone.utc)
             )
         # A missing device timestamp must not discard a heartbeat. Use its
-        # authenticated server receipt time. Exact replays of the current
-        # coordinate are also passed to route progression so a final-stop
-        # heartbeat can reverse immediately after a restart/reconnect.
+        # authenticated server receipt time. Visible state is updated only by
+        # a strictly newer device/receipt time; equality is a replay, not a
+        # new GPS observation.
         position_time = position["fix_time"] or now
         should_apply = (
             state is None
             or state_time is None
             or position_time > state_time
-        )
-        should_reconcile_route = bool(
-            not should_apply
-            and state is not None
-            and state_time is not None
-            and position_time == state_time
-            and math.isclose(float(state.latitude), float(position["latitude"]), abs_tol=1e-7)
-            and math.isclose(float(state.longitude), float(position["longitude"]), abs_tol=1e-7)
         )
         active_trip_id = None
         if should_apply:
@@ -854,10 +836,8 @@ def ingest_positions(
             state.received_at, state.status, state.ignition, state.motion = now, position["status"], position["ignition"], position["motion"]
             state.valid, state.protocol, state.raw_payload = position["valid"], position["protocol"], raw_json
             active_trip_id = _update_active_trip_from_vehicle(db, position, bus.id, now)
-        elif should_reconcile_route:
-            active_trip_id = _update_active_trip_from_vehicle(db, position, bus.id, now)
         accepted.append({"index": index, "bus_id": bus.id, "bus_number": bus.bus_number, "external_device_id": external_device_id,
-                         "applied_to_current_state": should_apply, "route_progression_reconciled": should_reconcile_route,
+                         "applied_to_current_state": should_apply, "route_progression_reconciled": False,
                          "active_trip_id": active_trip_id})
     db.commit()
     return {"accepted": accepted, "ignored": ignored, "received_count": len(accepted) + len(ignored)}
