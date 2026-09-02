@@ -19,6 +19,7 @@ from backend.routes.gps import start_trip, stop_trip
 from backend.routes.gps_provider import _update_active_trip_from_vehicle
 from backend.routes.models_tracking import LiveTrip
 from backend.schemas_tracking import TripStopRequest
+from backend.services.vehicle_gps import vehicle_gps_is_authoritative
 
 
 class VehicleGpsAutostartTest(unittest.TestCase):
@@ -169,6 +170,19 @@ class VehicleGpsAutostartTest(unittest.TestCase):
             self.assertEqual(trip.route_direction, "reverse")
             self.assertEqual(trip.terminal_stop_id, end.id)
             self.assertIsNone(trip.ended_at)
+
+            # A recent ignition-off heartbeat is a valid vehicle position,
+            # not an offline/missing-GPS condition.
+            self.assertTrue(
+                vehicle_gps_is_authoritative(
+                    type("GPSState", (), {
+                        "ignition": False,
+                        "fix_time": final_fix,
+                        "received_at": final_fix,
+                    })(),
+                    now=final_fix,
+                )
+            )
 
     def test_delayed_final_stop_fix_reverses_the_running_trip(self) -> None:
         """A reporting gap must not prevent the next terminal fix reversing."""

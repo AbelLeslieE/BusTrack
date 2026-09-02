@@ -890,14 +890,13 @@ def get_driver_tracking_source(current_user: User = Depends(require_driver), db:
     vehicle_is_primary = bool(
         vehicle
         and vehicle["is_fresh"]
-        and state.ignition is True
     )
     if vehicle_is_primary:
         return {"tracking_source": "vehicle_gps", "mobile_tracking_allowed": True,
                 "reason": (
                     "Vehicle GPS is live; phone GPS is also recorded to keep the trip continuous."
                     if state.ignition is True
-                    else "Fresh vehicle GPS is being received; phone GPS is also recorded."
+                    else "Vehicle GPS parked heartbeat is current and accepted for route progression."
                 ), "vehicle": vehicle,
                 "route_direction": active_trip.route_direction if active_trip else None,
                 "active_trip_id": active_trip.id if active_trip else None}

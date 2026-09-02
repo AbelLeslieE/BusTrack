@@ -23,9 +23,9 @@ def vehicle_gps_expected_interval_seconds(ignition: bool | None) -> int:
 
 
 def vehicle_gps_is_authoritative(state, now: datetime | None = None) -> bool:
-    """Return true only for a recent, valid, ignition-on vehicle position."""
+    """Return true for any recent vehicle coordinate, parked or moving."""
 
-    if state is None or state.ignition is not True:
+    if state is None:
         return False
 
     position_time = state.fix_time or state.received_at
