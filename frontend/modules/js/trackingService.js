@@ -237,7 +237,8 @@ export async function startTrip() {
     try {
         const source = await refreshTrackingSource();
         if (!source.active_trip_id) {
-            throw new Error("Waiting for the vehicle GPS module to begin tracking this bus.");
+            await startTripUsingMobileGpsFallback();
+            return;
         }
 
         // The vehicle module creates the session. Enabling phone GPS only
@@ -479,6 +480,7 @@ async function startTripUsingMobileGpsFallback() {
         // after the backend has created the mobile-sourced trip.
         activeTrackingSource = "mobile";
         tracking = true;
+        mobileTrackingEnabled = true;
         updateDirectionControls(trip.route_direction || "forward");
 
 

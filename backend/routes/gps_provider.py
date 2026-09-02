@@ -907,6 +907,28 @@ def get_driver_tracking_source(current_user: User = Depends(require_driver), db:
                 ), "vehicle": vehicle,
                 "route_direction": active_trip.route_direction if active_trip else None,
                 "active_trip_id": active_trip.id if active_trip else None}
+    mobile_is_current = bool(
+        active_trip is not None
+        and active_trip.current_location_source == "mobile"
+        and active_trip.last_location_update is not None
+        and (
+            (
+                active_trip.last_location_update.replace(tzinfo=timezone.utc)
+                if active_trip.last_location_update.tzinfo is None
+                else active_trip.last_location_update.astimezone(timezone.utc)
+            )
+            >= _utc_now() - timedelta(seconds=GPS_OFFLINE_GRACE_SECONDS)
+        )
+    )
+    if mobile_is_current:
+        return {
+            "tracking_source": "mobile",
+            "mobile_tracking_allowed": True,
+            "reason": "Phone GPS fallback is live; vehicle GPS will take over when it reports.",
+            "vehicle": vehicle,
+            "route_direction": active_trip.route_direction,
+            "active_trip_id": active_trip.id,
+        }
     return {
             # A running GPS-owned session does not mean the driver has enabled
             # phone sharing. The browser owns that opt-in, so do not report a

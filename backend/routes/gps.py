@@ -770,9 +770,11 @@ def start_trip(
             detail="No bus assigned.",
         )
 
-    # Vehicle GPS owns the live session. This endpoint is retained for
-    # compatible clients, but it now only returns the GPS-created session to
-    # which the driver may attach mobile location sharing.
+    # A provider-created trip is reused so the phone can supplement the
+    # installed module.  When the module is unavailable, an explicit phone
+    # position is also allowed to create the same live-trip state for testing
+    # and operational fallback.  Both sources use the identical route and
+    # terminal-progression rules below; neither rewrites route stops.
     trip = (
         db.query(LiveTrip)
         .filter(
@@ -784,11 +786,97 @@ def start_trip(
         .order_by(LiveTrip.last_location_update.desc(), LiveTrip.started_at.desc())
         .first()
     )
-    if trip is None:
+    if trip is not None:
+        return build_live_trip_response(trip, db)
+
+    if start_request is None:
         raise HTTPException(
             status_code=409,
-            detail="Vehicle GPS tracking has not started for this bus yet.",
+            detail=(
+                "Vehicle GPS tracking has not started for this bus yet. "
+                "Allow phone location to start the mobile fallback."
+            ),
         )
+
+    route = (
+        db.query(Route)
+        .filter(
+            Route.bus_id == driver.bus_id,
+            Route.status == "Active",
+        )
+        .order_by(Route.id.asc())
+        .first()
+    )
+    if route is None:
+        raise HTTPException(
+            status_code=400,
+            detail="No active route is assigned to this bus.",
+        )
+
+    route_stops = (
+        db.query(RouteStop)
+        .filter(RouteStop.route_id == route.id)
+        .order_by(RouteStop.sequence.asc())
+        .all()
+    )
+    if not route_stops:
+        raise HTTPException(
+            status_code=400,
+            detail="The assigned route has no stops to track.",
+        )
+
+    current_timestamp = datetime.now(timezone.utc)
+    reported_speed_kmh = (
+        float(start_request.speed) * 3.6
+        if start_request.speed is not None
+        else None
+    )
+    initial_speed_kmh = validate_speed(
+        reported_speed_kmh=reported_speed_kmh,
+        calculated_speed_kmh=None,
+    )["speed_kmh"]
+    direction = direction_from_start_position(
+        route_stops,
+        start_request.latitude,
+        start_request.longitude,
+    )
+    trip = LiveTrip(
+        driver_id=driver.id,
+        bus_id=driver.bus_id,
+        route_id=route.id,
+        status="Running",
+        route_direction=direction,
+        current_latitude=start_request.latitude,
+        current_longitude=start_request.longitude,
+        current_speed=initial_speed_kmh,
+        current_accuracy=start_request.accuracy,
+        last_location_update=current_timestamp,
+        current_location_source="mobile",
+        started_at=current_timestamp,
+    )
+    db.add(trip)
+    db.flush()
+
+    update_route_stop_progression(
+        trip=trip,
+        route_stops=ordered_route_stops(route_stops, trip.route_direction),
+        latitude=start_request.latitude,
+        longitude=start_request.longitude,
+        previous_location=None,
+        current_timestamp=current_timestamp,
+        db=db,
+    )
+    db.add(LiveLocation(
+        trip_id=trip.id,
+        latitude=start_request.latitude,
+        longitude=start_request.longitude,
+        speed=initial_speed_kmh,
+        accuracy=start_request.accuracy,
+        recorded_at=current_timestamp,
+        source="mobile",
+    ))
+    db.commit()
+    db.refresh(trip)
     return build_live_trip_response(trip, db)
 
 
