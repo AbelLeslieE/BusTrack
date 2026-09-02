@@ -160,6 +160,29 @@ class TerminalDirectionTest(unittest.TestCase):
         self.assertEqual(reverse_event["skipped_stop_count"], 1)
         self.assertEqual(reverse_trip.current_route_stop_id, 2)
 
+    def test_partial_terminal_state_is_reconciled_and_reversed(self) -> None:
+        """A saved terminal ID must not suppress an uncommitted reversal."""
+
+        self.trip.route_direction = "forward"
+        self.trip.current_route_stop_id = self.forward_stops[-1].id
+        self.trip.current_stop_status = "Arrived"
+        self.trip.terminal_stop_id = self.end.id
+        self.trip.terminal_reached_at = self.now
+
+        event = update_route_stop_progression(
+            self.trip,
+            self.forward_stops,
+            self.end.latitude,
+            self.end.longitude,
+            previous_location=None,
+            current_timestamp=self.now,
+            db=self.database,
+        )
+
+        self.assertTrue(event["terminal_reached"])
+        self.assertEqual(event["next_direction"], "reverse")
+        self.assertEqual(self.trip.route_direction, "reverse")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -287,12 +287,16 @@ def update_route_stop_progression(
         return route_stop.id == terminal_route_stop.id
 
     def terminal_reversal_is_pending(route_stop: RouteStop) -> bool:
-        """Return true once for each terminal arrival of a live trip."""
+        """Return true while this terminal still ends the active direction.
 
-        return (
-            is_active_direction_terminal(route_stop)
-            and getattr(trip, "terminal_stop_id", None) != route_stop.stop.id
-        )
+        ``terminal_stop_id`` is audit/display metadata and may already have
+        been written by an interrupted or older deployment before the trip's
+        direction was committed. The persisted direction is the authority:
+        once it changes, this same physical stop is the first stop of the new
+        leg and ``is_active_direction_terminal`` becomes false automatically.
+        """
+
+        return is_active_direction_terminal(route_stop)
 
     def record_stop_event(event_type: str, route_stop: RouteStop, stop, distance: float | None):
         db.add(TripStopEvent(
