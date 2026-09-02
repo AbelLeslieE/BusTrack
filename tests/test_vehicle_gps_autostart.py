@@ -184,6 +184,38 @@ class VehicleGpsAutostartTest(unittest.TestCase):
                 )
             )
 
+            # Simulate a restart after the final coordinate was saved but
+            # before its route transition committed. The first repeated
+            # ignition-off heartbeat must reconcile immediately; it must not
+            # wait for a second/newer coordinate.
+            trip.route_direction = "forward"
+            trip.terminal_reached_at = None
+            trip.terminal_stop_id = None
+            trip.current_route_stop_id = route.route_stops[-1].id
+            trip.current_stop_status = "Arrived"
+            trip.current_latitude = end.latitude
+            trip.current_longitude = end.longitude
+            trip.last_location_update = final_fix
+            database_session.commit()
+            _update_active_trip_from_vehicle(
+                database_session,
+                {
+                    "latitude": end.latitude,
+                    "longitude": end.longitude,
+                    "speed_kmh": 0.0,
+                    "accuracy": 8.0,
+                    "fix_time": final_fix,
+                    "valid": False,
+                    "ignition": False,
+                },
+                bus.id,
+                final_fix,
+            )
+            database_session.commit()
+            database_session.refresh(trip)
+            self.assertEqual(trip.route_direction, "reverse")
+            self.assertEqual(trip.terminal_stop_id, end.id)
+
     def test_delayed_final_stop_fix_reverses_the_running_trip(self) -> None:
         """A reporting gap must not prevent the next terminal fix reversing."""
 

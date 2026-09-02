@@ -71,6 +71,7 @@ class ProviderGpsFreshnessTest(unittest.TestCase):
             state = database_session.query(BusGPSState).filter(BusGPSState.bus_id == bus.id).one()
             self.assertEqual(first["accepted"][0]["applied_to_current_state"], True)
             self.assertEqual(equal["accepted"][0]["applied_to_current_state"], False)
+            self.assertEqual(equal["accepted"][0]["route_progression_reconciled"], False)
             self.assertEqual(older["accepted"][0]["applied_to_current_state"], False)
             self.assertEqual(state.latitude, 10.0)
             self.assertEqual(database_session.query(ProviderGPSPosition).filter(ProviderGPSPosition.bus_id == bus.id).count(), 3)
@@ -122,6 +123,24 @@ class ProviderGpsFreshnessTest(unittest.TestCase):
             self.assertTrue(result["accepted"][0]["applied_to_current_state"])
             self.assertFalse(state.valid)
             self.assertEqual((state.latitude, state.longitude), (10.5, 76.0))
+
+    def test_missing_device_timestamp_uses_receipt_time(self) -> None:
+        with self.session_factory() as database_session:
+            bus = Bus(bus_number="NO-TIME-01", registration_number="NO-TIME-REG", capacity=40, manufacturer="Test", model="Coach", year=2026, fuel_type="Diesel", status="Active", device_id="NO-TIME-DEVICE")
+            token = GPSIngestToken(label="no-time", token_hash=hashlib.sha256(b"no-time-token").hexdigest(), is_active=True)
+            database_session.add_all([bus, token])
+            database_session.commit()
+
+            payload = self._payload(10.25, datetime(2026, 8, 24, 8, 30, tzinfo=timezone.utc))
+            payload["uniqueId"] = "NO-TIME-DEVICE"
+            payload.pop("fixTime")
+            payload["valid"] = False
+            result = ingest_positions(self._request(), payload, "no-time-token", database_session)
+
+            state = database_session.query(BusGPSState).filter(BusGPSState.bus_id == bus.id).one()
+            self.assertTrue(result["accepted"][0]["applied_to_current_state"])
+            self.assertIsNone(state.fix_time)
+            self.assertEqual((state.latitude, state.longitude), (10.25, 76.0))
 
 
 if __name__ == "__main__":
