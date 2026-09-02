@@ -77,6 +77,22 @@ class TerminalDirectionTest(unittest.TestCase):
         self.assertIsNone(duplicate_event)
         self.assertEqual(self.trip.route_direction, "reverse")
 
+        # A stale caller may still supply the route in its canonical order
+        # after the trip has turned around.  The persisted direction and
+        # terminal identity must prevent that parked heartbeat from undoing
+        # the reversal.
+        canonical_order_duplicate = update_route_stop_progression(
+            self.trip,
+            self.forward_stops,
+            self.end.latitude,
+            self.end.longitude,
+            previous_location=None,
+            current_timestamp=self.now,
+            db=self.database,
+        )
+        self.assertIsNone(canonical_order_duplicate)
+        self.assertEqual(self.trip.route_direction, "reverse")
+
         # A later device fix at the opposite terminal completes the return
         # leg and automatically restores the normal morning direction.
         return_event = update_route_stop_progression(

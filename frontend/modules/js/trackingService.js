@@ -747,6 +747,7 @@ function applyTrackingSource(source) {
     }
 
     const vehicleIsPrimary = source.tracking_source === "vehicle_gps";
+    const vehicleHasLastKnownPosition = source.tracking_source === "vehicle_gps_last_known";
     const mobileIsActive = source.tracking_source === "mobile";
     const mobileIsReady = source.tracking_source === "mobile_available";
     const hasVehiclePosition = Boolean(
@@ -782,14 +783,18 @@ function applyTrackingSource(source) {
         ? "mobile"
         : vehicleIsPrimary
             ? "vehicle_gps"
+            : vehicleHasLastKnownPosition
+                ? "vehicle_gps_last_known"
             : "unavailable";
     const card = document.getElementById("trackingSourceCard");
     const button = document.getElementById("mobileFallbackBtn");
-    card?.classList.toggle("is-vehicle", vehicleIsPrimary);
+    card?.classList.toggle("is-vehicle", vehicleIsPrimary || vehicleHasLastKnownPosition);
     setText(
         "trackingSourceValue",
         vehicleIsPrimary
             ? "Vehicle GPS (MVD)"
+            : vehicleHasLastKnownPosition
+                ? "Vehicle GPS · last known location"
             : mobileIsActive
                 ? "Phone GPS"
                 : mobileIsReady
@@ -798,7 +803,11 @@ function applyTrackingSource(source) {
     );
     setText(
         "trackingSourcePill",
-        vehicleIsPrimary ? "LIVE" : mobileIsActive ? "LIVE" : "WAITING"
+        vehicleIsPrimary || mobileIsActive
+            ? "LIVE"
+            : vehicleHasLastKnownPosition
+                ? "LAST KNOWN"
+                : "WAITING"
     );
     setText("trackingSourceReason", source.reason || "Location-source status is unavailable.");
     setText(
@@ -807,6 +816,8 @@ function applyTrackingSource(source) {
             ? "🚌 Vehicle GPS + phone"
             : vehicleIsPrimary
                 ? "🚌 Vehicle GPS"
+            : vehicleHasLastKnownPosition
+                ? "🚌 Vehicle GPS · last known"
             : source.vehicle?.ignition === false
                 ? "🚌 Vehicle GPS · ignition off"
                 : mobileIsActive && mobileTrackingEnabled ? "📱 Phone GPS" : "⚫ Waiting for vehicle GPS"
@@ -817,6 +828,8 @@ function applyTrackingSource(source) {
             ? "🚌 Vehicle GPS + phone"
             : vehicleIsPrimary
                 ? "🚌 Vehicle GPS"
+            : vehicleHasLastKnownPosition
+                ? "🚌 Vehicle GPS · last known"
             : source.vehicle?.ignition === false
                 ? "🚌 Vehicle GPS · ignition off"
                 : mobilePublishingEnabled ? "📱 Phone GPS" : "⚫ GPS unavailable"
@@ -850,7 +863,9 @@ function applyTrackingSource(source) {
     if (mobilePublishingEnabled) {
         setText(
             "gpsStatus",
-            source.vehicle?.ignition === false
+            vehicleHasLastKnownPosition
+                ? "Vehicle GPS gap · showing last known position"
+                : source.vehicle?.ignition === false
                 ? "Vehicle GPS · ignition off · last known position"
                 : "Phone GPS sharing · waiting for vehicle GPS"
         );
@@ -860,6 +875,15 @@ function applyTrackingSource(source) {
         if (mobilePublishingEnabled && watchId === null) {
             startLocationTracking();
         }
+        return;
+    }
+
+    // Do not replace a valid, saved module position with a generic
+    // "Waiting for GPS" state merely because the next report is delayed.
+    // There is no new coordinate to plot, so the marker remains exactly at
+    // the timestamped last-known location until the device reports again.
+    if (vehicleHasLastKnownPosition) {
+        setText("gpsStatus", "Vehicle GPS gap · showing last known position");
         return;
     }
 

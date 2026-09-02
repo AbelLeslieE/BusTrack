@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 import tempfile
 import unittest
@@ -87,6 +87,30 @@ class VehicleGpsAutostartTest(unittest.TestCase):
             self.assertIn("Vehicle GPS tracking continues", stop_result["message"])
             self.assertIsNone(trip.ended_at)
 
+            # A normal 20-second update at the terminal must flip the same
+            # still-running trip even when a provider labels a parked final
+            # coordinate as "valid: false".
+            final_fix = timestamp + timedelta(seconds=20)
+            _update_active_trip_from_vehicle(
+                database_session,
+                {
+                    "latitude": stop_two.latitude,
+                    "longitude": stop_two.longitude,
+                    "speed_kmh": 0.0,
+                    "accuracy": 8.0,
+                    "fix_time": final_fix,
+                    "valid": False,
+                    "ignition": True,
+                },
+                bus.id,
+                final_fix,
+            )
+            database_session.commit()
+            database_session.refresh(trip)
+            self.assertEqual(trip.route_direction, "reverse")
+            self.assertEqual(trip.terminal_stop_id, stop_two.id)
+            self.assertIsNone(trip.ended_at)
+
     def test_ignition_off_heartbeat_creates_continuous_tracking_state(self) -> None:
         with self.session_factory() as database_session:
             user = User(username="parked-module-driver", password_hash="unused", full_name="Parked Module Driver", role="Driver", status="Active")
@@ -122,6 +146,80 @@ class VehicleGpsAutostartTest(unittest.TestCase):
             self.assertEqual(trip.current_location_source, "vehicle_gps")
             self.assertEqual(trip.current_route_stop_id, route.route_stops[0].id)
             self.assertEqual(trip.current_stop_status, "Arrived")
+
+            # A parked module's expected two-minute heartbeat uses exactly
+            # the same terminal reversal path.
+            final_fix = timestamp + timedelta(minutes=2)
+            _update_active_trip_from_vehicle(
+                database_session,
+                {
+                    "latitude": end.latitude,
+                    "longitude": end.longitude,
+                    "speed_kmh": 0.0,
+                    "accuracy": 8.0,
+                    "fix_time": final_fix,
+                    "valid": True,
+                    "ignition": False,
+                },
+                bus.id,
+                final_fix,
+            )
+            database_session.commit()
+            database_session.refresh(trip)
+            self.assertEqual(trip.route_direction, "reverse")
+            self.assertEqual(trip.terminal_stop_id, end.id)
+            self.assertIsNone(trip.ended_at)
+
+    def test_delayed_final_stop_fix_reverses_the_running_trip(self) -> None:
+        """A reporting gap must not prevent the next terminal fix reversing."""
+
+        with self.session_factory() as database_session:
+            user = User(username="gap-driver", password_hash="unused", full_name="Gap Driver", role="Driver", status="Active")
+            bus = Bus(bus_number="GPS-GAP", registration_number="GPS-GAP-REG", capacity=40, manufacturer="Test", model="Coach", year=2026, fuel_type="Diesel", status="Active")
+            database_session.add_all([user, bus])
+            database_session.flush()
+            driver = Driver(user_id=user.id, driver_code="GPS-GAP-DRV", license_number="GPS-GAP-LIC", license_expiry=date(2030, 1, 1), status="Available", bus_id=bus.id)
+            database_session.add(driver)
+            database_session.flush()
+            route = Route(route_code="GPS-GAP", route_name="GPS Gap Route", bus_id=bus.id, driver_id=driver.id, status="Active", total_stops=2)
+            start = Stop(stop_code="GPS-GAP-A", stop_name="Gap Start", latitude=10.0, longitude=76.0, radius=100, status="Active")
+            end = Stop(stop_code="GPS-GAP-B", stop_name="Gap End", latitude=10.1, longitude=76.1, radius=100, status="Active")
+            database_session.add_all([route, start, end])
+            database_session.flush()
+            database_session.add_all([
+                RouteStop(route_id=route.id, stop_id=start.id, sequence=1),
+                RouteStop(route_id=route.id, stop_id=end.id, sequence=2),
+            ])
+            database_session.commit()
+
+            first_fix = datetime(2026, 8, 24, 8, 30, tzinfo=timezone.utc)
+            trip_id = _update_active_trip_from_vehicle(
+                database_session,
+                {"latitude": start.latitude, "longitude": start.longitude, "speed_kmh": 0.0, "accuracy": 8.0, "fix_time": first_fix, "valid": True, "ignition": True},
+                bus.id,
+                first_fix,
+            )
+            database_session.commit()
+
+            # Five minutes later, the next valid module coordinate arrives at
+            # the final stop. Its age does not affect route progression.
+            final_fix = first_fix + timedelta(minutes=5)
+            _update_active_trip_from_vehicle(
+                database_session,
+                {"latitude": end.latitude, "longitude": end.longitude, "speed_kmh": 0.0, "accuracy": 8.0, "fix_time": final_fix, "valid": True, "ignition": False},
+                bus.id,
+                final_fix,
+            )
+            database_session.commit()
+
+            trip = database_session.get(LiveTrip, trip_id)
+            self.assertEqual(trip.route_direction, "reverse")
+            self.assertEqual(trip.terminal_stop_id, end.id)
+            self.assertEqual(
+                trip.last_location_update.replace(tzinfo=timezone.utc),
+                final_fix,
+            )
+            self.assertIsNone(trip.ended_at)
 
 
 if __name__ == "__main__":

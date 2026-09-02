@@ -266,6 +266,34 @@ def update_route_stop_progression(
     # FORWARD rather than being treated as a new return terminal.
     original_stops = original_route_stops(route_stops)
 
+    def is_active_direction_terminal(route_stop: RouteStop) -> bool:
+        """Whether ``route_stop`` finishes the trip's current direction.
+
+        GPS updates normally receive a direction-ordered list, but that is a
+        presentation convenience rather than durable state.  Resolving the
+        terminal from the immutable route endpoints and the persisted trip
+        direction prevents a replayed or legacy canonical-order update from
+        reversing a parked bus a second time.
+        """
+
+        if len(original_stops) < 2 or route_stop.stop is None:
+            return False
+
+        terminal_route_stop = (
+            original_stops[0]
+            if trip.route_direction == "reverse"
+            else original_stops[-1]
+        )
+        return route_stop.id == terminal_route_stop.id
+
+    def terminal_reversal_is_pending(route_stop: RouteStop) -> bool:
+        """Return true once for each terminal arrival of a live trip."""
+
+        return (
+            is_active_direction_terminal(route_stop)
+            and getattr(trip, "terminal_stop_id", None) != route_stop.stop.id
+        )
+
     def record_stop_event(event_type: str, route_stop: RouteStop, stop, distance: float | None):
         db.add(TripStopEvent(
             trip_id=trip.id,
@@ -383,11 +411,10 @@ def update_route_stop_progression(
     # reconnect, server restart, or delayed provider heartbeat. Direction is
     # normally switched by the arrival transition below, but a parked bus may
     # keep reporting from inside the terminal without crossing it again.
-    # Once switched, this stop is index 0 in the reverse-ordered list, so the
-    # condition cannot switch the same trip repeatedly.
+    # ``terminal_stop_id`` makes this idempotent even if a legacy caller sends
+    # the route in its original order after the direction has changed.
     if (
-        len(route_stops) > 1
-        and current_route_stop == route_stops[-1]
+        terminal_reversal_is_pending(current_route_stop)
         and trip.current_stop_status == "Arrived"
         and inside_radius
     ):
@@ -470,7 +497,7 @@ def update_route_stop_progression(
             trip.current_stop_departed_at = None
             record_stop_event("Arrived", target_route_stop, target_stop, target_distance)
 
-            terminal_reached = target_route_stop == route_stops[-1]
+            terminal_reached = terminal_reversal_is_pending(target_route_stop)
             completed_direction = None
             next_direction = None
             if terminal_reached:
@@ -519,7 +546,7 @@ def update_route_stop_progression(
         # The final stop completes the present route leg.  Keep the live trip
         # running and switch its travel view so the next provider fix advances
         # from this terminal through the same immutable route in reverse.
-        terminal_reached = len(route_stops) > 1 and current_route_stop == route_stops[-1]
+        terminal_reached = terminal_reversal_is_pending(current_route_stop)
         completed_direction = None
         next_direction = None
         if terminal_reached:

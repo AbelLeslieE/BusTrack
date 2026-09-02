@@ -259,10 +259,10 @@ def _serialize_state(state: BusGPSState, bus: Bus, *, include_raw: bool = False)
         "expected_interval_seconds": expected_interval_seconds,
         "age_seconds": age_seconds,
         "is_fresh": fresh,
-        # A parked heartbeat still comes from the vehicle tracker.  Do not
-        # label it as a mobile fallback: browser/driver GPS is not part of
-        # the production tracking data path.
-        "tracking_source": "vehicle_gps" if fresh else "unavailable",
+        # A delayed module fix is still a real vehicle position.  Keep it
+        # available to every portal as the last known location instead of
+        # making the bus disappear after the freshness grace period.
+        "tracking_source": "vehicle_gps" if fresh else "vehicle_gps_last_known",
     }
     if include_raw:
         try:
@@ -317,11 +317,11 @@ def _ensure_vehicle_tracking_session(
     if trip is not None:
         return trip
 
-    # GPS state is continuous. A valid parked/ignition-off heartbeat must be
-    # able to establish the same route-state session as an ignition-on fix so
-    # students retain a current marker, direction, and stop progress.
-    if position.get("valid") is False:
-        return None
+    # GPS state is continuous. Any authenticated packet with a usable
+    # coordinate can establish the same route-state session as an
+    # ignition-on fix. Provider ``valid`` is retained as diagnostics only:
+    # some devices flag parked terminal heartbeats as false even though their
+    # coordinates are exactly what is needed to reverse the trip.
 
     route = db.query(Route).filter(
         Route.bus_id == bus_id,
@@ -370,11 +370,10 @@ def _update_active_trip_from_vehicle(db: Session, position: dict[str, Any], bus_
     if trip is None:
         return None
 
-    # Some installed modules do not send an ignition attribute. A valid
+    # Some installed modules do not send an ignition attribute. Any accepted
     # coordinate must still progress the active trip even while phone data is
-    # also arriving. Explicitly invalid fixes remain in provider history only.
-    if position.get("valid") is False:
-        return trip.id
+    # also arriving. The provider's validity flag is preserved for diagnostics
+    # but never blocks a final-stop coordinate from reversing the route.
 
     position_timestamp = position.get("fix_time") or received_at
 
@@ -813,8 +812,7 @@ def ingest_positions(
                 else stored_time.astimezone(timezone.utc)
             )
         should_apply = (
-            position["valid"] is not False
-            and position["fix_time"] is not None
+            position["fix_time"] is not None
             and (
                 state is None
                 or state_time is None
@@ -893,7 +891,6 @@ def get_driver_tracking_source(current_user: User = Depends(require_driver), db:
         vehicle
         and vehicle["is_fresh"]
         and state.ignition is True
-        and state.valid is not False
     )
     if vehicle_is_primary:
         return {"tracking_source": "vehicle_gps", "mobile_tracking_allowed": True,
@@ -908,10 +905,10 @@ def get_driver_tracking_source(current_user: User = Depends(require_driver), db:
             # A running GPS-owned session does not mean the driver has enabled
             # phone sharing. The browser owns that opt-in, so do not report a
             # phone source merely because a vehicle session is active.
-            "tracking_source": "vehicle_gps_offline",
+            "tracking_source": "vehicle_gps_last_known" if vehicle else "vehicle_gps_offline",
             "mobile_tracking_allowed": True,
             "reason": (
-                "Vehicle GPS is unavailable; the bus remains on its last known module position."
+                "Vehicle GPS has not sent a recent fix; showing the bus at its last known module position."
                 if active_trip
                 else "Vehicle GPS is unavailable; waiting for the module to report."
             ), "vehicle": vehicle,
