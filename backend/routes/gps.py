@@ -770,34 +770,6 @@ def start_trip(
             detail="No bus assigned.",
         )
 
-    # A provider-created trip is reused so the phone can supplement the
-    # installed module.  When the module is unavailable, an explicit phone
-    # position is also allowed to create the same live-trip state for testing
-    # and operational fallback.  Both sources use the identical route and
-    # terminal-progression rules below; neither rewrites route stops.
-    trip = (
-        db.query(LiveTrip)
-        .filter(
-            LiveTrip.driver_id == driver.id,
-            LiveTrip.bus_id == driver.bus_id,
-            LiveTrip.status == "Running",
-            LiveTrip.ended_at.is_(None),
-        )
-        .order_by(LiveTrip.last_location_update.desc(), LiveTrip.started_at.desc())
-        .first()
-    )
-    if trip is not None:
-        return build_live_trip_response(trip, db)
-
-    if start_request is None:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                "Vehicle GPS tracking has not started for this bus yet. "
-                "Allow phone location to start the mobile fallback."
-            ),
-        )
-
     route = (
         db.query(Route)
         .filter(
@@ -811,6 +783,37 @@ def start_trip(
         raise HTTPException(
             status_code=400,
             detail="No active route is assigned to this bus.",
+        )
+
+    # A provider-created trip is reused so the phone can supplement the
+    # installed module. Hardware tracking may have started before a driver was
+    # assigned, so claim that bus-and-route session for the assigned driver
+    # instead of creating a competing mobile trip.
+    trip = (
+        db.query(LiveTrip)
+        .filter(
+            LiveTrip.bus_id == driver.bus_id,
+            LiveTrip.route_id == route.id,
+            LiveTrip.status == "Running",
+            LiveTrip.ended_at.is_(None),
+        )
+        .order_by(LiveTrip.last_location_update.desc(), LiveTrip.started_at.desc())
+        .first()
+    )
+    if trip is not None:
+        if trip.driver_id is None:
+            trip.driver_id = driver.id
+            db.commit()
+            db.refresh(trip)
+        return build_live_trip_response(trip, db)
+
+    if start_request is None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Vehicle GPS tracking has not started for this bus yet. "
+                "Allow phone location to start the mobile fallback."
+            ),
         )
 
     route_stops = (

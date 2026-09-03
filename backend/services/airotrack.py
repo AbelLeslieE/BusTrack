@@ -19,7 +19,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy.orm import Session
 
 from backend.models import Bus
-from backend.routes.gps_provider import _update_active_trip_from_vehicle
+from backend.routes.gps_provider import _position_from_current_state, _update_active_trip_from_vehicle
 from backend.routes.models_tracking import BusGPSState, GPSDeviceMapping, ProviderGPSPosition
 
 
@@ -141,10 +141,20 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
         state.course, state.altitude, state.accuracy, state.fix_time = None, None, None, fix_time
         state.received_at, state.status, state.ignition, state.motion = now, history.status, ignition, history.motion
         state.valid, state.protocol, state.raw_payload = True, "airotrack", raw_json
-        # A repeated polling response may be an old last-known point. Record it
-        # for diagnostics, but never move an active trip backwards with it.
-        if fix_time is None or fix_time >= now - timedelta(minutes=6):
-            active_trip_id = _update_active_trip_from_vehicle(db, position, bus.id, now)
+    # Reconcile from the canonical saved state even when Airotrack repeats the
+    # same source_date. This repairs a missing provider-owned route session
+    # after assignments change without treating the repeated payload as a new
+    # coordinate or allowing it to move the route backwards.
+    current_position_time = state.fix_time or state.received_at
+    if current_position_time.tzinfo is None:
+        current_position_time = current_position_time.replace(tzinfo=timezone.utc)
+    if state.fix_time is None or current_position_time >= now - timedelta(minutes=6):
+        active_trip_id = _update_active_trip_from_vehicle(
+            db,
+            _position_from_current_state(state),
+            bus.id,
+            now,
+        )
     return {
         "bus_id": bus.id,
         "bus_number": bus.bus_number,

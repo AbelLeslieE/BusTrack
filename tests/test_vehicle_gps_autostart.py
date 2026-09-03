@@ -112,6 +112,39 @@ class VehicleGpsAutostartTest(unittest.TestCase):
             self.assertEqual(trip.terminal_stop_id, stop_two.id)
             self.assertIsNone(trip.ended_at)
 
+    def test_vehicle_gps_creates_route_session_without_driver_assignment(self) -> None:
+        """The hardware tracker must not depend on a phone/driver session."""
+
+        with self.session_factory() as database_session:
+            bus = Bus(bus_number="GPS-NO-DRIVER", registration_number="GPS-NO-DRIVER-REG", capacity=40, manufacturer="Test", model="Coach", year=2026, fuel_type="Diesel", status="Active")
+            route = Route(route_code="GPS-NO-DRIVER", route_name="Provider-only Route", bus_id=None, driver_id=None, status="Active", total_stops=2)
+            start = Stop(stop_code="GPS-ND-A", stop_name="Provider Start", latitude=10.0, longitude=76.0, radius=100, status="Active")
+            end = Stop(stop_code="GPS-ND-B", stop_name="Provider End", latitude=10.1, longitude=76.1, radius=100, status="Active")
+            database_session.add_all([bus, route, start, end])
+            database_session.flush()
+            route.bus_id = bus.id
+            database_session.add_all([
+                RouteStop(route_id=route.id, stop_id=start.id, sequence=1),
+                RouteStop(route_id=route.id, stop_id=end.id, sequence=2),
+            ])
+            database_session.commit()
+
+            timestamp = datetime(2026, 8, 24, 8, 30, tzinfo=timezone.utc)
+            trip_id = _update_active_trip_from_vehicle(
+                database_session,
+                {"latitude": start.latitude, "longitude": start.longitude, "speed_kmh": 0.0, "accuracy": 8.0, "fix_time": timestamp, "valid": True, "ignition": False},
+                bus.id,
+                timestamp,
+            )
+            database_session.commit()
+
+            trip = database_session.get(LiveTrip, trip_id)
+            self.assertIsNotNone(trip)
+            self.assertIsNone(trip.driver_id)
+            self.assertEqual(trip.route_id, route.id)
+            self.assertEqual(trip.current_route_stop_id, route.route_stops[0].id)
+            self.assertEqual(trip.current_stop_status, "Arrived")
+
     def test_ignition_off_heartbeat_creates_continuous_tracking_state(self) -> None:
         with self.session_factory() as database_session:
             user = User(username="parked-module-driver", password_hash="unused", full_name="Parked Module Driver", role="Driver", status="Active")

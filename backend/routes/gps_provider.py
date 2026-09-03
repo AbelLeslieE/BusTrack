@@ -309,14 +309,6 @@ def _ensure_vehicle_tracking_session(
     coordinate creates the server-side session and its stop progression.
     """
 
-    trip = db.query(LiveTrip).filter(
-        LiveTrip.bus_id == bus_id,
-        LiveTrip.status == "Running",
-        LiveTrip.ended_at.is_(None),
-    ).order_by(LiveTrip.last_location_update.desc(), LiveTrip.started_at.desc()).first()
-    if trip is not None:
-        return trip
-
     # GPS state is continuous. Any authenticated packet with a usable
     # coordinate can establish the same route-state session as an
     # ignition-on fix. Provider ``valid`` is retained as diagnostics only:
@@ -330,6 +322,18 @@ def _ensure_vehicle_tracking_session(
     if route is None:
         return None
 
+    # Route assignments can change while the hardware keeps reporting. Reuse
+    # only a session for the bus's currently assigned route; otherwise the
+    # provider would keep updating an old route while students see tripId=null.
+    trip = db.query(LiveTrip).filter(
+        LiveTrip.bus_id == bus_id,
+        LiveTrip.route_id == route.id,
+        LiveTrip.status == "Running",
+        LiveTrip.ended_at.is_(None),
+    ).order_by(LiveTrip.last_location_update.desc(), LiveTrip.started_at.desc()).first()
+    if trip is not None:
+        return trip
+
     # A route assignment is normally authoritative. Keep compatibility with
     # older bus assignments by falling back to the driver linked to the bus.
     driver_id = route.driver_id
@@ -338,8 +342,22 @@ def _ensure_vehicle_tracking_session(
     if driver_id is None:
         legacy_bus = db.get(Bus, bus_id)
         driver_id = legacy_bus.driver_id if legacy_bus is not None else None
-    if driver_id is None or db.get(Driver, driver_id) is None:
-        return None
+    if driver_id is not None and db.get(Driver, driver_id) is None:
+        driver_id = None
+
+    # A route reassignment starts a new route-state session. Preserve the old
+    # session as stopped history instead of leaving two running trips for one
+    # bus. This does not change either trip's stored direction or stop order.
+    obsolete_trips = db.query(LiveTrip).filter(
+        LiveTrip.bus_id == bus_id,
+        LiveTrip.route_id != route.id,
+        LiveTrip.status == "Running",
+        LiveTrip.ended_at.is_(None),
+    ).all()
+    for obsolete_trip in obsolete_trips:
+        obsolete_trip.status = "Stopped"
+        obsolete_trip.ended_at = received_at
+        obsolete_trip.end_reason = "Route assignment changed while vehicle GPS tracking was active."
 
     route_stops = db.query(RouteStop).filter(
         RouteStop.route_id == route.id,
@@ -361,6 +379,25 @@ def _ensure_vehicle_tracking_session(
     db.add(trip)
     db.flush()
     return trip
+
+
+def _position_from_current_state(state: BusGPSState) -> dict[str, Any]:
+    """Build the canonical provider position used to recover route state.
+
+    Provider polling can repeat an equal or older payload after a route was
+    assigned. Reconciliation must use the newest saved bus state, never that
+    repeated payload, so the marker and route timeline cannot move backwards.
+    """
+
+    return {
+        "latitude": state.latitude,
+        "longitude": state.longitude,
+        "speed_kmh": state.speed_kmh,
+        "accuracy": state.accuracy,
+        "fix_time": state.fix_time or state.received_at,
+        "valid": state.valid,
+        "ignition": state.ignition,
+    }
 
 
 def _update_active_trip_from_vehicle(db: Session, position: dict[str, Any], bus_id: int, received_at: datetime) -> int | None:
@@ -835,9 +872,19 @@ def ingest_positions(
             state.course, state.altitude, state.accuracy, state.fix_time = position["course"], position["altitude"], position["accuracy"], position["fix_time"]
             state.received_at, state.status, state.ignition, state.motion = now, position["status"], position["ignition"], position["motion"]
             state.valid, state.protocol, state.raw_payload = position["valid"], position["protocol"], raw_json
-            active_trip_id = _update_active_trip_from_vehicle(db, position, bus.id, now)
+        # Always reconcile the route session from the newest saved state. This
+        # recovers the provider-owned trip when the GPS fix arrived before the
+        # bus/route/driver assignment, while _update_active_trip_from_vehicle's
+        # strict timestamp guard prevents duplicate stop or reversal events.
+        active_trip_id = _update_active_trip_from_vehicle(
+            db,
+            _position_from_current_state(state),
+            bus.id,
+            now,
+        )
         accepted.append({"index": index, "bus_id": bus.id, "bus_number": bus.bus_number, "external_device_id": external_device_id,
-                         "applied_to_current_state": should_apply, "route_progression_reconciled": False,
+                         "applied_to_current_state": should_apply,
+                         "route_progression_reconciled": active_trip_id is not None,
                          "active_trip_id": active_trip_id})
     db.commit()
     return {"accepted": accepted, "ignored": ignored, "received_count": len(accepted) + len(ignored)}

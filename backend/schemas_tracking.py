@@ -110,7 +110,7 @@ class LiveTripResponse(BaseModel):
 
     id: int
 
-    driver_id: int
+    driver_id: int | None
 
     bus_id: int
 

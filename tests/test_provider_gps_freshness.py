@@ -16,9 +16,9 @@ from sqlalchemy.orm import sessionmaker
 import backend.models  # noqa: F401
 import backend.routes.models_tracking  # noqa: F401
 from backend.database import Base
-from backend.models import Bus
+from backend.models import Bus, Route, RouteStop, Stop
 from backend.routes.gps_provider import _serialize_state, ingest_positions
-from backend.routes.models_tracking import BusGPSState, GPSIngestToken, ProviderGPSPosition
+from backend.routes.models_tracking import BusGPSState, GPSIngestToken, LiveTrip, ProviderGPSPosition
 
 
 class ProviderGpsFreshnessTest(unittest.TestCase):
@@ -141,6 +141,46 @@ class ProviderGpsFreshnessTest(unittest.TestCase):
             self.assertTrue(result["accepted"][0]["applied_to_current_state"])
             self.assertIsNone(state.fix_time)
             self.assertEqual((state.latitude, state.longitude), (10.25, 76.0))
+
+    def test_equal_poll_recovers_trip_after_route_is_assigned(self) -> None:
+        """A saved provider fix must seed route state after a late assignment."""
+
+        with self.session_factory() as database_session:
+            bus = Bus(bus_number="RECOVER-01", registration_number="RECOVER-REG-01", capacity=40, manufacturer="Test", model="Coach", year=2026, fuel_type="Diesel", status="Active", device_id="RECOVER-DEVICE")
+            token = GPSIngestToken(label="recover", token_hash=hashlib.sha256(b"recover-token").hexdigest(), is_active=True)
+            database_session.add_all([bus, token])
+            database_session.commit()
+
+            fix_time = datetime(2026, 8, 24, 8, 30, tzinfo=timezone.utc)
+            first_payload = self._payload(10.0, fix_time)
+            first_payload["uniqueId"] = "RECOVER-DEVICE"
+            first = ingest_positions(self._request(), first_payload, "recover-token", database_session)
+            self.assertIsNone(first["accepted"][0]["active_trip_id"])
+
+            route = Route(route_code="RECOVER-R", route_name="Recovered Route", bus_id=bus.id, driver_id=None, status="Active", total_stops=2)
+            start = Stop(stop_code="RECOVER-A", stop_name="Recovered Start", latitude=10.0, longitude=76.0, radius=100, status="Active")
+            end = Stop(stop_code="RECOVER-B", stop_name="Recovered End", latitude=10.1, longitude=76.1, radius=100, status="Active")
+            database_session.add_all([route, start, end])
+            database_session.flush()
+            database_session.add_all([
+                RouteStop(route_id=route.id, stop_id=start.id, sequence=1),
+                RouteStop(route_id=route.id, stop_id=end.id, sequence=2),
+            ])
+            database_session.commit()
+
+            repeated_payload = self._payload(11.0, fix_time)
+            repeated_payload["uniqueId"] = "RECOVER-DEVICE"
+            repeated = ingest_positions(self._request(), repeated_payload, "recover-token", database_session)
+
+            state = database_session.query(BusGPSState).filter(BusGPSState.bus_id == bus.id).one()
+            trip = database_session.query(LiveTrip).filter(LiveTrip.bus_id == bus.id).one()
+            self.assertFalse(repeated["accepted"][0]["applied_to_current_state"])
+            self.assertTrue(repeated["accepted"][0]["route_progression_reconciled"])
+            self.assertEqual(repeated["accepted"][0]["active_trip_id"], trip.id)
+            self.assertEqual(state.latitude, 10.0)
+            self.assertEqual(trip.current_latitude, 10.0)
+            self.assertIsNone(trip.driver_id)
+            self.assertEqual(trip.current_route_stop_id, route.route_stops[0].id)
 
 
 if __name__ == "__main__":

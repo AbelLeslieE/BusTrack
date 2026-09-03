@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 import tempfile
 import unittest
@@ -94,6 +94,54 @@ class MobileGpsFallbackTest(unittest.TestCase):
             db.refresh(trip)
             self.assertEqual(trip.route_direction, "reverse")
             self.assertEqual(trip.current_location_source, "vehicle_gps")
+
+    def test_phone_claims_existing_provider_trip_that_started_without_driver(self) -> None:
+        with self.session_factory() as db:
+            bus = Bus(bus_number="HANDOFF-01", registration_number="HANDOFF-REG", capacity=40, manufacturer="Test", model="Coach", year=2026, fuel_type="Diesel", status="Active")
+            route = Route(route_code="HANDOFF-R", route_name="Handoff Route", bus_id=None, driver_id=None, status="Active", total_stops=2)
+            start = Stop(stop_code="HANDOFF-A", stop_name="Handoff Start", latitude=10.0, longitude=76.0, radius=100, status="Active")
+            end = Stop(stop_code="HANDOFF-B", stop_name="Handoff End", latitude=10.1, longitude=76.1, radius=100, status="Active")
+            db.add_all([bus, route, start, end])
+            db.flush()
+            route.bus_id = bus.id
+            db.add_all([
+                RouteStop(route_id=route.id, stop_id=start.id, sequence=1),
+                RouteStop(route_id=route.id, stop_id=end.id, sequence=2),
+            ])
+            db.commit()
+
+            timestamp = datetime(2026, 8, 24, 8, 30, tzinfo=timezone.utc)
+            provider_trip_id = _update_active_trip_from_vehicle(
+                db,
+                {"latitude": start.latitude, "longitude": start.longitude, "speed_kmh": 0.0, "accuracy": 8.0, "fix_time": timestamp, "valid": True, "ignition": False},
+                bus.id,
+                timestamp,
+            )
+            db.commit()
+            self.assertIsNone(db.get(LiveTrip, provider_trip_id).driver_id)
+
+            user = User(username="handoff-driver", password_hash="unused", full_name="Handoff Driver", role="Driver", status="Active")
+            db.add(user)
+            db.flush()
+            driver = Driver(user_id=user.id, driver_code="HANDOFF-DRV", license_number="HANDOFF-LIC", license_expiry=date(2030, 1, 1), status="Available", bus_id=bus.id)
+            db.add(driver)
+            db.flush()
+            route.driver_id = driver.id
+            db.commit()
+
+            response = start_trip(None, user, db)
+            db.refresh(db.get(LiveTrip, provider_trip_id))
+
+            self.assertEqual(response["id"], provider_trip_id)
+            self.assertEqual(response["driver_id"], driver.id)
+            self.assertEqual(
+                db.query(LiveTrip).filter(
+                    LiveTrip.bus_id == bus.id,
+                    LiveTrip.status == "Running",
+                    LiveTrip.ended_at.is_(None),
+                ).count(),
+                1,
+            )
 
 
 if __name__ == "__main__":

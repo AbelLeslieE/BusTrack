@@ -49,9 +49,12 @@ class LiveTrip(Base):
         index=True,
     )
 
-    driver_id: Mapped[int] = mapped_column(
+    # A hardware-owned tracking session belongs to the bus and route even
+    # when no driver has been assigned yet. Phone-owned sessions still set
+    # this field and retain their existing authorization checks.
+    driver_id: Mapped[int | None] = mapped_column(
         ForeignKey("drivers.id"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
 

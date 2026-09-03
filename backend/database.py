@@ -6,6 +6,7 @@ TODO: Add Alembic migrations before evolving production database schemas.
 from collections.abc import Generator
 import os
 from pathlib import Path
+import re
 
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
@@ -82,6 +83,85 @@ class Base(DeclarativeBase):
     """Base class for all Bus Tracker SQLAlchemy models."""
 
 
+def _make_live_trip_driver_optional(database_engine=engine) -> None:
+    """Upgrade existing databases for hardware-owned trips without a driver."""
+
+    database_inspector = inspect(database_engine)
+    if "live_trips" not in database_inspector.get_table_names():
+        return
+    driver_column = next(
+        (
+            column
+            for column in database_inspector.get_columns("live_trips")
+            if column["name"] == "driver_id"
+        ),
+        None,
+    )
+    if driver_column is None or driver_column.get("nullable", True):
+        return
+
+    if database_engine.dialect.name == "postgresql":
+        with database_engine.begin() as connection:
+            connection.execute(text(
+                "ALTER TABLE live_trips ALTER COLUMN driver_id DROP NOT NULL"
+            ))
+        return
+
+    if database_engine.dialect.name != "sqlite":
+        raise RuntimeError(
+            "The live_trips.driver_id compatibility migration supports SQLite and PostgreSQL."
+        )
+
+    # SQLite cannot drop a NOT NULL constraint in place. Rebuild this one
+    # table transactionally while foreign-key enforcement is temporarily off;
+    # child tables continue to reference the same final table name.
+    temporary_table = "live_trips__driver_optional"
+    with database_engine.connect() as connection:
+        create_sql = connection.exec_driver_sql(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='live_trips'"
+        ).scalar_one()
+        optional_sql = re.sub(
+            r"(\bdriver_id\b\s+INTEGER)\s+NOT\s+NULL",
+            r"\1",
+            create_sql,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+        optional_sql = re.sub(
+            r"^CREATE\s+TABLE\s+(?:\"live_trips\"|live_trips)",
+            f"CREATE TABLE {temporary_table}",
+            optional_sql,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+        if optional_sql == create_sql or "driver_id INTEGER NOT NULL" in optional_sql:
+            raise RuntimeError("Unable to make live_trips.driver_id optional.")
+
+        column_names = [
+            row[1]
+            for row in connection.exec_driver_sql("PRAGMA table_info(live_trips)").all()
+        ]
+        quoted_columns = ", ".join(f'"{name}"' for name in column_names)
+        connection.commit()
+        connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+        connection.commit()
+        try:
+            with connection.begin():
+                connection.exec_driver_sql(f"DROP TABLE IF EXISTS {temporary_table}")
+                connection.exec_driver_sql(optional_sql)
+                connection.exec_driver_sql(
+                    f"INSERT INTO {temporary_table} ({quoted_columns}) "
+                    f"SELECT {quoted_columns} FROM live_trips"
+                )
+                connection.exec_driver_sql("DROP TABLE live_trips")
+                connection.exec_driver_sql(
+                    f"ALTER TABLE {temporary_table} RENAME TO live_trips"
+                )
+        finally:
+            connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+            connection.commit()
+
+
 def get_db() -> Generator[Session, None, None]:
     """Yield one database session per request and always close it afterward."""
 
@@ -137,6 +217,8 @@ def initialize_database() -> None:
     Base.metadata.create_all(
         bind=engine
     )
+
+    _make_live_trip_driver_optional()
 
     # This project currently has no migration framework. Keep existing local
     # deployments compatible with the student route assignment introduced by
