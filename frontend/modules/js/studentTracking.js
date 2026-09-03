@@ -870,10 +870,13 @@ function renderTrackView() {
                             ROUTE PROGRESS
                         </p>
 
-                        <h3>
+                        <h3 id="student-track-route-name">
 
                             ${
                                 escapeHTML(
+                                    state.trackingData
+                                        ?.route
+                                        ?.route_name ||
                                     state.assignedBus
                                         ?.route
                                         ?.route_name ||
@@ -886,7 +889,9 @@ function renderTrackView() {
                     </div>
 
 
-                    ${renderLiveStatus()}
+                    <div id="student-track-live-status">
+                        ${renderLiveStatus()}
+                    </div>
 
                 </div>
 
@@ -3983,6 +3988,26 @@ function renderTrackingSummary() {
 ========================================================== */
 
 function updateTrackView() {
+
+    // The Track panel is created before its first asynchronous tracking
+    // response returns. Refresh its header from the same state used by the
+    // map and timeline so it cannot stay stuck at "No bus assigned" after a
+    // valid bus/route response has arrived.
+    const routeName =
+        state.trackingData?.route?.route_name ||
+        state.assignedBus?.route?.route_name ||
+        "Assigned Route";
+    setText(
+        "student-track-route-name",
+        routeName
+    );
+
+    const trackStatus = document.querySelector(
+        "#student-track-live-status"
+    );
+    if (trackStatus) {
+        trackStatus.innerHTML = renderLiveStatus();
+    }
 
     renderTrackTimeline();
 
