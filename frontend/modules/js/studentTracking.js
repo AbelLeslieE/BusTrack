@@ -3997,10 +3997,12 @@ function updateTrackView() {
         state.trackingData?.route?.route_name ||
         state.assignedBus?.route?.route_name ||
         "Assigned Route";
-    setText(
-        "student-track-route-name",
-        routeName
+    const routeNameElement = document.querySelector(
+        "#student-track-route-name"
     );
+    if (routeNameElement) {
+        routeNameElement.textContent = routeName;
+    }
 
     const trackStatus = document.querySelector(
         "#student-track-live-status"
