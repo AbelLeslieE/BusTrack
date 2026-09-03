@@ -24,6 +24,7 @@ from backend.routes.models_tracking import (
     LiveTrip,
     TripStopEvent,
     ProviderGPSPosition,
+    GPSProviderHealthState,
 )
 
 # ======================================================
@@ -478,6 +479,7 @@ def delete_bus(
     # them explicitly because the established schema does not use DB-level
     # cascade rules for bus references.
     db.query(BusGPSState).filter(BusGPSState.bus_id == bus.id).delete(synchronize_session=False)
+    db.query(GPSProviderHealthState).filter(GPSProviderHealthState.bus_id == bus.id).delete(synchronize_session=False)
     db.query(ProviderGPSPosition).filter(ProviderGPSPosition.bus_id == bus.id).delete(synchronize_session=False)
     db.query(GPSDeviceMapping).filter(GPSDeviceMapping.bus_id == bus.id).delete(synchronize_session=False)
     db.query(GPSIngestToken).filter(GPSIngestToken.bus_id == bus.id).delete(synchronize_session=False)

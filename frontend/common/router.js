@@ -208,6 +208,10 @@ const technicianModules = {
     technicianDashboard: {
         title: "GPS Integration",
         load: () => import("../modules/js/technicianDashboard.js")
+    },
+    providerHealth: {
+        title: "Provider Health",
+        load: () => import("../modules/js/providerHealth.js")
     }
 };
 let shell;

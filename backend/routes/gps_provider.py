@@ -11,11 +11,12 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import math
+import os
 import re
 import secrets
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request, status
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request, Response, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -27,6 +28,7 @@ from backend.routes.models_tracking import (
     GPSDeviceMapping,
     GPSIngestToken,
     GPSProviderTranslationConfig,
+    GPSProviderHealthState,
     LiveLocation,
     LiveTrip,
     ProviderGPSPosition,
@@ -46,6 +48,8 @@ from backend.services.vehicle_gps import (
 from backend.routes.gps import update_route_stop_progression
 from backend.services.trip_direction import direction_from_start_position, ordered_route_stops
 from backend.services.telemetry_retention import trim_active_trip_location_history
+from backend.services.telemetry_retention import provider_history_retention_minutes
+from backend.services.provider_health import record_provider_success
 from backend.models import RouteStop
 
 
@@ -270,6 +274,155 @@ def _serialize_state(state: BusGPSState, bus: Bus, *, include_raw: bool = False)
         except json.JSONDecodeError:
             result["provider_payload"] = None
     return result
+
+
+def _normalized_datetime(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    return (
+        value.replace(tzinfo=timezone.utc)
+        if value.tzinfo is None
+        else value.astimezone(timezone.utc)
+    )
+
+
+def _age_seconds(value: datetime | None, now: datetime) -> int | None:
+    normalized = _normalized_datetime(value)
+    if normalized is None:
+        return None
+    return max(0, int((now - normalized).total_seconds()))
+
+
+def _decoded_payload(value: str) -> Any:
+    try:
+        return json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        return None
+
+
+def _serialize_provider_health(
+    db: Session,
+    bus: Bus,
+    *,
+    now: datetime,
+    state: BusGPSState | None,
+    health: GPSProviderHealthState | None,
+    latest_position: ProviderGPSPosition | None,
+) -> dict[str, Any]:
+    expected_interval = vehicle_gps_expected_interval_seconds(
+        state.ignition if state is not None else None
+    )
+    source_time = (state.fix_time or state.received_at) if state else None
+    provider_contact_at = latest_position.received_at if latest_position else None
+    if health and health.last_success_at:
+        saved_success = _normalized_datetime(health.last_success_at)
+        saved_contact = _normalized_datetime(provider_contact_at)
+        if saved_contact is None or (saved_success is not None and saved_success > saved_contact):
+            provider_contact_at = health.last_success_at
+
+    source_age = _age_seconds(source_time, now)
+    contact_age = _age_seconds(provider_contact_at, now)
+    latest_delivery_delay = None
+    if latest_position and latest_position.fix_time:
+        received = _normalized_datetime(latest_position.received_at)
+        fixed = _normalized_datetime(latest_position.fix_time)
+        latest_delivery_delay = max(0, int((received - fixed).total_seconds()))
+
+    active_error = bool(
+        health
+        and health.last_error
+        and health.last_error_at
+        and (
+            not health.last_success_at
+            or _normalized_datetime(health.last_error_at) > _normalized_datetime(health.last_success_at)
+        )
+    )
+    contact_late_after = max(GPS_OFFLINE_GRACE_SECONDS, expected_interval + 60)
+    if state is None:
+        health_status = "error" if active_error else "no_data"
+    elif active_error:
+        health_status = "error"
+    elif contact_age is None or contact_age > contact_late_after:
+        health_status = "offline"
+    elif source_age is None or source_age > GPS_OFFLINE_GRACE_SECONDS:
+        # The provider is answering, but its device timestamp is old. This is
+        # the exact lag condition that must not be presented as live tracking.
+        health_status = "delayed"
+    else:
+        health_status = "healthy"
+
+    active_trip = db.query(LiveTrip).filter(
+        LiveTrip.bus_id == bus.id,
+        LiveTrip.status == "Running",
+        LiveTrip.ended_at.is_(None),
+    ).order_by(LiveTrip.started_at.desc()).first()
+    return {
+        "bus_id": bus.id,
+        "bus_number": bus.bus_number,
+        "registration_number": bus.registration_number,
+        "configured_device_id": bus.device_id,
+        "external_device_id": state.external_device_id if state else None,
+        "health_status": health_status,
+        "protocol": (health.protocol if health else None) or (state.protocol if state else None),
+        "expected_interval_seconds": expected_interval,
+        "last_provider_attempt_at": health.last_attempt_at if health else None,
+        "last_provider_success_at": provider_contact_at,
+        "last_provider_error_at": health.last_error_at if health else None,
+        "last_provider_error": health.last_error if health else None,
+        "consecutive_errors": health.consecutive_errors if health else 0,
+        "provider_contact_age_seconds": contact_age,
+        "latest_device_time": source_time,
+        "device_data_age_seconds": source_age,
+        "latest_delivery_delay_seconds": latest_delivery_delay,
+        "latitude": state.latitude if state else None,
+        "longitude": state.longitude if state else None,
+        "speed_kmh": state.speed_kmh if state else None,
+        "ignition": state.ignition if state else None,
+        "motion": state.motion if state else None,
+        "valid": state.valid if state else None,
+        "current_provider_position_id": state.provider_position_id if state else None,
+        "active_trip_id": active_trip.id if active_trip else None,
+        "route_direction": active_trip.route_direction if active_trip else None,
+        "current_route_stop_id": active_trip.current_route_stop_id if active_trip else None,
+    }
+
+
+def _serialize_provider_position(
+    item: ProviderGPSPosition,
+    bus: Bus,
+    *,
+    current_provider_position_id: int | None,
+) -> dict[str, Any]:
+    received = _normalized_datetime(item.received_at)
+    fixed = _normalized_datetime(item.fix_time)
+    delivery_delay = (
+        max(0, int((received - fixed).total_seconds()))
+        if received is not None and fixed is not None
+        else None
+    )
+    return {
+        "id": item.id,
+        "bus_id": bus.id,
+        "bus_number": bus.bus_number,
+        "registration_number": bus.registration_number,
+        "external_device_id": item.external_device_id,
+        "latitude": item.latitude,
+        "longitude": item.longitude,
+        "speed_kmh": item.speed_kmh,
+        "course": item.course,
+        "altitude": item.altitude,
+        "accuracy": item.accuracy,
+        "fix_time": item.fix_time,
+        "received_at": item.received_at,
+        "delivery_delay_seconds": delivery_delay,
+        "status": item.status,
+        "ignition": item.ignition,
+        "motion": item.motion,
+        "valid": item.valid,
+        "protocol": item.protocol,
+        "applied_to_current_state": item.id == current_provider_position_id,
+        "provider_payload": _decoded_payload(item.raw_payload),
+    }
 
 
 def _serialize_audit_event(event: AuditEvent) -> dict[str, Any]:
@@ -831,6 +984,11 @@ def ingest_positions(
             ignored.append({"index": index, "external_device_ids": position["external_ids"], "reason": "Token is not authorized for this bus."})
             continue
 
+        # Lock the vehicle row before comparing its current GPS timestamp.
+        # This makes the newest-only rule safe across simultaneous webhook,
+        # background-poller, and technician refresh requests.
+        bus = db.query(Bus).filter(Bus.id == bus.id).with_for_update().one()
+
         now = _utc_now()
         external_device_id = position["external_ids"][0]
         raw_json = json.dumps(position["raw"], separators=(",", ":"), default=str)
@@ -872,6 +1030,13 @@ def ingest_positions(
             state.course, state.altitude, state.accuracy, state.fix_time = position["course"], position["altitude"], position["accuracy"], position["fix_time"]
             state.received_at, state.status, state.ignition, state.motion = now, position["status"], position["ignition"], position["motion"]
             state.valid, state.protocol, state.raw_payload = position["valid"], position["protocol"], raw_json
+        record_provider_success(
+            db,
+            bus.id,
+            protocol=position["protocol"] or "provider_webhook",
+            attempted_at=now,
+            source_time=position["fix_time"],
+        )
         # Always reconcile the route session from the newest saved state. This
         # recovers the provider-owned trip when the GPS fix arrived before the
         # bus/route/driver assignment, while _update_active_trip_from_vehicle's
@@ -903,6 +1068,119 @@ def refresh_airotrack_positions(
         return refresh_airotrack(db, bus_id=bus_id)
     except RuntimeError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
+
+
+@router.get("/provider-health")
+def get_provider_health(
+    response: Response,
+    bus_id: int | None = Query(default=None, ge=1),
+    db: Session = Depends(get_db),
+    _technician: User = Depends(require_gps_technician),
+):
+    """Show provider-contact health separately from device-fix freshness."""
+
+    response.headers["Cache-Control"] = "no-store"
+    bus_query = db.query(Bus)
+    if bus_id is not None:
+        bus_query = bus_query.filter(Bus.id == bus_id)
+    buses = bus_query.order_by(Bus.bus_number.asc(), Bus.id.asc()).all()
+    if bus_id is not None and not buses:
+        raise HTTPException(status_code=404, detail="Bus not found.")
+
+    selected_ids = [bus.id for bus in buses]
+    states = {
+        item.bus_id: item
+        for item in db.query(BusGPSState).filter(BusGPSState.bus_id.in_(selected_ids)).all()
+    } if selected_ids else {}
+    health_states = {
+        item.bus_id: item
+        for item in db.query(GPSProviderHealthState).filter(
+            GPSProviderHealthState.bus_id.in_(selected_ids)
+        ).all()
+    } if selected_ids else {}
+    now = _utc_now()
+    rows: list[dict[str, Any]] = []
+    for bus in buses:
+        latest_position = db.query(ProviderGPSPosition).filter(
+            ProviderGPSPosition.bus_id == bus.id
+        ).order_by(
+            ProviderGPSPosition.received_at.desc(),
+            ProviderGPSPosition.id.desc(),
+        ).first()
+        rows.append(_serialize_provider_health(
+            db,
+            bus,
+            now=now,
+            state=states.get(bus.id),
+            health=health_states.get(bus.id),
+            latest_position=latest_position,
+        ))
+
+    counts = {
+        state_name: sum(1 for item in rows if item["health_status"] == state_name)
+        for state_name in ("healthy", "delayed", "offline", "error", "no_data")
+    }
+    try:
+        poll_interval = max(20, int(os.getenv("AIROTRACK_POLL_INTERVAL_SECONDS", "20")))
+    except ValueError:
+        poll_interval = 20
+    return {
+        "generated_at": now,
+        "poll_interval_seconds": poll_interval,
+        "history_retention_minutes": provider_history_retention_minutes(),
+        "counts": counts,
+        "buses": rows,
+    }
+
+
+@router.get("/provider-health/positions")
+def list_provider_positions(
+    response: Response,
+    bus_id: int | None = Query(default=None, ge=1),
+    limit: int = Query(default=100, ge=1, le=250),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    _technician: User = Depends(require_gps_technician),
+):
+    """Return the retained raw provider coordinate feed, optionally for one exact bus."""
+
+    response.headers["Cache-Control"] = "no-store"
+    if bus_id is not None and db.get(Bus, bus_id) is None:
+        raise HTTPException(status_code=404, detail="Bus not found.")
+    query = db.query(ProviderGPSPosition)
+    if bus_id is not None:
+        query = query.filter(ProviderGPSPosition.bus_id == bus_id)
+    total = query.count()
+    positions = query.order_by(
+        ProviderGPSPosition.received_at.desc(),
+        ProviderGPSPosition.id.desc(),
+    ).offset(offset).limit(limit).all()
+    bus_ids = {item.bus_id for item in positions}
+    buses = {
+        bus.id: bus
+        for bus in db.query(Bus).filter(Bus.id.in_(bus_ids)).all()
+    } if bus_ids else {}
+    states = {
+        item.bus_id: item.provider_position_id
+        for item in db.query(BusGPSState).filter(BusGPSState.bus_id.in_(bus_ids)).all()
+    } if bus_ids else {}
+    return {
+        "positions": [
+            _serialize_provider_position(
+                item,
+                buses[item.bus_id],
+                current_provider_position_id=states.get(item.bus_id),
+            )
+            for item in positions
+            if item.bus_id in buses
+        ],
+        "offset": offset,
+        "limit": limit,
+        "total": total,
+        "has_more": offset + len(positions) < total,
+        "bus_id": bus_id,
+        "history_retention_minutes": provider_history_retention_minutes(),
+    }
 
 
 @router.get("/status")

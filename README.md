@@ -117,6 +117,9 @@ accounts have a separate GPS Integration portal; they can rotate or disable
 provider credentials, edit external device-to-bus mappings, and update the
 allowed JSON field paths when a provider changes its payload layout. They do
 not receive general fleet, account, or assignment administration permissions.
+The separate **Provider Health** module shows provider contact time and device
+fix time independently, reports delayed/offline/error states per bus, and
+provides an exact-bus filter over the rolling raw coordinate feed.
 
 See [`docs/mvd-gps-provider-handoff.md`](docs/mvd-gps-provider-handoff.md) for
 the exact handoff contract to send to the GPS provider, including the accepted
@@ -137,7 +140,17 @@ automatically. A GPS technician can run an immediate authorised refresh with
 
 The vendor's `source_date`, not the time BusTrack polled it, determines whether
 a location is fresh. An old last-known point remains visible to management but
-is never presented to users as current vehicle movement.
+is never presented to users as current vehicle movement. If a sleeping service
+wakes to an advancing queue of older Airotrack heartbeats, BusTrack performs a
+bounded catch-up read and applies only the greatest device timestamp. Set
+`AIROTRACK_CATCHUP_MAX_REQUESTS` to tune the maximum (default 8). A production
+cold start completes its first provider refresh before serving tracking pages.
+
+A suspended free web service cannot run outbound polling code while suspended.
+For uninterrupted collection during that period, configure the provider to
+push heartbeats to the webhook endpoint or run the service on an always-on
+instance. The cold-start catch-up prevents the saved pre-sleep coordinate from
+winning once the service is awake again.
 
 ## Folder guide
 

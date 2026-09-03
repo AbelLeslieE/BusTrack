@@ -112,8 +112,9 @@ last-known location when the ignition is off or a GPS feed is briefly absent.
 PostgreSQL also activates the built-in coordinate-retention service by default.
 It keeps the current `bus_gps_states` row for every bus (so the live map can
 still show a parked bus with ignition off), the newest two active-trip fixes
-from each GPS source for speed calculation, and a small 15-minute provider
-diagnostic window. When a driver or administrator completes a trip, every raw
+from each GPS source for speed calculation, and a rolling 24-hour provider
+diagnostic window for the Technician Provider Health module. When a driver or
+administrator completes a trip, every raw
 `live_locations` coordinate for that trip is deleted immediately. The durable
 record is `trip_stop_events`: trip, stop, route order, Arrived/Departed type,
 and UTC timestamp. Old stop-event coordinates are removed too. Change the

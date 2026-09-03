@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 from pathlib import Path
 import tempfile
@@ -17,7 +17,14 @@ import backend.models  # noqa: F401
 import backend.routes.models_tracking  # noqa: F401
 from backend.database import Base
 from backend.models import Bus, Route, RouteStop, Stop
-from backend.routes.gps_provider import _serialize_state, ingest_positions
+from fastapi import Response
+
+from backend.routes.gps_provider import (
+    _serialize_state,
+    get_provider_health,
+    ingest_positions,
+    list_provider_positions,
+)
 from backend.routes.models_tracking import BusGPSState, GPSIngestToken, LiveTrip, ProviderGPSPosition
 
 
@@ -181,6 +188,46 @@ class ProviderGpsFreshnessTest(unittest.TestCase):
             self.assertEqual(trip.current_latitude, 10.0)
             self.assertIsNone(trip.driver_id)
             self.assertEqual(trip.current_route_stop_id, route.route_stops[0].id)
+
+    def test_provider_health_separates_recent_contact_from_delayed_device_fix(self) -> None:
+        with self.session_factory() as database_session:
+            bus = Bus(bus_number="HEALTH-01", registration_number="HEALTH-REG-01", capacity=40, manufacturer="Test", model="Coach", year=2026, fuel_type="Diesel", status="Active", device_id="HEALTH-DEVICE")
+            token = GPSIngestToken(label="health", token_hash=hashlib.sha256(b"health-token").hexdigest(), is_active=True)
+            database_session.add_all([bus, token])
+            database_session.commit()
+
+            old_fix = datetime.now(timezone.utc) - timedelta(minutes=22)
+            payload = self._payload(10.75, old_fix)
+            payload["uniqueId"] = "HEALTH-DEVICE"
+            payload["providerExtra"] = {"heartbeat": "20-second"}
+            ingest_positions(self._request(), payload, "health-token", database_session)
+
+            health_response = Response()
+            result = get_provider_health(
+                response=health_response,
+                bus_id=bus.id,
+                db=database_session,
+                _technician=SimpleNamespace(),
+            )
+            self.assertEqual(health_response.headers["cache-control"], "no-store")
+            self.assertEqual(len(result["buses"]), 1)
+            self.assertEqual(result["buses"][0]["health_status"], "delayed")
+            self.assertLess(result["buses"][0]["provider_contact_age_seconds"], 5)
+            self.assertGreater(result["buses"][0]["device_data_age_seconds"], 20 * 60)
+
+            history_response = Response()
+            history = list_provider_positions(
+                response=history_response,
+                bus_id=bus.id,
+                limit=100,
+                offset=0,
+                db=database_session,
+                _technician=SimpleNamespace(),
+            )
+            self.assertEqual(history_response.headers["cache-control"], "no-store")
+            self.assertEqual(history["total"], 1)
+            self.assertEqual(history["positions"][0]["bus_id"], bus.id)
+            self.assertEqual(history["positions"][0]["provider_payload"]["providerExtra"]["heartbeat"], "20-second")
 
 
 if __name__ == "__main__":

@@ -141,6 +141,14 @@ def purge_ended_trip_coordinates(db: Session) -> int:
     return removed
 
 
+def provider_history_retention_minutes() -> int:
+    """Return the rolling technician-visible provider history window."""
+
+    return _bounded_int(
+        "GPS_PROVIDER_HISTORY_RETENTION_MINUTES", 1440, minimum=15, maximum=10080
+    )
+
+
 def purge_provider_position_history(db: Session, *, now: datetime | None = None) -> int:
     """Delete expired provider fixes while always retaining every bus's latest state."""
 
@@ -148,9 +156,7 @@ def purge_provider_position_history(db: Session, *, now: datetime | None = None)
     # BusGPSState first so its referenced position cannot be mistaken for an
     # expired, unprotected telemetry row in this same transaction.
     db.flush()
-    retention_minutes = _bounded_int(
-        "GPS_PROVIDER_HISTORY_RETENTION_MINUTES", 15, minimum=5, maximum=1440
-    )
+    retention_minutes = provider_history_retention_minutes()
     current_time = now or datetime.now(timezone.utc)
     cutoff = current_time - timedelta(minutes=retention_minutes)
     current_position_ids = select(BusGPSState.provider_position_id).where(

@@ -1,5 +1,4 @@
 import { requireAuthenticatedSession } from "/static/common/auth.js";
-import { loadModule } from "/static/common/router.js";
 import { canonicalRole, ROLE_ADMIN, ROLE_DRIVER, ROLE_TECHNICIAN, ROLE_USER } from "/static/common/roles.js";
 import { installHardRefreshShortcut } from "/static/common/cacheRefresh.js";
 
@@ -10,6 +9,11 @@ const profile = await requireAuthenticatedSession();
 if (!profile) {
     throw new Error("No authenticated session.");
 }
+
+// Import the role-sensitive router only after the server session has refreshed
+// localStorage. Otherwise a previous account's cached role can build the wrong
+// sidebar when a technician opens or reloads a bookmarked module.
+const { loadModule } = await import("/static/common/router.js");
 
 const role = canonicalRole(profile.role);
 let moduleName;
@@ -32,7 +36,7 @@ switch (role) {
         break;
     case ROLE_TECHNICIAN:
         if (!window.location.hash) window.location.hash = "technicianDashboard";
-        moduleName = "technicianDashboard";
+        moduleName = window.location.hash.slice(1);
         break;
     default:
         throw new Error(`Unsupported user role: ${profile.role}`);

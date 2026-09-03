@@ -2,6 +2,7 @@ import { logoutSession } from "/static/common/auth.js";
 
 const workspaceItems = [
     ["technicianDashboard", "GPS Integration", "⌘"],
+    ["providerHealth", "Provider Health", "⌁"],
 ];
 
 function navItem([route, label, icon], activeRoute) {
@@ -21,7 +22,7 @@ export function createTechnicianSidebar(activeRoute, onNavigate) {
         <nav class="sidebar-nav"><p class="nav-label">Integration</p>${workspaceItems.map(item => navItem(item, activeRoute)).join("")}</nav>
         <div class="sidebar-footer">
             <p class="nav-label">Restricted access</p>
-            <p class="sidebar-help">Manage device mappings, field translation, and provider credentials.</p>
+            <p class="sidebar-help">Manage GPS integration and inspect each provider heartbeat.</p>
             <a class="nav-item logout-btn" href="#" data-action="logout"><span class="nav-icon">⇦</span><span>Logout</span></a>
         </div>`;
     sidebar.addEventListener("click", event => {

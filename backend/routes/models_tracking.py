@@ -339,6 +339,34 @@ class ProviderGPSPosition(Base):
     raw_payload: Mapped[str] = mapped_column(Text, nullable=False)
 
 
+class GPSProviderHealthState(Base):
+    """Latest provider-contact result for one bus.
+
+    ``BusGPSState`` answers "what is the newest coordinate?" while this table
+    answers "is BusTrack successfully reaching the provider right now?".  The
+    two clocks must stay separate because a successful poll can still return a
+    delayed device fix.
+    """
+
+    __tablename__ = "gps_provider_health_states"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    bus_id: Mapped[int] = mapped_column(ForeignKey("buses.id"), unique=True, nullable=False, index=True)
+    protocol: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    consecutive_errors: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_source_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+
 class BusGPSState(Base):
     """Latest translated GPS state for each bus, including off/heartbeat data."""
 

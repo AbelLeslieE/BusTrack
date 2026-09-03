@@ -29,6 +29,15 @@ services:
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
         value: 30
 
+      - key: AIROTRACK_POLL_INTERVAL_SECONDS
+        value: 20
+
+      - key: AIROTRACK_CATCHUP_MAX_REQUESTS
+        value: 8
+
+      - key: GPS_PROVIDER_HISTORY_RETENTION_MINUTES
+        value: 1440
+
       - key: JWT_SECRET_KEY
         # Render creates and persists a cryptographically strong 256-bit key
         # for new Blueprint deployments. Never replace this key after users

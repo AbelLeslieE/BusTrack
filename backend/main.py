@@ -50,26 +50,45 @@ FRONTEND_DIR = PROJECT_DIR / "frontend"
 load_dotenv(PROJECT_DIR / ".env")
 
 
-async def _airotrack_poll_loop() -> None:
+async def _run_airotrack_refresh(label: str) -> None:
+    """Run one isolated fleet refresh and surface partial vendor failures."""
+
+    database_session = SessionLocal()
+    try:
+        from backend.services.airotrack import refresh_airotrack
+        result = await asyncio.to_thread(refresh_airotrack, database_session)
+        if result["errors"] or result["skipped"]:
+            print(
+                f"Airotrack {label}: {len(result['updated'])} updated, "
+                f"{len(result['errors'])} errors, {len(result['skipped'])} skipped."
+            )
+    except Exception as error:  # Keep the tracker available if vendor is temporarily down.
+        database_session.rollback()
+        print(f"Airotrack {label} error: {error}")
+    finally:
+        database_session.close()
+
+
+async def _airotrack_poll_loop(*, initial_delay: bool = False) -> None:
     """Keep provider pulling independent of browser/admin page visits."""
 
     try:
         interval = max(20, int(os.getenv("AIROTRACK_POLL_INTERVAL_SECONDS", "20")))
     except ValueError:
         interval = 20
+    if initial_delay:
+        await asyncio.sleep(interval)
     while True:
         if restore_in_progress():
             await asyncio.sleep(1)
             continue
-        database_session = SessionLocal()
-        try:
-            from backend.services.airotrack import refresh_airotrack
-            await asyncio.to_thread(refresh_airotrack, database_session)
-        except Exception as error:  # Keep the tracker available if vendor is temporarily down.
-            print(f"Airotrack polling error: {error}")
-        finally:
-            database_session.close()
-        await asyncio.sleep(interval)
+        loop_started_at = asyncio.get_running_loop().time()
+        await _run_airotrack_refresh("poll")
+        elapsed = asyncio.get_running_loop().time() - loop_started_at
+        # Keep the configured interval measured from poll start. A slow fleet
+        # request must not silently turn 20-second polling into 20 seconds plus
+        # the full vendor response time.
+        await asyncio.sleep(max(0, interval - elapsed))
 
 
 async def _telemetry_retention_loop() -> None:
@@ -103,7 +122,16 @@ async def lifespan(_: FastAPI):
     poll_task = None
     retention_task = None
     if os.getenv("AIROTRACK_API_TOKEN", "").strip():
-        poll_task = asyncio.create_task(_airotrack_poll_loop())
+        initial_refresh_completed = False
+        if os.getenv("APP_ENV", "development").strip().casefold() == "production":
+            # On a Render cold start, refresh before the service reports ready.
+            # The first student response then uses the newest fix available
+            # from the provider instead of the pre-sleep database snapshot.
+            await _run_airotrack_refresh("startup refresh")
+            initial_refresh_completed = True
+        poll_task = asyncio.create_task(
+            _airotrack_poll_loop(initial_delay=initial_refresh_completed)
+        )
     if telemetry_retention_enabled():
         # Run once at PostgreSQL startup so migration-era coordinate history is
         # reduced immediately; the periodic task keeps it bounded afterwards.

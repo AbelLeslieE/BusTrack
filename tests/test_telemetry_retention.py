@@ -104,11 +104,11 @@ class TelemetryRetentionTest(unittest.TestCase):
 
             expired = ProviderGPSPosition(
                 bus_id=bus.id, external_device_id="RET-GPS", latitude=10.0, longitude=76.0,
-                received_at=now - timedelta(minutes=20), raw_payload="{}",
+                received_at=now - timedelta(days=2), raw_payload="{}",
             )
             protected = ProviderGPSPosition(
                 bus_id=bus.id, external_device_id="RET-GPS", latitude=10.1, longitude=76.1,
-                received_at=now - timedelta(minutes=20), raw_payload="{}",
+                received_at=now - timedelta(days=2), raw_payload="{}",
             )
             database_session.add_all([expired, protected])
             database_session.flush()
