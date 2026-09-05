@@ -1,7 +1,7 @@
 """Contracts for the vendor-to-BusTrack GPS translation boundary."""
 
 from pydantic import BaseModel, Field
-from typing import Any
+from typing import Any, Literal
 
 
 class GPSIngestTokenCreate(BaseModel):
@@ -29,3 +29,9 @@ class GPSTranslationConfigUpdate(BaseModel):
     """JSON-path configuration accepted from the Technician workspace."""
 
     field_paths: dict[str, Any]
+
+
+class GPSProviderTripDirectionUpdate(BaseModel):
+    """A technician's explicit override for one running vehicle trip."""
+
+    direction: Literal["forward", "reverse"]

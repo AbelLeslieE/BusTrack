@@ -8,6 +8,7 @@ const state = {
     selectedBusId: "",
     loading: true,
     refreshing: false,
+    changingDirectionBusId: null,
     lastRefreshError: "",
 };
 
@@ -71,6 +72,10 @@ function healthCard(item) {
     const trip = item.active_trip_id
         ? `Trip #${item.active_trip_id} · ${item.route_direction || "direction pending"}`
         : "No active GPS route session";
+    const nextDirection = item.route_direction === "reverse" ? "forward" : "reverse";
+    const directionControl = item.active_trip_id
+        ? `<div class="provider-direction-control"><span>Manual route control</span><button class="tech-button secondary provider-direction-button" type="button" data-provider-direction-bus="${item.bus_id}" data-provider-next-direction="${nextDirection}" ${state.changingDirectionBusId === item.bus_id ? "disabled" : ""}>${state.changingDirectionBusId === item.bus_id ? "Changing…" : nextDirection === "reverse" ? "↔ Change to return" : "↔ Change to outbound"}</button></div>`
+        : "";
     return `<article class="provider-bus-card ${escapeHtml(item.health_status)}">
         <header><div><p>${escapeHtml(item.bus_number)}</p><strong>${escapeHtml(item.registration_number || "No registration")}</strong></div><span class="provider-health-pill ${escapeHtml(item.health_status)}">${escapeHtml(statusLabel(item.health_status))}</span></header>
         <dl>
@@ -81,6 +86,7 @@ function healthCard(item) {
             <div><dt>Latest coordinates</dt><dd><code>${escapeHtml(coordinates)}</code></dd></div>
             <div><dt>Tracking session</dt><dd>${escapeHtml(trip)}</dd></div>
         </dl>
+        ${directionControl}
         ${item.last_provider_error ? `<p class="provider-error-copy">${escapeHtml(item.last_provider_error)}</p>` : ""}
     </article>`;
 }
@@ -140,6 +146,44 @@ function bindEvents() {
     page?.querySelector("#provider-pull-now")?.addEventListener("click", () => void pullProviderNow());
     page?.querySelectorAll("[data-provider-position]").forEach(button => {
         button.addEventListener("click", () => showRawPosition(Number(button.dataset.providerPosition)));
+    });
+    page?.querySelectorAll("[data-provider-direction-bus]").forEach(button => {
+        button.addEventListener("click", () => confirmDirectionChange(
+            Number(button.dataset.providerDirectionBus),
+            button.dataset.providerNextDirection,
+        ));
+    });
+}
+
+function confirmDirectionChange(busId, direction) {
+    const bus = (state.health?.buses || []).find(item => item.bus_id === busId);
+    if (!bus || (direction !== "forward" && direction !== "reverse")) return;
+    const directionLabel = direction === "reverse" ? "return" : "outbound";
+    Modal.confirm({
+        eyebrow: "LIVE TRIP CONTROL",
+        title: `Change ${bus.bus_number} to ${directionLabel}?`,
+        subtitle: "This changes the active trip only; it does not rewrite the saved route.",
+        content: `<p>The student map and railway tracker will use the <strong>${escapeHtml(directionLabel)}</strong> stop order. The next GPS heartbeat continues progression from the bus's current live stop.</p>`,
+        confirmText: `Use ${directionLabel} route`,
+        style: "primary",
+        onConfirm: async () => {
+            state.changingDirectionBusId = busId;
+            renderPage();
+            try {
+                const result = await request(`/integrations/gps/provider-health/buses/${busId}/direction`, {
+                    method: "POST",
+                    body: JSON.stringify({ direction }),
+                });
+                Modal.close();
+                await refreshData();
+                Modal.success({ title: "Route direction changed", subtitle: result.message });
+            } catch (error) {
+                Modal.error({ title: "Unable to change route direction", subtitle: error.message });
+            } finally {
+                state.changingDirectionBusId = null;
+                renderPage();
+            }
+        },
     });
 }
 

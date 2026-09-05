@@ -38,6 +38,7 @@ from backend.schemas_gps_provider import (
     GPSDeviceMappingUpdate,
     GPSIngestTokenCreate,
     GPSIngestTokenUpdate,
+    GPSProviderTripDirectionUpdate,
     GPSTranslationConfigUpdate,
 )
 from backend.security import require_driver, require_gps_technician
@@ -1198,6 +1199,96 @@ def get_provider_status(bus_id: int, db: Session = Depends(get_db), _technician:
     if state is None:
         raise HTTPException(status_code=404, detail="No GPS provider data has been received for this bus.")
     return _serialize_state(state, bus, include_raw=True)
+
+
+@router.post("/provider-health/buses/{bus_id}/direction")
+def override_provider_trip_direction(
+    bus_id: int,
+    payload: GPSProviderTripDirectionUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    technician: User = Depends(require_gps_technician),
+):
+    """Manually change the travel order of a bus's active live trip.
+
+    This is an operational recovery action for a bus that turns around before
+    it reaches a terminal. The shared route and its canonical stop sequences
+    remain untouched: every portal derives its display order from this
+    trip-level direction.
+    """
+
+    bus = db.get(Bus, bus_id)
+    if bus is None:
+        raise HTTPException(status_code=404, detail="Bus not found.")
+
+    trip = db.query(LiveTrip).filter(
+        LiveTrip.bus_id == bus_id,
+        LiveTrip.status == "Running",
+        LiveTrip.ended_at.is_(None),
+    ).order_by(LiveTrip.started_at.desc()).first()
+    if trip is None:
+        raise HTTPException(
+            status_code=409,
+            detail="This bus does not have an active tracking trip to change.",
+        )
+
+    route_stops = db.query(RouteStop).filter(
+        RouteStop.route_id == trip.route_id,
+    ).order_by(RouteStop.sequence.asc()).all()
+    if len(route_stops) < 2:
+        raise HTTPException(
+            status_code=409,
+            detail="The active route needs at least two stops before its direction can be changed.",
+        )
+
+    previous_direction = trip.route_direction
+    trip.route_direction = payload.direction
+
+    # A terminal-completed indicator belongs to the direction that just
+    # ended. Clear it so a manual correction does not look like a GPS-triggered
+    # terminal reversal in the student portal.
+    trip.terminal_reached_at = None
+    trip.terminal_stop_id = None
+
+    route_stop_ids = {route_stop.id for route_stop in route_stops}
+    if trip.current_route_stop_id not in route_stop_ids:
+        # Provider-created trips normally initialise this from their first
+        # coordinate. If a technician acts before that happens, begin at the
+        # first stop in the selected direction rather than inventing a stop.
+        trip.current_route_stop_id = ordered_route_stops(
+            route_stops, payload.direction
+        )[0].id
+        trip.current_stop_status = "Approaching"
+        trip.current_stop_arrived_at = None
+        trip.current_stop_departed_at = None
+
+    record_audit_event(
+        db,
+        category="tracking",
+        action="trip_direction_manually_changed",
+        actor=technician,
+        subject_type="live_trip",
+        subject_id=trip.id,
+        subject_label=f"{bus.bus_number} · Trip #{trip.id}",
+        details={
+            "bus_id": bus.id,
+            "previous_direction": previous_direction,
+            "route_direction": trip.route_direction,
+            "current_route_stop_id": trip.current_route_stop_id,
+        },
+        request=request,
+    )
+    db.commit()
+    db.refresh(trip)
+
+    return {
+        "bus_id": bus.id,
+        "trip_id": trip.id,
+        "route_direction": trip.route_direction,
+        "current_route_stop_id": trip.current_route_stop_id,
+        "current_stop_status": trip.current_stop_status,
+        "message": "Trip direction changed. Student live tracking will redraw in the new route order on its next refresh.",
+    }
 
 
 @router.get("/driver/source")
