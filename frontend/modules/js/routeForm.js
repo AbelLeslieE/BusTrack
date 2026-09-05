@@ -26,6 +26,14 @@ let routeMapContainer = null;
 let routeLayer = null;
 
 let routeStopMarkers = [];
+
+// The public OSRM demo endpoint is best-effort. Stop selection can change
+// several times in quick succession, so only the latest route calculation is
+// allowed to reach it or draw on the map.
+let roadRouteRequestId = 0;
+let roadRouteController = null;
+let roadRouteTimer = null;
+const ROAD_ROUTE_DEBOUNCE_MS = 350;
 /* ==========================================================================
    CREATE FORM
 ========================================================================== */
@@ -512,9 +520,138 @@ function initializeRouteMap(){
    GENERATE ROAD ROUTE
 ========================================================================== */
 
-async function generateRoadRoute(){
+function cancelRoadRouteRequest(){
 
-    if(selectedStops.length < 2){
+    roadRouteRequestId++;
+
+    if(roadRouteTimer !== null){
+
+        window.clearTimeout(roadRouteTimer);
+
+        roadRouteTimer = null;
+
+    }
+
+    if(roadRouteController){
+
+        roadRouteController.abort();
+
+        roadRouteController = null;
+
+    }
+
+}
+
+
+function scheduleRoadRoute(){
+
+    cancelRoadRouteRequest();
+
+    const requestId = roadRouteRequestId;
+
+    roadRouteTimer = window.setTimeout(
+
+        ()=>{
+
+            roadRouteTimer = null;
+
+            void generateRoadRoute(requestId);
+
+        },
+
+        ROAD_ROUTE_DEBOUNCE_MS
+
+    );
+
+}
+
+
+function drawStopOrderFallback(stops){
+
+    if(!routeMap || !Array.isArray(stops) || stops.length < 2){
+
+        return;
+
+    }
+
+    const points = stops
+
+        .map(stop=>[
+
+            Number(stop.latitude),
+
+            Number(stop.longitude)
+
+        ])
+
+        .filter(point=>
+
+            Number.isFinite(point[0]) &&
+
+            Number.isFinite(point[1])
+
+        );
+
+    if(points.length < 2){
+
+        return;
+
+    }
+
+    clearRouteLayer();
+
+    routeLayer = window.L.polyline(
+
+        points,
+
+        {
+
+            color:"#77DDF8",
+
+            weight:5,
+
+            opacity:.8,
+
+            dashArray:"10 9",
+
+            lineCap:"round",
+
+            lineJoin:"round"
+
+        }
+
+    ).addTo(routeMap);
+
+    const bounds = routeLayer.getBounds();
+
+    if(bounds.isValid()){
+
+        routeMap.fitBounds(
+
+            bounds,
+
+            {
+
+                padding:[50,50],
+
+                maxZoom:17
+
+            }
+
+        );
+
+    }
+
+    renderRouteStopMarkers();
+
+}
+
+
+async function generateRoadRoute(requestId){
+
+    const stopsForRequest = [...selectedStops];
+
+    if(stopsForRequest.length < 2){
 
         clearRouteLayer();
 
@@ -534,12 +671,12 @@ async function generateRoadRoute(){
 
     for(
         let index = 0;
-        index < selectedStops.length;
+        index < stopsForRequest.length;
         index++
     ){
 
         const stop =
-            selectedStops[index];
+            stopsForRequest[index];
 
 
         const latitude =
@@ -618,9 +755,28 @@ async function generateRoadRoute(){
             "Calculating road route..."
         );
 
+        const controller = new AbortController();
+
+        roadRouteController = controller;
 
         const response =
-            await fetch(url);
+            await fetch(
+
+                url,
+
+                {
+
+                    signal:controller.signal
+
+                }
+
+            );
+
+        if(requestId !== roadRouteRequestId){
+
+            return;
+
+        }
 
 
         /* ======================================================
@@ -628,27 +784,6 @@ async function generateRoadRoute(){
         ======================================================= */
 
         if(!response.ok){
-
-            const responseText =
-                await response.text();
-
-
-            console.error(
-
-                "BusTrack OSRM HTTP error:",
-
-                {
-
-                    status:response.status,
-
-                    response:responseText,
-
-                    url
-
-                }
-
-            );
-
 
             throw new Error(
 
@@ -666,6 +801,12 @@ async function generateRoadRoute(){
         const data =
             await response.json();
 
+        if(requestId !== roadRouteRequestId){
+
+            return;
+
+        }
+
 
         /* ======================================================
            ROUTE VALIDATION
@@ -674,7 +815,9 @@ async function generateRoadRoute(){
         if(
             data.code !== "Ok" ||
             !Array.isArray(data.routes) ||
-            data.routes.length === 0
+            data.routes.length === 0 ||
+            !data.routes[0]?.geometry ||
+            !Array.isArray(data.routes[0].geometry.coordinates)
         ){
 
             throw new Error(
@@ -705,25 +848,33 @@ async function generateRoadRoute(){
 
     catch(error){
 
-        console.error(
+        if(
+            error?.name === "AbortError" ||
+            requestId !== roadRouteRequestId
+        ){
 
-            "BusTrack: Route generation error:",
+            return;
 
-            error
+        }
 
-        );
-
-
-        clearRouteLayer();
-
+        // A public routing service can reject a waypoint that is not close
+        // enough to a mapped road. The route still has a valid stop order and
+        // can be saved, so show that order instead of failing the builder.
+        drawStopOrderFallback(stopsForRequest);
 
         updateRouteMapStatus(
-
-            error.message ||
-
-            "Unable to calculate road route."
-
+            "Road routing unavailable — showing stop order"
         );
+
+    }
+
+    finally{
+
+        if(roadRouteController?.signal.aborted || requestId === roadRouteRequestId){
+
+            roadRouteController = null;
+
+        }
 
     }
 
@@ -998,6 +1149,8 @@ function updateRouteMap(){
 
     if(selectedStops.length === 0){
 
+        cancelRoadRouteRequest();
+
         clearRouteLayer();
 
 
@@ -1025,6 +1178,8 @@ function updateRouteMap(){
     ========================================================== */
 
     if(selectedStops.length === 1){
+
+        cancelRoadRouteRequest();
 
         const stop =
             selectedStops[0];
@@ -1084,7 +1239,7 @@ function updateRouteMap(){
        TWO OR MORE STOPS
     ========================================================== */
 
-    generateRoadRoute();
+    scheduleRoadRoute();
 
 }
 /* ==========================================================================
@@ -1111,6 +1266,8 @@ function clearRouteLayer(){
 ========================================================================== */
 
 function clearRouteMap(){
+
+    cancelRoadRouteRequest();
 
     clearRouteLayer();
 
@@ -1775,6 +1932,8 @@ export function setSelectedStops(
 ========================================================================== */
 
 export function destroyRouteMap(){
+
+    cancelRoadRouteRequest();
 
     if(routeMap){
 
