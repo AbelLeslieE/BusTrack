@@ -83,6 +83,12 @@ class LiveTrip(Base):
         nullable=False,
     )
 
+    # Progression reset is independent of the last physical GPS observation.
+    route_reset_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reset_waiting_for_start: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    reset_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    reset_request_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+
     # ======================================================
     # CURRENT LIVE POSITION
     # ======================================================

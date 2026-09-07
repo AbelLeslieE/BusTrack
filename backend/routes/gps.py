@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
+from backend.services.trip_reset import as_utc, lock_tracking_bus, observation_after_reset, reset_metadata
 
 from backend.routes.models_tracking import (
     LiveTrip,
@@ -218,6 +219,7 @@ def build_live_trip_response(
         "ended_at": trip.ended_at,
 
         "route_direction": trip.route_direction,
+        **reset_metadata(trip),
 
     }
 
@@ -259,6 +261,14 @@ def update_route_stop_progression(
 
     if not route_stops:
         return None
+
+    if getattr(trip, "route_reset_at", None):
+        if not observation_after_reset(trip, current_timestamp):
+            return None
+        if trip.last_location_update and as_utc(current_timestamp) <= as_utc(trip.last_location_update):
+            return None
+        if previous_location and as_utc(previous_location.recorded_at) <= as_utc(trip.route_reset_at):
+            previous_location = None
 
     # ``route_stops`` is the direction-specific travel/display order. Keep a
     # separately reconstructed original order for all terminal decisions. A
@@ -410,6 +420,19 @@ def update_route_stop_progression(
         current_distance,
         current_stop,
     )
+
+    if getattr(trip, "reset_waiting_for_start", False):
+        # Only the selected first stop can start this new progression. Never
+        # infer its arrival from an old crossing or a later stop's geofence.
+        if not inside_radius:
+            return None
+        trip.reset_waiting_for_start = False
+        trip.current_stop_status = "Arrived"
+        trip.current_stop_arrived_at = current_timestamp
+        trip.current_stop_departed_at = None
+        record_stop_event("Arrived", current_route_stop, current_stop, current_distance)
+        return {"event": "Arrived", "route_stop_id": current_route_stop.id,
+                "stop_id": current_stop.id, "reset_start_confirmed": True}
 
     # Reconcile a terminal that was already marked as arrived before a device
     # reconnect, server restart, or delayed provider heartbeat. Direction is
@@ -944,8 +967,11 @@ def update_location(
     # FIND ACTIVE TRIP
     # ======================================================
 
+    bus_id = db.query(LiveTrip.bus_id).filter(LiveTrip.id == request.trip_id).scalar()
+    if bus_id is not None:
+        lock_tracking_bus(db, bus_id)
     trip = (
-        db.query(LiveTrip)
+        db.query(LiveTrip).populate_existing()
         .filter(
             LiveTrip.id == request.trip_id,
             LiveTrip.ended_at.is_(None),
@@ -984,6 +1010,15 @@ def update_location(
     # Phone and installed-module positions are both accepted. Each source
     # updates the active-trip snapshot when it reports, so a driver phone can
     # fill gaps while module-only devices still advance the route normally.
+
+    if getattr(trip, "route_reset_at", None):
+        # In-flight phone callbacks from before the reset cannot restart it.
+        if (request.reset_version != trip.reset_version
+                or not observation_after_reset(trip, request.recorded_at)
+                or (trip.last_location_update and as_utc(request.recorded_at) <= as_utc(trip.last_location_update))):
+            return {"message": "Waiting for a new phone fix after route reset.",
+                    "applied": False, **reset_metadata(trip)}
+        current_timestamp = as_utc(request.recorded_at)
 
     mobile_accuracy = request.accuracy
 
@@ -1185,6 +1220,7 @@ def update_location(
 
     return {
 
+        **reset_metadata(trip),
         "message":
             "Location updated successfully.",
 
@@ -1292,7 +1328,10 @@ def change_trip_direction(
     if driver is None:
         raise HTTPException(status_code=403, detail="Driver access required.")
 
-    trip = db.query(LiveTrip).filter(
+    bus_id = db.query(LiveTrip.bus_id).filter(LiveTrip.id == request.trip_id).scalar()
+    if bus_id is not None:
+        lock_tracking_bus(db, bus_id)
+    trip = db.query(LiveTrip).populate_existing().filter(
         LiveTrip.id == request.trip_id,
         LiveTrip.driver_id == driver.id,
         LiveTrip.ended_at.is_(None),
@@ -1300,6 +1339,8 @@ def change_trip_direction(
     if trip is None:
         raise HTTPException(status_code=404, detail="Active trip not found.")
 
+    if trip.reset_waiting_for_start:
+        raise HTTPException(status_code=409, detail="Route reset is waiting for its first stop.")
     route_stops = db.query(RouteStop).filter(
         RouteStop.route_id == trip.route_id,
     ).order_by(RouteStop.sequence.asc()).all()

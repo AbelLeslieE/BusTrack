@@ -1377,6 +1377,28 @@ async function loadStudentTracking() {
     );
 
 
+    const previousTrip = state.liveTrip;
+    if (previousTrip?.id === data?.trip?.id &&
+        Number(data?.trip?.reset_version || 0) < Number(previousTrip?.reset_version || 0)) return null;
+    const resetChanged = previousTrip?.id !== data?.trip?.id ||
+        Number(previousTrip?.reset_version || 0) !== Number(data?.trip?.reset_version || 0);
+    if (resetChanged) {
+        state.etaRequestId++;
+        state.etaDistanceMeters = null;
+        state.etaMinutes = null;
+        state.etaLoading = false;
+        state.etaOrigin = null;
+        state.etaDestinationId = null;
+        state.etaLastCalculatedAt = 0;
+        if (state.terminalNoticeTimer !== null) {
+            window.clearTimeout(state.terminalNoticeTimer);
+            state.terminalNoticeTimer = null;
+            Modal.close();
+        }
+        state.terminalNoticeKey = null;
+        resetRoadRouteForDirection();
+    }
+
     const nextRouteDirection =
         data?.trip?.route_direction ||
         "forward";
@@ -2513,6 +2535,14 @@ function updateBusPosition() {
 ========================================================== */
 
 async function calculateNextStopETA() {
+    if (state.liveTrip?.reset_waiting_for_start) {
+        state.etaRequestId++;
+        state.etaLoading = false;
+        state.etaMinutes = null;
+        state.etaDistanceMeters = null;
+        updateETAInterface();
+        return;
+    }
 
     const trip =
         state.trackingData?.trip ||
@@ -3152,8 +3182,8 @@ function cleanupTracking() {
     state.etaLoading =
         false;
 
-    state.etaRequestId =
-        0;
+    state.etaRequestId++;
+    state.roadRouteRequestId++;
     state.etaOrigin = null;
     state.etaDestinationId = null;
     state.etaLastCalculatedAt = 0;
@@ -3540,6 +3570,12 @@ function updateETAInterface(
     }
 
 
+    if (state.liveTrip?.reset_waiting_for_start) {
+        etaElement.textContent = "Waiting for first stop";
+        if (distanceElement) distanceElement.textContent = "";
+        return;
+    }
+
     if (
         mode === "waiting"
     ) {
@@ -3668,7 +3704,7 @@ function renderStopInformation() {
 
                 <span>
                     ${
-                        progress.status === "Arrived"
+                        state.liveTrip?.reset_waiting_for_start ? "ROUTE START" : progress.status === "Arrived"
                             ? "ARRIVED AT"
                             : "CURRENTLY NEAR"
                     }
@@ -4026,6 +4062,10 @@ function updateTrackView() {
 ========================================================== */
 
 function renderTrackingMessage() {
+    if (state.liveTrip?.reset_waiting_for_start && !state.error) {
+        return `<div class="student-tracking-message"><p>${escapeHTML(state.liveTrip.reset_message || "Route reset — waiting to reach the first stop.")}</p>
+            <p>${getTelemetry().is_fresh ? "The map shows the actual reported bus location." : "GPS is delayed. Showing the last known bus location."}</p></div>`;
+    }
 
     if (state.error) {
 
@@ -4692,8 +4732,8 @@ export function render() {
     state.etaLoading =
         false;
 
-    state.etaRequestId =
-        0;
+    state.etaRequestId++;
+    state.roadRouteRequestId++;
 
     state.etaOrigin = null;
     state.etaDestinationId = null;

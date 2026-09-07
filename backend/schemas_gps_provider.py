@@ -1,5 +1,6 @@
 """Contracts for the vendor-to-BusTrack GPS translation boundary."""
 
+from uuid import UUID
 from pydantic import BaseModel, Field
 from typing import Any, Literal
 
@@ -35,3 +36,10 @@ class GPSProviderTripDirectionUpdate(BaseModel):
     """A technician's explicit override for one running vehicle trip."""
 
     direction: Literal["forward", "reverse"]
+
+
+class GPSProviderTripReset(BaseModel):
+    direction: Literal["forward", "reverse"] = "forward"
+    trip_id: int = Field(gt=0)
+    expected_reset_version: int = Field(ge=0)
+    request_id: UUID

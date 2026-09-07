@@ -42,6 +42,11 @@ class TripStartRequest(BaseModel):
 
 class LocationUpdateRequest(BaseModel):
 
+    # Required for progression after a technician reset. Legacy clients can
+    # still send coordinates, but cannot unlock a reset without fix metadata.
+    recorded_at: datetime | None = None
+    reset_version: int | None = Field(default=None, ge=0)
+
     trip_id: int
 
     latitude: float
@@ -128,6 +133,10 @@ class LiveTripResponse(BaseModel):
     # Returned immediately after a vehicle-GPS-started trip is created, so
     # the driver UI can render the correct stop order from its first frame.
     route_direction: Literal["forward", "reverse"] = "forward"
+    reset_version: int = 0
+    route_reset_at: datetime | None = None
+    reset_waiting_for_start: bool = False
+    reset_message: str | None = None
 
     started_at: datetime
 

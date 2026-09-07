@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
+from backend.services.trip_reset import reset_metadata
 from backend.security import require_management, require_user
 from backend.models import (
     Student,
@@ -1060,6 +1061,7 @@ def get_student_live_tracking(
     if tracking_available:
 
         trip_data = {
+            **reset_metadata(trip),
 
             "id":
                 trip.id if trip is not None else None,

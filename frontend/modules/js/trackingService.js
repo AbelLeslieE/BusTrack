@@ -32,6 +32,9 @@ let trackingAccessToken = null;
 // Keeping it locally lets the driver UI update at once while other portals
 // receive the same value from their normal polling response.
 let currentRouteDirection = "forward";
+let currentResetVersion = 0;
+let resetWaitingForStart = false;
+let sourceRequestId = 0;
 let terminalMessageTimer = null;
 
 // The MVD unit is primary. Phone GPS runs only while that signal is stale.
@@ -651,7 +654,7 @@ function showTerminalArrival(nextDirection) {
 function showRunningTripStatus(direction = currentRouteDirection) {
     updateDirectionControls(direction);
     if (terminalMessageTimer === null) {
-        setText("tripStatus", `🟢 Running · ${directionLabel()}`);
+        setText("tripStatus", resetWaitingForStart ? "Route reset — waiting to reach the first stop." : `🟢 Running · ${directionLabel()}`);
     }
 }
 
@@ -727,6 +730,18 @@ function updateVehicleLocation(vehicle) {
 
 function applyTrackingSource(source) {
     if (!source) return;
+    const sameTrip = currentTripId === source.active_trip_id;
+    const resetVersion = Number(source.reset_version || 0);
+    if (sameTrip && resetVersion < currentResetVersion) return;
+    const resetChanged = sameTrip && resetVersion !== currentResetVersion;
+    if (!sameTrip || resetChanged) {
+        currentResetVersion = resetVersion;
+        pendingLocation = null;
+        previousGpsSample = null;
+        if (terminalMessageTimer !== null) window.clearTimeout(terminalMessageTimer);
+        terminalMessageTimer = null;
+    }
+    resetWaitingForStart = Boolean(source.reset_waiting_for_start);
 
     // A GPS module may begin reporting after the driver portal has already
     // opened. Adopt that server-created session immediately; no driver button
@@ -764,7 +779,7 @@ function applyTrackingSource(source) {
         && sourceDirection !== currentRouteDirection
     );
     if (sourceDirection) {
-        if (directionChangedAtTerminal) {
+        if (directionChangedAtTerminal && !resetChanged && !resetWaitingForStart) {
             // Provider GPS reached the final stop. The driver screen polls
             // this endpoint, so it can show the transition without reload.
             showTerminalArrival(sourceDirection);
@@ -811,7 +826,8 @@ function applyTrackingSource(source) {
                 ? "LAST KNOWN"
                 : "WAITING"
     );
-    setText("trackingSourceReason", source.reason || "Location-source status is unavailable.");
+    setText("trackingSourceReason", [source.reset_message, source.reason].filter(Boolean).join(" ") || "Location-source status is unavailable.");
+    if (resetWaitingForStart || resetChanged) showRunningTripStatus(sourceDirection);
     setText(
         "activeTrackingSource",
         vehicleIsPrimary && mobilePublishingEnabled
@@ -897,10 +913,12 @@ function applyTrackingSource(source) {
 }
 
 async function refreshTrackingSource() {
+    const requestId = ++sourceRequestId;
+    const session = trackingSession;
     const response = await fetch("/api/integrations/gps/driver/source");
     if (!response.ok) throw new Error("Unable to check vehicle GPS status.");
     const source = await response.json();
-    applyTrackingSource(source);
+    if (requestId === sourceRequestId && session === trackingSession) applyTrackingSource(source);
     return source;
 }
 
@@ -1514,7 +1532,8 @@ async function onLocationSuccess(position) {
         speedKmh != null
             ? speedKmh / 3.6
             : null,
-        accuracy
+        accuracy,
+        gpsTimestamp
     );
 
 }
@@ -1578,7 +1597,9 @@ async function flushPendingLocation() {
                 latitude: location.latitude,
                 longitude: location.longitude,
                 speed: location.speed,
-                accuracy: location.accuracy
+                accuracy: location.accuracy,
+                recorded_at: new Date(location.timestamp).toISOString(),
+                reset_version: location.resetVersion
             })
         });
 
@@ -1597,6 +1618,8 @@ async function flushPendingLocation() {
         const result = await response.json();
         console.log("GPS sent to server successfully:", result);
 
+        if (location.resetVersion !== currentResetVersion) return;
+        if (result.applied === false) void refreshTrackingSource().catch(() => {});
         if (result.stop_progression_event?.trip_leg_completed) {
             showTerminalArrival(
                 result.stop_progression_event.next_direction || currentRouteDirection
@@ -1610,10 +1633,10 @@ async function flushPendingLocation() {
     }
 }
 
-async function sendLocation(latitude, longitude, speed, accuracy) {
+async function sendLocation(latitude, longitude, speed, accuracy, timestamp) {
     if (activeTrackingSource !== "mobile" || !currentTripId) return;
     // Preserve only the newest coordinate while the network is busy.
-    pendingLocation = { latitude, longitude, speed, accuracy };
+    pendingLocation = { latitude, longitude, speed, accuracy, timestamp, resetVersion: currentResetVersion };
     await flushPendingLocation();
 }
 /* ==========================================================
@@ -1924,6 +1947,9 @@ function getLocationErrorMessage(error) {
 ========================================================== */
 
 export function cleanupTracking() {
+    sourceRequestId++;
+    currentResetVersion = 0;
+    resetWaitingForStart = false;
 
     console.log(
         "Cleaning up driver tracking..."

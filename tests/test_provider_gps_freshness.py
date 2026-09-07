@@ -16,7 +16,7 @@ from sqlalchemy.orm import sessionmaker
 import backend.models  # noqa: F401
 import backend.routes.models_tracking  # noqa: F401
 from backend.database import Base
-from backend.models import Bus, Route, RouteStop, Stop
+from backend.models import Bus, Route, RouteStop, Stop, Student, User
 from fastapi import Response
 
 from backend.routes.gps_provider import (
@@ -26,6 +26,7 @@ from backend.routes.gps_provider import (
     list_provider_positions,
 )
 from backend.routes.models_tracking import BusGPSState, GPSIngestToken, LiveTrip, ProviderGPSPosition
+from backend.routes.student import get_student_live_tracking
 
 
 class ProviderGpsFreshnessTest(unittest.TestCase):
@@ -228,6 +229,83 @@ class ProviderGpsFreshnessTest(unittest.TestCase):
             self.assertEqual(history["total"], 1)
             self.assertEqual(history["positions"][0]["bus_id"], bus.id)
             self.assertEqual(history["positions"][0]["provider_payload"]["providerExtra"]["heartbeat"], "20-second")
+
+    def test_provider_heartbeats_drive_student_map_and_track_through_return_leg(self) -> None:
+        """The student response keeps the same stop state for map and railway views."""
+
+        with self.session_factory() as database_session:
+            student_user = User(username="heartbeat-student", password_hash="unused", full_name="Heartbeat Student", role="User", status="Active")
+            bus = Bus(bus_number="HEART-01", registration_number="HEART-REG", capacity=40, manufacturer="Test", model="Coach", year=2026, fuel_type="Diesel", status="Active", device_id="HEART-DEVICE")
+            token = GPSIngestToken(label="heartbeat", token_hash=hashlib.sha256(b"heartbeat-token").hexdigest(), is_active=True)
+            database_session.add_all([student_user, bus, token])
+            database_session.flush()
+            route = Route(route_code="HEART-R", route_name="Heartbeat Route", bus_id=bus.id, driver_id=None, status="Active", total_stops=3)
+            stops = [
+                Stop(stop_code="HEART-A", stop_name="Start", latitude=10.0, longitude=76.0, radius=120, status="Active"),
+                Stop(stop_code="HEART-B", stop_name="Middle", latitude=10.01, longitude=76.01, radius=120, status="Active"),
+                Stop(stop_code="HEART-C", stop_name="Terminal", latitude=10.02, longitude=76.02, radius=120, status="Active"),
+            ]
+            database_session.add_all([route, *stops])
+            database_session.flush()
+            database_session.add_all([
+                RouteStop(route_id=route.id, stop_id=stop.id, sequence=index)
+                for index, stop in enumerate(stops, start=1)
+            ])
+            database_session.add(Student(user_id=student_user.id, student_code="HEART-STUDENT", route_id=route.id, bus_id=bus.id, stop_id=stops[0].id))
+            database_session.commit()
+
+            first_fix = datetime.now(timezone.utc)
+
+            def send(latitude: float, longitude: float, fix_time: datetime) -> None:
+                ingest_positions(
+                    self._request(),
+                    {
+                        "uniqueId": "HEART-DEVICE",
+                        "latitude": latitude,
+                        "longitude": longitude,
+                        "speed": 0,
+                        "fixTime": fix_time.isoformat().replace("+00:00", "Z"),
+                        "valid": True,
+                        "attributes": {"ignition": False, "motion": False},
+                    },
+                    "heartbeat-token",
+                    database_session,
+                )
+
+            send(stops[0].latitude, stops[0].longitude, first_fix)
+            at_start = get_student_live_tracking(student_user, database_session)
+            self.assertEqual(at_start["trip"]["route_direction"], "forward")
+            self.assertEqual([item["tracking_status"] for item in at_start["stops"]], ["reached", "pending", "pending"])
+
+            # An ignition-off heartbeat at the terminal must still update the
+            # tracker and immediately reverse the live route order.
+            send(stops[2].latitude, stops[2].longitude, first_fix + timedelta(minutes=2))
+            at_terminal = get_student_live_tracking(student_user, database_session)
+            self.assertEqual(at_terminal["trip"]["route_direction"], "reverse")
+            self.assertEqual([item["stop_code"] for item in at_terminal["stops"]], ["HEART-C", "HEART-B", "HEART-A"])
+            self.assertEqual([item["tracking_status"] for item in at_terminal["stops"]], ["terminal_completed", "pending", "pending"])
+
+            # The next accepted provider coordinate is consumed in the return
+            # direction, rather than being ignored after the reversal.
+            send(stops[1].latitude, stops[1].longitude, first_fix + timedelta(minutes=4))
+            at_return_stop = get_student_live_tracking(student_user, database_session)
+            self.assertEqual(at_return_stop["trip"]["route_direction"], "reverse")
+            self.assertEqual([item["tracking_status"] for item in at_return_stop["stops"]], ["completed", "reached", "pending"])
+
+            # If the provider subsequently goes quiet, the student response
+            # retains the last accepted location and geofence state instead of
+            # removing the bus or resetting the railway tracker.
+            trip = database_session.query(LiveTrip).filter(LiveTrip.bus_id == bus.id).one()
+            state = database_session.query(BusGPSState).filter(BusGPSState.bus_id == bus.id).one()
+            stale_time = datetime.now(timezone.utc) - timedelta(hours=1)
+            trip.last_location_update = stale_time
+            state.fix_time = stale_time
+            state.received_at = stale_time
+            database_session.commit()
+            last_known = get_student_live_tracking(student_user, database_session)
+            self.assertFalse(last_known["trip"]["telemetry"]["is_fresh"])
+            self.assertEqual((last_known["trip"]["latitude"], last_known["trip"]["longitude"]), (stops[1].latitude, stops[1].longitude))
+            self.assertEqual([item["tracking_status"] for item in last_known["stops"]], ["completed", "reached", "pending"])
 
 
 if __name__ == "__main__":

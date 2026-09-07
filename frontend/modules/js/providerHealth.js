@@ -9,6 +9,8 @@ const state = {
     loading: true,
     refreshing: false,
     changingDirectionBusId: null,
+    resettingBusId: null,
+    refreshRequestId: 0,
     lastRefreshError: "",
 };
 
@@ -74,7 +76,7 @@ function healthCard(item) {
         : "No active GPS route session";
     const nextDirection = item.route_direction === "reverse" ? "forward" : "reverse";
     const directionControl = item.active_trip_id
-        ? `<div class="provider-direction-control"><span>Manual route control</span><button class="tech-button secondary provider-direction-button" type="button" data-provider-direction-bus="${item.bus_id}" data-provider-next-direction="${nextDirection}" ${state.changingDirectionBusId === item.bus_id ? "disabled" : ""}>${state.changingDirectionBusId === item.bus_id ? "Changing…" : nextDirection === "reverse" ? "↔ Change to return" : "↔ Change to outbound"}</button></div>`
+        ? `<div class="provider-direction-control"><span>Manual route control</span><button class="tech-button secondary provider-direction-button" type="button" data-provider-direction-bus="${item.bus_id}" data-provider-next-direction="${nextDirection}" ${state.changingDirectionBusId === item.bus_id || state.resettingBusId === item.bus_id ? "disabled" : ""}>${state.changingDirectionBusId === item.bus_id ? "Changing…" : nextDirection === "reverse" ? "↔ Change to return" : "↔ Change to outbound"}</button><button class="tech-button secondary" type="button" data-provider-reset-bus="${item.bus_id}" ${state.resettingBusId === item.bus_id || state.changingDirectionBusId === item.bus_id ? "disabled" : ""}>${state.resettingBusId === item.bus_id ? "Resetting…" : "Reset to first stop"}</button></div>`
         : "";
     return `<article class="provider-bus-card ${escapeHtml(item.health_status)}">
         <header><div><p>${escapeHtml(item.bus_number)}</p><strong>${escapeHtml(item.registration_number || "No registration")}</strong></div><span class="provider-health-pill ${escapeHtml(item.health_status)}">${escapeHtml(statusLabel(item.health_status))}</span></header>
@@ -87,6 +89,7 @@ function healthCard(item) {
             <div><dt>Tracking session</dt><dd>${escapeHtml(trip)}</dd></div>
         </dl>
         ${directionControl}
+        ${item.reset_waiting_for_start ? `<p class="tech-muted">${escapeHtml(item.reset_message)}</p>` : ""}
         ${item.last_provider_error ? `<p class="provider-error-copy">${escapeHtml(item.last_provider_error)}</p>` : ""}
     </article>`;
 }
@@ -139,6 +142,9 @@ function renderPage() {
 }
 
 function bindEvents() {
+    page?.querySelectorAll("[data-provider-reset-bus]").forEach(button => {
+        button.addEventListener("click", () => void openResetDialog(Number(button.dataset.providerResetBus)));
+    });
     page?.querySelector("#provider-bus-filter")?.addEventListener("change", event => {
         state.selectedBusId = event.target.value;
         void refreshData();
@@ -153,6 +159,63 @@ function bindEvents() {
             button.dataset.providerNextDirection,
         ));
     });
+}
+
+async function openResetDialog(busId) {
+    if (state.resettingBusId !== null || state.changingDirectionBusId !== null) return;
+    state.resettingBusId = busId;
+    renderPage();
+    try {
+        const options = await request(`/integrations/gps/provider-health/buses/${busId}/reset-options`, { cache: "no-store" });
+        if (!page) return;
+        const requestId = crypto.randomUUID();
+        let submitting = false;
+        let direction = "forward";
+        Modal.form({
+            eyebrow: "LIVE TRIP CONTROL",
+            title: `Reset ${options.bus_number} to first stop`,
+            subtitle: options.route_name,
+            size: "sm",
+            submitText: "Reset to first stop",
+            content: `<label for="provider-reset-direction">Journey direction</label>
+                <select id="provider-reset-direction"><option value="forward">Outbound</option><option value="reverse">Return</option></select>
+                <p>Starting stop: <strong id="provider-reset-start">${escapeHtml(options.starts.forward.name)}</strong></p>
+                <p>Clears current stop progress and waits for a fresh GPS arrival at this stop. The real bus location and journey history stay available.</p>
+                <p id="provider-reset-error" role="alert"></p>`,
+            onOpen: () => document.getElementById("provider-reset-direction")?.addEventListener("change", event => {
+                direction = event.target.value;
+                document.getElementById("provider-reset-start").textContent = options.starts[direction].name;
+            }),
+            onSubmit: async () => {
+                if (submitting) return;
+                submitting = true;
+                const select = document.getElementById("provider-reset-direction");
+                if (select) select.disabled = true;
+                try {
+                    const result = await request(`/integrations/gps/provider-health/buses/${busId}/reset`, {
+                        method: "POST",
+                        body: JSON.stringify({direction, trip_id: options.trip_id,
+                            expected_reset_version: options.reset_version, request_id: requestId}),
+                    });
+                    Modal.close();
+                    await refreshData({ force: true });
+                    Modal.success({ title: "Route reset", subtitle: result.message });
+                } catch (error) {
+                    const message = document.getElementById("provider-reset-error");
+                    if (message) message.textContent = error.message;
+                    // Retrying this dialog reuses the same request ID.
+                } finally {
+                    submitting = false;
+                    if (select) select.disabled = false;
+                }
+            },
+        });
+    } catch (error) {
+        Modal.error({ title: "Unable to reset route", subtitle: error.message });
+    } finally {
+        state.resettingBusId = null;
+        renderPage();
+    }
 }
 
 function confirmDirectionChange(busId, direction) {
@@ -201,8 +264,9 @@ function showRawPosition(id) {
     });
 }
 
-async function refreshData({ preserveError = false } = {}) {
-    if (state.refreshing) return;
+async function refreshData({ preserveError = false, force = false } = {}) {
+    if (state.refreshing && !force) return;
+    const requestId = ++state.refreshRequestId;
     state.refreshing = true;
     if (!preserveError) state.lastRefreshError = "";
     try {
@@ -211,11 +275,13 @@ async function refreshData({ preserveError = false } = {}) {
             request("/integrations/gps/provider-health"),
             request(`/integrations/gps/provider-health/positions${suffix}`),
         ]);
+        if (requestId !== state.refreshRequestId) return;
         state.health = health;
         state.positions = feed.positions;
     } catch (error) {
-        state.lastRefreshError = `Unable to refresh provider health: ${error.message}`;
+        if (requestId === state.refreshRequestId) state.lastRefreshError = `Unable to refresh provider health: ${error.message}`;
     } finally {
+        if (requestId !== state.refreshRequestId) return;
         state.loading = false;
         state.refreshing = false;
         renderPage();

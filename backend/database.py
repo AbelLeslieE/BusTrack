@@ -172,6 +172,23 @@ def get_db() -> Generator[Session, None, None]:
         database_session.close()
 
 
+def _add_trip_reset_columns(database_engine=engine) -> None:
+    """Add reset state to existing SQLite/PostgreSQL databases without data loss."""
+    inspector = inspect(database_engine)
+    if "live_trips" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("live_trips")}
+    with database_engine.begin() as connection:
+        for name, definition in {
+            "route_reset_at": "TIMESTAMP NULL",
+            "reset_waiting_for_start": "BOOLEAN NOT NULL DEFAULT FALSE",
+            "reset_version": "INTEGER NOT NULL DEFAULT 0",
+            "reset_request_id": "VARCHAR(36) NULL",
+        }.items():
+            if name not in columns:
+                connection.execute(text(f"ALTER TABLE live_trips ADD COLUMN {name} {definition}"))
+
+
 def initialize_database() -> None:
     """
     Create the database schema.
@@ -219,6 +236,7 @@ def initialize_database() -> None:
     )
 
     _make_live_trip_driver_optional()
+    _add_trip_reset_columns()
 
     # This project currently has no migration framework. Keep existing local
     # deployments compatible with the student route assignment introduced by

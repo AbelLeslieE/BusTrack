@@ -21,6 +21,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
+from backend.services.trip_reset import lock_tracking_bus, reset_metadata
 from backend.audit import record_audit_event
 from backend.models import APIRequestLog, AuditEvent, Bus, Driver, Route, User
 from backend.routes.models_tracking import (
@@ -39,6 +40,7 @@ from backend.schemas_gps_provider import (
     GPSIngestTokenCreate,
     GPSIngestTokenUpdate,
     GPSProviderTripDirectionUpdate,
+    GPSProviderTripReset,
     GPSTranslationConfigUpdate,
 )
 from backend.security import require_driver, require_gps_technician
@@ -385,6 +387,7 @@ def _serialize_provider_health(
         "active_trip_id": active_trip.id if active_trip else None,
         "route_direction": active_trip.route_direction if active_trip else None,
         "current_route_stop_id": active_trip.current_route_stop_id if active_trip else None,
+        **reset_metadata(active_trip),
     }
 
 
@@ -479,7 +482,7 @@ def _ensure_vehicle_tracking_session(
     # Route assignments can change while the hardware keeps reporting. Reuse
     # only a session for the bus's currently assigned route; otherwise the
     # provider would keep updating an old route while students see tripId=null.
-    trip = db.query(LiveTrip).filter(
+    trip = db.query(LiveTrip).populate_existing().filter(
         LiveTrip.bus_id == bus_id,
         LiveTrip.route_id == route.id,
         LiveTrip.status == "Running",
@@ -549,6 +552,7 @@ def _position_from_current_state(state: BusGPSState) -> dict[str, Any]:
         "speed_kmh": state.speed_kmh,
         "accuracy": state.accuracy,
         "fix_time": state.fix_time or state.received_at,
+        "has_device_timestamp": state.fix_time is not None,
         "valid": state.valid,
         "ignition": state.ignition,
     }
@@ -604,15 +608,18 @@ def _update_active_trip_from_vehicle(db: Session, position: dict[str, Any], bus_
             position["longitude"],
         )
 
-    update_route_stop_progression(
-        trip=trip,
-        route_stops=ordered_route_stops(route_stops, trip.route_direction),
-        latitude=position["latitude"],
-        longitude=position["longitude"],
-        previous_location=previous_location,
-        current_timestamp=position_timestamp,
-        db=db,
-    )
+    # Receipt time alone cannot prove an observation belongs to the new
+    # journey. Keep its location without letting it unlock a manual reset.
+    if not trip.route_reset_at or position.get("has_device_timestamp", position.get("fix_time") is not None):
+        update_route_stop_progression(
+            trip=trip,
+            route_stops=ordered_route_stops(route_stops, trip.route_direction),
+            latitude=position["latitude"],
+            longitude=position["longitude"],
+            previous_location=previous_location,
+            current_timestamp=position_timestamp,
+            db=db,
+        )
 
     db.add(LiveLocation(
         trip_id=trip.id,
@@ -988,7 +995,7 @@ def ingest_positions(
         # Lock the vehicle row before comparing its current GPS timestamp.
         # This makes the newest-only rule safe across simultaneous webhook,
         # background-poller, and technician refresh requests.
-        bus = db.query(Bus).filter(Bus.id == bus.id).with_for_update().one()
+        bus = lock_tracking_bus(db, bus.id)
 
         now = _utc_now()
         external_device_id = position["external_ids"][0]
@@ -1201,6 +1208,80 @@ def get_provider_status(bus_id: int, db: Session = Depends(get_db), _technician:
     return _serialize_state(state, bus, include_raw=True)
 
 
+def _reset_target(db: Session, bus_id: int):
+    bus = db.get(Bus, bus_id)
+    if bus is None:
+        raise HTTPException(status_code=404, detail="Bus not found.")
+    trip = db.query(LiveTrip).populate_existing().filter(
+        LiveTrip.bus_id == bus_id, LiveTrip.status == "Running", LiveTrip.ended_at.is_(None),
+    ).order_by(LiveTrip.started_at.desc()).first()
+    if trip is None:
+        raise HTTPException(status_code=409, detail="This bus has no active tracking trip to reset.")
+    route = db.query(Route).filter(Route.bus_id == bus_id, Route.status == "Active").order_by(Route.id.asc()).first()
+    if route is None or route.id != trip.route_id:
+        raise HTTPException(status_code=409, detail="The active trip no longer matches the bus's active route. Refresh its assignment first.")
+    stops = db.query(RouteStop).filter(RouteStop.route_id == route.id).order_by(RouteStop.sequence.asc()).all()
+    if not stops or any(item.stop is None or item.stop.latitude is None or item.stop.longitude is None
+                        or not -90 <= item.stop.latitude <= 90 or not -180 <= item.stop.longitude <= 180
+                        for item in stops):
+        raise HTTPException(status_code=409, detail="The route needs stops with valid coordinates before it can be reset.")
+    return bus, trip, route, stops
+
+
+@router.get("/provider-health/buses/{bus_id}/reset-options")
+def get_trip_reset_options(bus_id: int, db: Session = Depends(get_db),
+                           _technician: User = Depends(require_gps_technician)):
+    bus, trip, route, stops = _reset_target(db, bus_id)
+    return {"bus_id": bus.id, "bus_number": bus.bus_number, "trip_id": trip.id,
+            "route_name": route.route_name, **reset_metadata(trip),
+            "starts": {direction: {"id": items[0].stop.id, "name": items[0].stop.stop_name}
+                       for direction, items in (("forward", stops), ("reverse", list(reversed(stops))))}}
+
+
+@router.post("/provider-health/buses/{bus_id}/reset")
+def reset_provider_trip(bus_id: int, payload: GPSProviderTripReset, request: Request,
+                        db: Session = Depends(get_db), technician: User = Depends(require_gps_technician)):
+    lock_tracking_bus(db, bus_id)
+    bus, trip, route, stops = _reset_target(db, bus_id)
+    if trip.id != payload.trip_id:
+        raise HTTPException(status_code=409, detail="The active trip changed. Reopen the reset dialog.")
+    if trip.reset_request_id == str(payload.request_id):
+        return {"bus_id": bus.id, "trip_id": trip.id, "already_applied": True,
+                **reset_metadata(trip), "message": "This reset was already applied."}
+    if (trip.reset_version or 0) != payload.expected_reset_version:
+        raise HTTPException(status_code=409, detail="This trip was reset by another request. Reopen the reset dialog.")
+
+    previous = {"direction": trip.route_direction, "route_stop_id": trip.current_route_stop_id,
+                "status": trip.current_stop_status,
+                "arrived_at": trip.current_stop_arrived_at.isoformat() if trip.current_stop_arrived_at else None,
+                "departed_at": trip.current_stop_departed_at.isoformat() if trip.current_stop_departed_at else None,
+                "reset_version": trip.reset_version or 0}
+    first = ordered_route_stops(stops, payload.direction)[0]
+    trip.route_direction = payload.direction
+    trip.current_route_stop_id = first.id
+    trip.current_stop_status = "Approaching"
+    trip.current_stop_arrived_at = None
+    trip.current_stop_departed_at = None
+    trip.terminal_reached_at = None
+    trip.terminal_stop_id = None
+    trip.route_reset_at = _utc_now()
+    trip.reset_waiting_for_start = True
+    trip.reset_version = (trip.reset_version or 0) + 1
+    trip.reset_request_id = str(payload.request_id)
+    record_audit_event(db, category="tracking", action="trip_progression_reset", actor=technician,
+                      subject_type="live_trip", subject_id=trip.id,
+                      subject_label=f"{bus.bus_number} · Trip #{trip.id}",
+                      details={"bus_id": bus.id, "route_id": route.id, "previous": previous,
+                               "direction": payload.direction, "first_stop_id": first.stop.id,
+                               "reset_at": trip.route_reset_at.isoformat(), "request_id": str(payload.request_id),
+                               "reset_version": trip.reset_version}, request=request)
+    db.commit()
+    db.refresh(trip)
+    return {"bus_id": bus.id, "trip_id": trip.id, "route_direction": trip.route_direction,
+            "current_route_stop_id": trip.current_route_stop_id, **reset_metadata(trip),
+            "message": f"Route reset to {first.stop.stop_name}. Waiting for a fresh GPS arrival at this stop."}
+
+
 @router.post("/provider-health/buses/{bus_id}/direction")
 def override_provider_trip_direction(
     bus_id: int,
@@ -1217,11 +1298,11 @@ def override_provider_trip_direction(
     trip-level direction.
     """
 
-    bus = db.get(Bus, bus_id)
+    bus = lock_tracking_bus(db, bus_id)
     if bus is None:
         raise HTTPException(status_code=404, detail="Bus not found.")
 
-    trip = db.query(LiveTrip).filter(
+    trip = db.query(LiveTrip).populate_existing().filter(
         LiveTrip.bus_id == bus_id,
         LiveTrip.status == "Running",
         LiveTrip.ended_at.is_(None),
@@ -1241,6 +1322,8 @@ def override_provider_trip_direction(
             detail="The active route needs at least two stops before its direction can be changed.",
         )
 
+    if trip.reset_waiting_for_start:
+        raise HTTPException(status_code=409, detail="Route reset is waiting for its first stop. Use Reset to first stop to choose another direction.")
     previous_direction = trip.route_direction
     trip.route_direction = payload.direction
 
@@ -1321,7 +1404,8 @@ def get_driver_tracking_source(current_user: User = Depends(require_driver), db:
                     if state.ignition is True
                     else "Vehicle GPS parked heartbeat is current and accepted for route progression."
                 ), "vehicle": vehicle,
-                "route_direction": active_trip.route_direction if active_trip else None,
+                **reset_metadata(active_trip),
+            "route_direction": active_trip.route_direction if active_trip else None,
                 "active_trip_id": active_trip.id if active_trip else None}
     mobile_is_current = bool(
         active_trip is not None
@@ -1342,6 +1426,7 @@ def get_driver_tracking_source(current_user: User = Depends(require_driver), db:
             "mobile_tracking_allowed": True,
             "reason": "Phone GPS fallback is live; vehicle GPS will take over when it reports.",
             "vehicle": vehicle,
+            **reset_metadata(active_trip),
             "route_direction": active_trip.route_direction,
             "active_trip_id": active_trip.id,
         }
@@ -1356,5 +1441,6 @@ def get_driver_tracking_source(current_user: User = Depends(require_driver), db:
                 if active_trip
                 else "Vehicle GPS is unavailable; waiting for the module to report."
             ), "vehicle": vehicle,
+            **reset_metadata(active_trip),
             "route_direction": active_trip.route_direction if active_trip else None,
             "active_trip_id": active_trip.id if active_trip else None}

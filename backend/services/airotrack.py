@@ -20,6 +20,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy.orm import Session
 
 from backend.models import Bus
+from backend.services.trip_reset import lock_tracking_bus
 from backend.routes.gps_provider import _position_from_current_state, _update_active_trip_from_vehicle
 from backend.routes.models_tracking import BusGPSState, GPSDeviceMapping, ProviderGPSPosition
 from backend.services.provider_health import record_provider_error, record_provider_success
@@ -155,7 +156,7 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
     # Serialize current-state decisions with webhook writes. Without this row
     # lock, two concurrent workers could both compare against an old value and
     # let the slower transaction overwrite a newer device timestamp.
-    bus = db.query(Bus).filter(Bus.id == bus.id).with_for_update().one()
+    bus = lock_tracking_bus(db, bus.id)
     returned_registration = str(data.get("vehicle_registration") or "").strip()
     if not returned_registration:
         raise ValueError("Airotrack response has no vehicle registration.")
