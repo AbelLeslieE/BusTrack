@@ -32,7 +32,7 @@ function renderItems() {
     const list = state.view.querySelector("#notificationList");
     const visible = state.filter === "all" ? state.items : state.items.filter(item => item.status === state.filter);
     if (!visible.length) {
-        list.innerHTML = `<div class="notifications-empty"><h3>No ${state.filter === "all" ? "operational" : state.filter.toLowerCase()} notifications</h3><p>Driver feedback will appear here as soon as it is reported.</p></div>`;
+        list.innerHTML = `<div class="notifications-empty"><h3>No ${state.filter === "all" ? "operational" : state.filter.toLowerCase()} notifications</h3><p>Driver feedback and document reminders will appear here.</p></div>`;
         return;
     }
     list.innerHTML = visible.map(item => `
@@ -46,12 +46,13 @@ function renderItems() {
             </div>
             <p class="notification-message">${escapeHtml(item.message || "No additional details provided.")}</p>
             <div class="notification-meta">
-                <span><strong>Driver:</strong> ${escapeHtml(item.driver_name || item.driver_code || "Unknown")}</span>
+                ${item.feedback_type !== "document_expiry" ? `<span><strong>Driver:</strong> ${escapeHtml(item.driver_name || item.driver_code || "Unknown")}</span>` : ""}
                 <span><strong>Bus:</strong> ${escapeHtml(item.bus_number || "Unassigned")}</span>
-                <span><strong>Route:</strong> ${escapeHtml(item.route_name || item.route_code || "Unassigned")}</span>
+                ${item.feedback_type !== "document_expiry" ? `<span><strong>Route:</strong> ${escapeHtml(item.route_name || item.route_code || "Unassigned")}</span>` : ""}
                 <time datetime="${escapeHtml(item.created_at || "")}">${escapeHtml(formatDate(item.created_at))}</time>
             </div>
             <div class="notification-actions">
+                ${/^#buses\?bus=\d+&document=[a-z_]+$/.test(item.document_link || "") ? `<a class="notification-document-link" href="${escapeHtml(item.document_link)}">View document</a>` : ""}
                 ${item.status === "Open" ? `<button type="button" data-notification-action="Acknowledged">Acknowledge</button>` : ""}
                 ${item.status !== "Resolved" ? `<button type="button" class="notification-resolve" data-notification-action="Resolved">Mark resolved</button>` : ""}
                 ${item.status !== "Open" ? `<button type="button" class="notification-reopen" data-notification-action="Open">Reopen</button>` : ""}
@@ -127,17 +128,17 @@ export function render() {
             <div>
                 <p class="notifications-eyebrow">Operations center</p>
                 <h1>Notifications</h1>
-                <p>Review live feedback from drivers, acknowledge incidents, and keep every operational response traceable.</p>
+                <p>Review driver feedback and document expiry reminders, and acknowledge alerts.</p>
             </div>
             <div class="notifications-hero-action"><button id="refreshNotifications" type="button" class="notifications-refresh">Refresh</button><span id="notificationActionMessage" class="notifications-action-message" role="status" aria-live="polite"></span><span id="notificationLastRefresh">Waiting for data</span></div>
         </section>
         <section class="notifications-summary" aria-label="Notification summary">
-            <article class="notification-stat glass-card"><span class="notification-stat__icon notification-stat-blue">◉</span><div><small>Total feedback</small><strong id="notificationTotal">0</strong></div></article>
+            <article class="notification-stat glass-card"><span class="notification-stat__icon notification-stat-blue">◉</span><div><small>Total alerts</small><strong id="notificationTotal">0</strong></div></article>
             <article class="notification-stat glass-card"><span class="notification-stat__icon notification-stat-amber">!</span><div><small>Open</small><strong id="notificationOpen">0</strong></div></article>
             <article class="notification-stat glass-card"><span class="notification-stat__icon notification-stat-red">⚠</span><div><small>Critical</small><strong id="notificationCritical">0</strong></div></article>
         </section>
         <section class="notifications-list-card glass-card">
-            <div class="notifications-list-heading"><div><p class="notifications-eyebrow">Driver feedback</p><h2>Operational alerts</h2></div><div class="notification-filters" role="group" aria-label="Filter notifications"><button type="button" class="is-active" data-notification-filter="all">All</button><button type="button" data-notification-filter="Open">Open</button><button type="button" data-notification-filter="Acknowledged">Acknowledged</button><button type="button" data-notification-filter="Resolved">Resolved</button></div></div>
+            <div class="notifications-list-heading"><div><p class="notifications-eyebrow">Fleet notifications</p><h2>Operational alerts</h2></div><div class="notification-filters" role="group" aria-label="Filter notifications"><button type="button" class="is-active" data-notification-filter="all">All</button><button type="button" data-notification-filter="Open">Open</button><button type="button" data-notification-filter="Acknowledged">Acknowledged</button><button type="button" data-notification-filter="Resolved">Resolved</button></div></div>
             <div id="notificationList" class="notifications-list"><div class="notifications-loading">Loading notifications…</div></div>
         </section>`;
     view.querySelector("#refreshNotifications").addEventListener("click", loadNotifications);

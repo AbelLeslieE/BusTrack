@@ -25,6 +25,7 @@ from backend.services.restore_state import restore_in_progress
 from backend.routes.auth import router as authentication_router
 from database.create_default_admin import create_default_admin
 from backend.routes.buses import router as bus_router
+from backend.routes.bus_documents import router as bus_documents_router
 from backend.routes.routes import router as route_router
 from backend.routes.stops import router as stop_router
 from backend.routes.route_import import router as route_import_router
@@ -115,6 +116,28 @@ async def _telemetry_retention_loop() -> None:
         await asyncio.sleep(interval)
 
 
+async def _document_expiry_loop() -> None:
+    """Startup catch-up and daily reminders, isolated from the GPS tasks."""
+    from backend.services.bus_documents import run_document_reminders
+
+    def check_documents():
+        with SessionLocal() as database_session:
+            run_document_reminders(database_session)
+            database_session.commit()
+
+    while True:
+        if restore_in_progress():
+            await asyncio.sleep(60)
+            continue
+        try:
+            await asyncio.to_thread(check_documents)
+        except Exception as error:
+            print(f"Document expiry check error: {error}")
+            await asyncio.sleep(300)
+            continue
+        await asyncio.sleep(86400)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     validate_security_configuration()
@@ -122,6 +145,7 @@ async def lifespan(_: FastAPI):
     create_default_admin()
     poll_task = None
     retention_task = None
+    document_task = asyncio.create_task(_document_expiry_loop())
     if os.getenv("AIROTRACK_API_TOKEN", "").strip():
         initial_refresh_completed = False
         if os.getenv("APP_ENV", "development").strip().casefold() == "production":
@@ -149,6 +173,9 @@ async def lifespan(_: FastAPI):
     try:
         yield
     finally:
+        document_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await document_task
         if poll_task is not None:
             poll_task.cancel()
             with suppress(asyncio.CancelledError):
@@ -185,6 +212,7 @@ app.add_middleware(
 app.add_middleware(RequestAuditMiddleware)
 app.include_router(authentication_router)
 app.include_router(bus_router)
+app.include_router(bus_documents_router)
 app.include_router(driver_router)
 app.include_router(route_router)
 app.include_router(stop_router)

@@ -196,7 +196,7 @@ def list_history_buses(
             "registration_number": bus.registration_number,
             "status": bus.status,
             "trip_count": db.query(LiveTrip).filter(LiveTrip.bus_id == bus.id).count(),
-            "feedback_count": db.query(FleetNotification).filter(FleetNotification.bus_id == bus.id).count(),
+            "feedback_count": db.query(FleetNotification).filter(FleetNotification.bus_id == bus.id, FleetNotification.feedback_type != "document_expiry").count(),
             "last_trip_at": latest.started_at if latest else None,
         })
     return result
@@ -242,7 +242,7 @@ def bus_history(
                            # Keep the API shape stable while ensuring raw
                            # distance/coordinate telemetry is never retained.
                            "distance_meters": None, "radius_meters": None})
-    feedback_query = db.query(FleetNotification).filter(FleetNotification.bus_id == bus.id)
+    feedback_query = db.query(FleetNotification).filter(FleetNotification.bus_id == bus.id, FleetNotification.feedback_type != "document_expiry")
     if start: feedback_query = feedback_query.filter(FleetNotification.created_at >= start)
     if end: feedback_query = feedback_query.filter(FleetNotification.created_at <= end)
     feedback = [{"id": item.id, "kind": "feedback", "trip_id": item.trip_id,

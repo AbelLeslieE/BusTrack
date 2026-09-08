@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import Bus, Driver, FleetNotification, Route, User
 from backend.routes.models_tracking import LiveTrip
+from backend.models_documents import BusDocument, BusDocumentReminder
 from backend.schemas import NotificationFeedbackCreate, NotificationStatusUpdate
 from backend.security import require_authenticated, require_driver, require_management, normalized_role
 from backend.roles import ROLE_ADMIN, ROLE_DRIVER
@@ -27,11 +28,18 @@ VALID_STATUSES = {"Open", "Acknowledged", "Resolved"}
 
 
 def _serialize(notification: FleetNotification, db: Session) -> dict:
+    document_link = None
+    if notification.feedback_type == "document_expiry":
+        reminder = db.query(BusDocumentReminder).filter_by(notification_id=notification.id).first()
+        document = db.get(BusDocument, reminder.document_id) if reminder else None
+        if document:
+            document_link = f"#buses?bus={document.bus_id}&document={document.document_type}"
     driver = db.get(Driver, notification.driver_id) if notification.driver_id else None
     bus = db.get(Bus, notification.bus_id) if notification.bus_id else None
     route = db.get(Route, notification.route_id) if notification.route_id else None
     return {
         "id": notification.id,
+        "document_link": document_link,
         "feedback_type": notification.feedback_type,
         "title": notification.title,
         "message": notification.message,

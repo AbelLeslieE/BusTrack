@@ -23,6 +23,7 @@ from sqlalchemy.orm import (
 
 
 from backend.database import Base
+import backend.models_documents  # noqa: F401 — register independent optional tables
 
 
 class User(Base):

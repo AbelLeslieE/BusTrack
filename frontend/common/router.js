@@ -544,6 +544,10 @@ return {
 }
 
 export async function loadModule(requestedRoute) {
+  // Bus document alerts retain their target in the hash query string.
+  if (typeof requestedRoute === "string" && requestedRoute.startsWith("buses?")) {
+      requestedRoute = "buses";
+  }
   const defaultRoute =
         isDriver
             ? "driverDashboard"

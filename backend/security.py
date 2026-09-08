@@ -250,6 +250,10 @@ class RequestSecurityMiddleware:
 
         path = str(scope.get("path", ""))
         method = str(scope.get("method", "GET")).upper()
+        path_parts = path.strip("/").split("/")
+        is_document_upload = (method == "PUT" and len(path_parts) == 5
+                              and path_parts[:2] == ["api", "buses"]
+                              and path_parts[2].isdigit() and path_parts[3] == "documents")
         client_key = self._client_key(scope)
 
         if (
@@ -266,7 +270,7 @@ class RequestSecurityMiddleware:
                 limiter = self.gps_ingest_limiter
             elif path == "/api/auth/login":
                 limiter = self.login_limiter
-            elif path.endswith("/import") or path.endswith("/preview"):
+            elif path.endswith("/import") or path.endswith("/preview") or is_document_upload:
                 limiter = self.upload_limiter
             if not limiter.allow(client_key):
                 await self._reject(send, 429, "Too many requests. Please try again later.")
@@ -287,7 +291,7 @@ class RequestSecurityMiddleware:
                 self.MAX_BACKUP_UPLOAD_BYTES
                 if path == "/api/settings/backup/restore"
                 else self.MAX_UPLOAD_BYTES
-                if path.endswith("/import") or path.endswith("/preview")
+                if path.endswith("/import") or path.endswith("/preview") or is_document_upload
                 else self.MAX_REQUEST_BYTES
             )
             if request_size > max_size:
@@ -298,7 +302,7 @@ class RequestSecurityMiddleware:
             self.MAX_BACKUP_UPLOAD_BYTES
             if path == "/api/settings/backup/restore"
             else self.MAX_UPLOAD_BYTES
-            if path.endswith("/import") or path.endswith("/preview")
+            if path.endswith("/import") or path.endswith("/preview") or is_document_upload
             else self.MAX_REQUEST_BYTES
         )
         received_bytes = 0

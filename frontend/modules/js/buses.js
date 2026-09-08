@@ -28,6 +28,7 @@ import { confirmDeletion, showOperationFeedback } from "../../common/operationFe
 import { escapeHtml } from "../../common/security.js";
 
 import { createBusForm } from "./busForm.js";
+import { openBusDetails } from "./busDocuments.js";
 import { getDrivers } from "./driversApi.js";
 
 import { getRoutes } from "./routesApi.js";
@@ -1243,7 +1244,8 @@ function bindTableEvents(root) {
 
 }
 
-async function openBusViewModal(busId) {
+async function openBusViewModal(busId, documentType = null) {
+    const origin = elements.page;
 
     try {
 
@@ -1256,20 +1258,8 @@ async function openBusViewModal(busId) {
 
         const bus = await response.json();
 
-        Modal.alert({
-            eyebrow: "FLEET MANAGEMENT",
-            title: bus.bus_number,
-            subtitle: "Bus details",
-            content: `
-                <div class="detail-list">
-                    <p><strong>Registration:</strong> ${formatValue(bus.registration_number)}</p>
-                    <p><strong>Capacity:</strong> ${formatValue(bus.capacity)}</p>
-                    <p><strong>Vehicle:</strong> ${formatValue(bus.manufacturer)} ${formatValue(bus.model)} (${formatValue(bus.year)})</p>
-                    <p><strong>Fuel:</strong> ${formatValue(bus.fuel_type)}</p>
-                    <p><strong>Status:</strong> ${formatValue(bus.status)}</p>
-                    <p><strong>GPS Device:</strong> ${formatValue(bus.device_id)}</p>
-                </div>`,
-        });
+        if (!origin?.isConnected) return;
+        openBusDetails(bus, documentType);
 
     } catch (error) {
 
@@ -1533,6 +1523,11 @@ async function initialize(root) {
 
     // Attach all event listeners
     bindEvents(root);
+
+    const target = new URLSearchParams(window.location.hash.split("?")[1] || "");
+    if (root.isConnected && /^\d+$/.test(target.get("bus") || "") && target.get("document")) {
+        await openBusViewModal(Number(target.get("bus")), target.get("document"));
+    }
 
 }
 
