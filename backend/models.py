@@ -581,6 +581,8 @@ class BusPass(Base):
         index=True,
     )
 
+    credential_version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+
     status: Mapped[str] = mapped_column(
         String(20),
         default="Pending",
@@ -615,6 +617,39 @@ class BusPass(Base):
 # ==========================================================
 # ROUTE MODEL
 # ==========================================================
+
+class PassIdentity(Base):
+    """Official transport identity, enrolled only by Admin; never self-profile data."""
+    __tablename__ = "pass_identities"
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), primary_key=True)
+    official_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    department: Mapped[str] = mapped_column(String(120), nullable=False)
+    photo_base64: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_by: Mapped[int] = mapped_column(Integer, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
+
+class PassVerification(Base):
+    """Safe snapshots survive account/pass/trip deletion. No raw QR is retained."""
+    __tablename__ = "pass_verifications"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    pass_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    student_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    student_name: Mapped[str | None] = mapped_column(String(100))
+    driver_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    actor_user_id: Mapped[int] = mapped_column(Integer, index=True)
+    driver_name: Mapped[str] = mapped_column(String(100))
+    bus_id: Mapped[int | None] = mapped_column(Integer)
+    bus_number: Mapped[str | None] = mapped_column(String(20))
+    route_id: Mapped[int | None] = mapped_column(Integer)
+    route_name: Mapped[str | None] = mapped_column(String(100))
+    trip_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    token_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    consumed_token: Mapped[str | None] = mapped_column(String(64), unique=True)
+    scanned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    result: Mapped[str] = mapped_column(String(40), index=True)
+    reason: Mapped[str] = mapped_column(String(250))
+
 
 class Route(Base):
     """

@@ -131,6 +131,11 @@ const adminModules = {
 
 const driverModules = {
 
+    verifyBusPass: {
+        title: "Verify Bus Pass",
+        load: () => import("../modules/js/verifyBusPass.js")
+    },
+
     driverDashboard: {
         title: "Dashboard",
         load: () => import("../modules/js/driverDashboard.js")

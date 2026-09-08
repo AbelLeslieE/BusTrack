@@ -12,9 +12,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
-from backend.models import Bus, BusPass, Route, Student, User
+from backend.models import Bus, BusPass, PassIdentity, Route, Student, User
 from backend.schemas import BusPassIssue, BusPassUpdate
 from backend.security import require_management
+from backend.services.pass_credentials import locked_pass
+from backend.routes.pass_validation import audit
 
 
 router = APIRouter(prefix="/api/bus-passes", tags=["Bus Passes"])
@@ -78,6 +80,7 @@ def _assignment(student: Student, db: Session) -> tuple[Route | None, Bus | None
 
 
 def _serialize(student: Student, bus_pass: BusPass | None, db: Session) -> dict:
+    identity = db.get(PassIdentity, student.id)
     route, bus = _assignment(student, db)
     today = date.today()
     effective_status = _effective_status(bus_pass) if bus_pass else None
@@ -88,7 +91,7 @@ def _serialize(student: Student, bus_pass: BusPass | None, db: Session) -> dict:
     return {
         "student": {
             "id": student.id,
-            "name": student.user.full_name if student.user else "Unknown student",
+            "name": identity.official_name if identity else (student.user.full_name if student.user else "Unknown student"),
             "student_code": student.student_code,
         },
         "transport": {
@@ -185,6 +188,7 @@ def issue_bus_pass(
         issued_at=datetime.now(timezone.utc),
     )
     db.add(bus_pass)
+    audit(db, _current_user, "pass_issued", student.id, {"status": payload.status})
     db.commit()
     db.refresh(bus_pass)
     return _serialize(student, bus_pass, db)
@@ -199,9 +203,13 @@ def update_bus_pass(
 ):
     """Renew a pass from a new start date or change its active/suspended state."""
 
-    bus_pass = db.get(BusPass, pass_id)
+    bus_pass = locked_pass(db, pass_id)
     if bus_pass is None:
         raise HTTPException(status_code=404, detail="Bus pass not found.")
+
+    previous_status = bus_pass.status
+    if previous_status == "Revoked" and payload.status != "Revoked":
+        raise HTTPException(409, "A revoked pass cannot be restored. Issue a new pass through the transport office.")
 
     next_valid_from = payload.valid_from or bus_pass.valid_from
     next_validity_period = payload.validity_period or bus_pass.validity_period
@@ -222,6 +230,9 @@ def update_bus_pass(
     bus_pass.validity_period = next_validity_period
     bus_pass.academic_year = payload.academic_year.strip() if payload.academic_year else None
     bus_pass.status = payload.status
+    bus_pass.credential_version += 1
+    audit(db, _current_user, "pass_updated", bus_pass.student_id,
+          {"pass_id": bus_pass.id, "previous_status": previous_status, "status": payload.status})
 
     db.commit()
     db.refresh(bus_pass)
@@ -236,8 +247,9 @@ def delete_bus_pass(
 ):
     """Remove an issued pass without changing the student's bus assignment."""
 
-    bus_pass = db.get(BusPass, pass_id)
+    bus_pass = locked_pass(db, pass_id)
     if bus_pass is None:
         raise HTTPException(status_code=404, detail="Bus pass not found.")
+    audit(db, _current_user, "pass_deleted", bus_pass.student_id, {"pass_id": bus_pass.id})
     db.delete(bus_pass)
     db.commit()

@@ -173,7 +173,7 @@ class BusPassUpdate(BaseModel):
     valid_until: date | None = None
     validity_period: Literal["One Day", "One Year", "Two Semesters", "Custom Dates"] | None = None
     academic_year: str | None = Field(default=None, max_length=30)
-    status: Literal["Active", "Pending", "Suspended"]
+    status: Literal["Active", "Pending", "Suspended", "Revoked", "Expired"]
 
 
 class UserListResponse(BaseModel):

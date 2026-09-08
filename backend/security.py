@@ -218,7 +218,7 @@ class RequestSecurityMiddleware:
             (b"x-content-type-options", b"nosniff"),
             (b"x-frame-options", b"DENY"),
             (b"referrer-policy", b"strict-origin-when-cross-origin"),
-            (b"permissions-policy", b"camera=(), microphone=(), payment=()"),
+            (b"permissions-policy", b"camera=(self), microphone=(), payment=()"),
             (b"cross-origin-opener-policy", b"same-origin"),
             (b"cross-origin-resource-policy", b"same-origin"),
             (b"x-permitted-cross-domain-policies", b"none"),

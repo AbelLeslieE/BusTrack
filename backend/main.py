@@ -40,6 +40,7 @@ from backend.routes.active_users import router as active_users_router
 from backend.routes.trip_history import router as trip_history_router
 from backend.routes.admin import router as admin_router
 from backend.routes.bus_passes import router as bus_pass_router
+from backend.routes.pass_validation import router as pass_validation_router
 from backend.security import RequestSecurityMiddleware
 from backend.request_audit import RequestAuditMiddleware
 from backend.utils.jwt_handler import validate_security_configuration
@@ -200,6 +201,7 @@ app.include_router(active_users_router)
 app.include_router(trip_history_router)
 app.include_router(admin_router)
 app.include_router(bus_pass_router)
+app.include_router(pass_validation_router)
 
 
 

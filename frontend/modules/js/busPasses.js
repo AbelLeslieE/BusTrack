@@ -2,6 +2,7 @@ import { Modal } from "/static/common/modal.js";
 import { request } from "/static/common/api.js";
 import { createDropdown } from "/static/common/dropdown.js";
 import { confirmDeletion, showOperationFeedback } from "/static/common/operationFeedback.js";
+import { editPassIdentity, passHistory } from "/static/modules/js/passAdministration.js";
 
 const API = "/bus-passes";
 
@@ -64,7 +65,7 @@ function recordRow(record) {
         <td>${pass ? `<strong>${escapeHtml(pass.pass_number)}</strong><small>${escapeHtml(pass.validity_period)}</small>` : "—"}</td>
         <td>${badge(pass)}${pass?.expiring_soon ? '<small class="bus-passes-expiry">Expires within 30 days</small>' : ""}</td>
         <td>${pass ? formatDate(pass.valid_until) : "—"}</td>
-        <td>${action}</td>
+        <td>${action}<button type="button" class="bus-passes-action enroll-pass" data-student-id="${record.student.id}">Official photo / identity</button></td>
     </tr>`;
 }
 
@@ -82,6 +83,7 @@ function renderPage(data) {
             <div class="bus-passes-table-wrap"><table class="bus-passes-table"><thead><tr><th>Student</th><th>Assigned transport</th><th>Boarding stop</th><th>Pass number</th><th>Status</th><th>Valid until</th><th>Action</th></tr></thead><tbody>${data.records.length ? data.records.map(recordRow).join("") : '<tr><td colspan="7" class="bus-passes-empty">No student accounts are available.</td></tr>'}</tbody></table></div>
         </section>`;
     attachEvents(root, data);
+    root.append(passHistory());
     return root;
 }
 
@@ -101,7 +103,7 @@ function formMarkup(record, mode) {
         <div class="modal-group"><label class="modal-label">Validity plan</label><div class="bus-pass-period-dropdown"></div><small class="bus-pass-form__hint">One Day ends on the selected day. You may always edit the expiry date.</small></div>
         <div class="modal-group"><label class="modal-label" for="bus-pass-valid-until">Expiry date</label><input id="bus-pass-valid-until" type="date" value="${initialExpiryDate}" required></div>
         <div class="modal-group"><label class="modal-label" for="bus-pass-academic-year">Academic year / session</label><input id="bus-pass-academic-year" type="text" maxlength="30" value="${escapeHtml(pass?.academic_year || "")}" placeholder="2026–2027"></div>
-        <div class="modal-group"><label class="modal-label">Pass status</label><div class="bus-pass-status-dropdown"></div></div>
+        <div class="modal-group"><label class="modal-label">Pass status</label><div class="bus-pass-status-dropdown"></div><small class="bus-pass-form__hint">Suspended passes can be restored to Active. Revocation cannot be reversed.</small></div>
     </form>`;
 }
 
@@ -119,7 +121,7 @@ function openPassModal(record, mode, reload) {
         id: "bus-pass-status",
         placeholder: "Select status",
         value: pass?.status || "Active",
-        items: mode === "issue" ? ["Active", "Pending"] : ["Active", "Pending", "Suspended"],
+        items: mode === "issue" ? ["Active", "Pending"] : pass?.status === "Revoked" ? ["Revoked"] : ["Active", "Pending", "Suspended", "Revoked", "Expired"],
     });
     form.querySelector(".bus-pass-period-dropdown").appendChild(periodDropdown);
     form.querySelector(".bus-pass-status-dropdown").appendChild(statusDropdown);
@@ -177,6 +179,7 @@ function openPassModal(record, mode, reload) {
 }
 
 function attachEvents(root, data) {
+    root.querySelectorAll(".enroll-pass").forEach(button => button.addEventListener("click", () => void editPassIdentity(Number(button.dataset.studentId))));
     const reload = async () => {
         root.replaceWith(await loadPage());
     };

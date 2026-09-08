@@ -25,6 +25,7 @@ from backend.models import (
     RouteStop,
     Stop,
     BusPass,
+    PassIdentity,
 )
 
 from backend.routes.models_tracking import (
@@ -320,10 +321,13 @@ def get_current_student_bus_pass(
             "message": f"Your bus pass expires in {days_until_expiry} day{'s' if days_until_expiry != 1 else ''}. Please contact the transport office to renew it.",
             "days_until_expiry": days_until_expiry,
         })
+    official_identity = db.get(PassIdentity, student.id)
     return {
         "student": {
             "id": student.id,
-            "name": current_user.full_name,
+            "name": official_identity.official_name if official_identity else current_user.full_name,
+            "department": official_identity.department if official_identity else None,
+            "photo": "data:image/jpeg;base64," + official_identity.photo_base64 if official_identity else None,
             "student_code": student.student_code,
         },
         "bus_pass": (

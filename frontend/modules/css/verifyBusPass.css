@@ -1,0 +1,11 @@
+@import url('/static/modules/css/portalPages.css');
+.verify-pass-page {max-width:900px;margin:auto;padding:24px;}
+.pass-scanner,.pass-scan-result {padding:24px;border-radius:20px;background:rgba(9,31,54,.92);color:#eef7ff;text-align:center;margin:18px 0;}
+.pass-scanner video {width:100%;max-width:540px;max-height:48vh;border-radius:16px;background:#081421;}
+.verify-pass-page button {background:#86e4fa;color:#082439;font:inherit;font-weight:700;border:0;border-radius:12px;padding:14px 24px;cursor:pointer;min-height:48px;}
+.pass-scan-result.is-valid {border:3px solid #49dfaa;background:#0a382e;}
+.pass-scan-result.is-invalid {border:3px solid #ff9292;background:#461d28;}
+.official-pass-photo {display:block;width:240px;height:280px;object-fit:contain;background:#f4f6fa;border-radius:12px;margin:20px auto;max-width:100%;}
+.pass-scan-result h3 {font-size:1.6rem;}
+.verify-pass-page [hidden] {display:none!important;}
+@media(max-width:600px){.verify-pass-page{padding:12px}.pass-scanner,.pass-scan-result{padding:16px}}

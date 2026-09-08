@@ -10,6 +10,7 @@ const primaryItems = [
     ["myBus", "My Bus", "▣"],
     ["myRoute", "My Route", "⌁"],
     ["driverTracking", "Live Tracking", "◎"],
+    ["verifyBusPass", "Verify Bus Pass", "▦"],
     ["tripHistory", "Trip History", "◷"],
 ];
 

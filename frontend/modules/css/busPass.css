@@ -1,5 +1,11 @@
 @import url("/static/modules/css/portalPages.css");
 
+.bus-pass-official-photo {width:100px;height:120px;object-fit:contain;background:#f5f7fa;border-radius:12px;}
+.live-pass-qr {text-align:center;padding:20px 0;}
+.live-pass-qr img {display:block;width:360px;max-width:100%;height:auto;margin:auto;background:white;image-rendering:pixelated;border-radius:8px;}
+.live-pass-qr p {margin:12px 0;font-weight:700;}
+.digital-bus-pass.status-revoked {background:#592733;}
+
 .bus-pass-layout { display: grid; grid-template-columns: minmax(0, .95fr) minmax(340px, 1.05fr); gap: 24px; align-items: stretch; }
 .digital-bus-pass { position: relative; overflow: hidden; min-height: 420px; padding: 29px; border: 1px solid rgba(175, 232, 255, .32); border-radius: 25px; background: linear-gradient(138deg, #092d59 0%, #155c8e 48%, #523d9f 110%); box-shadow: 0 28px 55px rgba(0, 9, 31, .36), inset 0 1px rgba(255,255,255,.22); color: #eff9ff; }
 .digital-bus-pass::after { position: absolute; right: -115px; bottom: -125px; width: 330px; height: 330px; border: 1px solid rgba(203,245,255,.2); border-radius: 50%; box-shadow: 0 0 0 40px rgba(170,230,255,.05), 0 0 0 82px rgba(170,230,255,.04); content: ""; pointer-events: none; }
