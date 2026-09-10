@@ -154,7 +154,7 @@ class StopExportTest(unittest.TestCase):
             self.assertEqual(result["imported"], 1)
             stop = database_session.query(Stop).one()
             self.assertEqual(stop.stop_name, "Legacy Stop")
-            self.assertEqual(stop.stop_code, "ST0001")
+            self.assertEqual(stop.stop_code, "ST001")
             self.assertEqual(stop.radius, 50)
 
 

@@ -34,6 +34,13 @@ from backend.models import (
     RouteStop,
 )
 from backend.security import require_management
+from backend.services.stop_codes import (
+    format_stop_code,
+    generated_stop_number,
+    highest_generated_stop_number,
+    lock_stop_code_writes,
+    next_stop_code,
+)
 # ==========================================================
 # ROUTER
 # ==========================================================
@@ -206,7 +213,24 @@ def export_stops(
 
         }
 
-    )   
+    )
+# ==========================================================
+# PREVIEW NEXT AUTOMATIC STOP CODE
+# ==========================================================
+
+@router.get("/next-code")
+def get_next_stop_code(
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
+):
+    """Preview the code that would be assigned if a stop were created now.
+
+    The create endpoint calculates it again while holding the write lock, so
+    concurrent administrators can never create duplicate codes.
+    """
+
+    return {"stop_code": next_stop_code(db)}
+
 # ==========================================================
 # GET SINGLE STOP
 # ==========================================================
@@ -276,35 +300,17 @@ def create_stop(
     _current_user = Depends(require_management),
 
 ):
-    """
-    Creates a new master stop.
-    """
+    """Create a master stop with a server-assigned sequential code."""
 
-    # ======================================================
-    # VALIDATE STOP CODE
-    # ======================================================
+    stop_name = str(stop_data.get("stop_name") or "").strip()
+    if not stop_name:
+        raise HTTPException(status_code=400, detail="Stop name is required.")
+    if len(stop_name) > 150:
+        raise HTTPException(status_code=400, detail="Stop name is too long.")
 
-    existing_code = (
-
-        db.query(Stop)
-
-        .filter(
-            Stop.stop_code == stop_data["stop_code"]
-        )
-
-        .first()
-
-    )
-
-    if existing_code:
-
-        raise HTTPException(
-
-            status_code=400,
-
-            detail="Stop code already exists."
-
-        )
+    # Acquire the write lock before reading the maximum or checking the name.
+    # This keeps two workers from both assigning (for example) ST030.
+    lock_stop_code_writes(db)
 
     # ======================================================
     # VALIDATE STOP NAME
@@ -315,7 +321,7 @@ def create_stop(
         db.query(Stop)
 
         .filter(
-            Stop.stop_name == stop_data["stop_name"]
+            Stop.stop_name == stop_name
         )
 
         .first()
@@ -338,9 +344,9 @@ def create_stop(
 
     stop = Stop(
 
-        stop_code = stop_data["stop_code"],
+        stop_code = next_stop_code(db),
 
-        stop_name = stop_data["stop_name"],
+        stop_name = stop_name,
 
         latitude = stop_data.get("latitude"),
 
@@ -425,33 +431,6 @@ def update_stop(
         )
 
     # ======================================================
-    # CHECK DUPLICATE STOP CODE
-    # ======================================================
-
-    existing_code = (
-
-        db.query(Stop)
-
-        .filter(
-            Stop.stop_code == stop_data["stop_code"],
-            Stop.id != stop_id
-        )
-
-        .first()
-
-    )
-
-    if existing_code:
-
-        raise HTTPException(
-
-            status_code=400,
-
-            detail="Stop code already exists."
-
-        )
-
-    # ======================================================
     # CHECK DUPLICATE STOP NAME
     # ======================================================
 
@@ -481,8 +460,6 @@ def update_stop(
     # ======================================================
     # UPDATE VALUES
     # ======================================================
-
-    stop.stop_code = stop_data["stop_code"]
 
     stop.stop_name = stop_data["stop_name"]
 
@@ -596,6 +573,9 @@ async def import_stops(
             raise ValueError("Geofence Radius (m) must be between 10 and 500")
         return radius
 
+    # Imports that omit a stop code share the same allocator as the Add Stop
+    # form. Explicit codes in complete backup files remain supported.
+    lock_stop_code_writes(db)
     existing_stops = db.query(Stop).all()
     stops_by_code = {stop.stop_code.strip().casefold(): stop for stop in existing_stops}
     stops_by_name = {stop.stop_name.strip().casefold(): stop for stop in existing_stops}
@@ -607,11 +587,7 @@ async def import_stops(
         for route_stop in db.query(RouteStop).all()
     }
 
-    highest_generated_stop_number = 0
-    for stop in existing_stops:
-        code = stop.stop_code.strip().upper()
-        if code.startswith("ST") and code[2:].isdigit():
-            highest_generated_stop_number = max(highest_generated_stop_number, int(code[2:]))
+    highest_stop_number = highest_generated_stop_number(db)
 
     imported_stops: list[dict] = []
     skipped_stops: list[dict] = []
@@ -662,8 +638,8 @@ async def import_stops(
             })
         else:
             if not stop_code:
-                highest_generated_stop_number += 1
-                stop_code = f"ST{highest_generated_stop_number:04d}"
+                highest_stop_number += 1
+                stop_code = format_stop_code(highest_stop_number)
             if len(stop_code) > 20 or len(stop_name) > 150:
                 skipped_stops.append({
                     "row": row_number,
@@ -682,6 +658,9 @@ async def import_stops(
             )
             db.add(stop)
             db.flush()
+            explicit_number = generated_stop_number(stop.stop_code)
+            if explicit_number is not None:
+                highest_stop_number = max(highest_stop_number, explicit_number)
             stops_by_code[stop.stop_code.casefold()] = stop
             stops_by_name[stop.stop_name.casefold()] = stop
             imported_stops.append({"row": row_number, "stop_code": stop.stop_code, "stop_name": stop.stop_name})

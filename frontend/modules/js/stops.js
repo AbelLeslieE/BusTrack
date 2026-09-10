@@ -2155,9 +2155,16 @@ function openAddStopModal(root){
                     <input
                         id="stop_code"
                         class="modal-input"
-                        placeholder="ST0001"
-                        required
+                        value="Generating..."
+                        readonly
+                        aria-describedby="stop-code-help"
                     >
+
+                    <p id="stop-code-help" class="field-help">
+
+                        Assigned automatically from the latest stop code.
+
+                    </p>
 
                 </div>
 
@@ -2450,13 +2457,6 @@ function openAddStopModal(root){
 
             try{
 
-                const stopCode =
-                    content
-                        .querySelector("#stop_code")
-                        .value
-                        .trim();
-
-
                 const stopName =
                     content
                         .querySelector("#stop_name")
@@ -2491,25 +2491,6 @@ function openAddStopModal(root){
                 /* ==================================================
                    VALIDATION
                 =================================================== */
-
-                if(!stopCode){
-
-                    showStopFormError(
-
-                        content,
-
-                        "Stop Code Required",
-
-                        "Please enter a stop code.",
-
-                        "stop_code"
-
-                    );
-
-                    return;
-
-                }
-
 
                 if(!stopName){
 
@@ -2580,9 +2561,7 @@ function openAddStopModal(root){
                    CREATE STOP
                 =================================================== */
 
-                await StopsAPI.createStop({
-
-                    stop_code:stopCode,
+                const result = await StopsAPI.createStop({
 
                     stop_name:stopName,
 
@@ -2610,7 +2589,7 @@ function openAddStopModal(root){
                     title:"Stop Created",
 
                     subtitle:
-                        "The stop and its exact map location have been saved successfully."
+                        `${result.stop.stop_code} was assigned automatically and the stop was saved successfully.`
 
                 });
 
@@ -2652,6 +2631,37 @@ function openAddStopModal(root){
         content.querySelector(
             "#stop-location-map"
         );
+
+
+    const stopCodeInput =
+        content.querySelector(
+            "#stop_code"
+        );
+
+
+    StopsAPI.getNextStopCode()
+
+        .then(result=>{
+
+            if(content.isConnected){
+
+                stopCodeInput.value = result.stop_code;
+
+            }
+
+        })
+
+        .catch(error=>{
+
+            console.error(error);
+
+            if(content.isConnected){
+
+                stopCodeInput.value = "Assigned when saved";
+
+            }
+
+        });
 
 
     const latitudeInput =
@@ -2883,8 +2893,15 @@ function openEditStopModal(root, stop){
                         id="stop_code"
                         class="modal-input"
                         value="${escapeHtml(stop.stop_code ?? "")}"
-                        required
+                        readonly
+                        aria-describedby="edit-stop-code-help"
                     >
+
+                    <p id="edit-stop-code-help" class="field-help">
+
+                        Stop codes are assigned automatically and stay fixed.
+
+                    </p>
 
                 </div>
 
@@ -3163,12 +3180,6 @@ function openEditStopModal(root, stop){
                     stop.id,
 
                     {
-
-                        stop_code:
-                            content
-                                .querySelector("#stop_code")
-                                .value
-                                .trim(),
 
                         stop_name:
                             content
