@@ -231,6 +231,38 @@ class ProviderGpsFreshnessTest(unittest.TestCase):
             self.assertEqual(history["positions"][0]["bus_id"], bus.id)
             self.assertEqual(history["positions"][0]["provider_payload"]["providerExtra"]["heartbeat"], "20-second")
 
+    def test_provider_health_compares_latest_and_previous_accepted_fixes(self) -> None:
+        with self.session_factory() as database_session:
+            bus = Bus(bus_number="GAP-01", registration_number="GAP-REG", capacity=40, manufacturer="Test", model="Coach", year=2026, fuel_type="Diesel", status="Active", device_id="GAP-DEVICE")
+            token = GPSIngestToken(label="gap", token_hash=hashlib.sha256(b"gap-token").hexdigest(), is_active=True)
+            database_session.add_all([bus, token])
+            database_session.commit()
+
+            current_time = datetime.now(timezone.utc)
+            previous_time = current_time - timedelta(seconds=290)
+            latest_time = current_time - timedelta(seconds=120)
+            previous = self._payload(10.0, previous_time)
+            previous["uniqueId"] = "GAP-DEVICE"
+            latest = self._payload(10.1, latest_time)
+            latest["uniqueId"] = "GAP-DEVICE"
+            ingest_positions(self._request(), previous, "gap-token", database_session)
+            ingest_positions(self._request(), latest, "gap-token", database_session)
+
+            health = get_provider_health(
+                response=Response(),
+                bus_id=bus.id,
+                db=database_session,
+                _technician=SimpleNamespace(),
+            )["buses"][0]
+            self.assertEqual(health["device_update_gap_seconds"], 170)
+            self.assertEqual(health["device_update_delay_seconds"], 50)
+            self.assertEqual(
+                health["previous_device_time"].replace(tzinfo=timezone.utc),
+                previous_time,
+            )
+            self.assertIsNotNone(health["latest_accepted_received_at"])
+            self.assertGreaterEqual(health["latest_delivery_delay_seconds"], 120)
+
     def test_provider_heartbeats_drive_student_map_and_track_through_return_leg(self) -> None:
         """The student response keeps the same stop state for map and railway views."""
 

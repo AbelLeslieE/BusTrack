@@ -68,6 +68,16 @@ function summaryCard(label, value, detail, tone = "") {
     return `<article class="tech-stat provider-stat ${tone}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong><small>${escapeHtml(detail)}</small></article>`;
 }
 
+function updateGapDetail(item) {
+    if (item.device_update_gap_seconds === null || item.device_update_gap_seconds === undefined) {
+        return "Waiting for two distinct accepted GPS fixes";
+    }
+    const timing = Number(item.device_update_delay_seconds) > 0
+        ? `${formatAge(item.device_update_delay_seconds)} later than expected`
+        : "Within the expected heartbeat interval";
+    return `Previous: ${formatDate(item.previous_device_time)} · ${timing}`;
+}
+
 function healthCard(item) {
     const coordinates = item.latitude === null || item.longitude === null
         ? "No coordinate received"
@@ -82,9 +92,11 @@ function healthCard(item) {
     return `<article class="provider-bus-card ${escapeHtml(item.health_status)}">
         <header><div><p>${escapeHtml(item.bus_number)}</p><strong>${escapeHtml(item.registration_number || "No registration")}</strong></div><span class="provider-health-pill ${escapeHtml(item.health_status)}">${escapeHtml(statusLabel(item.health_status))}</span></header>
         <dl>
-            <div><dt>Provider contacted</dt><dd>${escapeHtml(formatDate(item.last_provider_success_at))}<small>${escapeHtml(formatAge(item.provider_contact_age_seconds))} ago</small></dd></div>
-            <div><dt>Device coordinate time</dt><dd>${escapeHtml(formatDate(item.latest_device_time))}<small>${escapeHtml(formatAge(item.device_data_age_seconds))} old</small></dd></div>
-            <div><dt>Accepted fix delay</dt><dd>${escapeHtml(formatAge(item.latest_delivery_delay_seconds))}</dd></div>
+            <div><dt>Latest provider contact</dt><dd>${escapeHtml(formatDate(item.last_provider_success_at))}<small>${escapeHtml(formatAge(item.provider_contact_age_seconds))} ago · valid or quarantined response</small></dd></div>
+            <div><dt>Accepted by BusTrack</dt><dd>${escapeHtml(formatDate(item.latest_accepted_received_at))}<small>Receipt time for the accepted fix below</small></dd></div>
+            <div><dt>Latest accepted GPS time</dt><dd>${escapeHtml(formatDate(item.latest_device_time))}<small>${escapeHtml(formatAge(item.device_data_age_seconds))} old</small></dd></div>
+            <div><dt>Delivery delay</dt><dd>${escapeHtml(formatAge(item.latest_delivery_delay_seconds))}<small>BusTrack receipt time minus this device time</small></dd></div>
+            <div><dt>GPS update gap</dt><dd>${escapeHtml(formatAge(item.device_update_gap_seconds))}<small>${escapeHtml(updateGapDetail(item))}</small></dd></div>
             <div><dt>Ignition / expected</dt><dd>${escapeHtml(ignitionLabel(item.ignition))}</dd></div>
             <div><dt>Latest coordinates</dt><dd><code>${escapeHtml(coordinates)}</code></dd></div>
             <div><dt>Tracking session</dt><dd>${escapeHtml(trip)}</dd></div>

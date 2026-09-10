@@ -335,10 +335,27 @@ def _serialize_provider_health(
     source_age = _age_seconds(source_time, now)
     contact_age = _age_seconds(provider_contact_at, now)
     latest_delivery_delay = None
+    previous_position = None
+    device_update_gap = None
+    device_update_delay = None
     if current_position and current_position.fix_time:
         received = _normalized_datetime(current_position.received_at)
         fixed = _normalized_datetime(current_position.fix_time)
         latest_delivery_delay = max(0, int((received - fixed).total_seconds()))
+        previous_position = db.query(ProviderGPSPosition).filter(
+            ProviderGPSPosition.bus_id == bus.id,
+            ProviderGPSPosition.fix_time.is_not(None),
+            ProviderGPSPosition.fix_time < current_position.fix_time,
+            ProviderGPSPosition.quarantine_reason.is_(None),
+        ).order_by(
+            ProviderGPSPosition.fix_time.desc(),
+            ProviderGPSPosition.received_at.desc(),
+            ProviderGPSPosition.id.desc(),
+        ).first()
+        if previous_position is not None:
+            previous_fixed = _normalized_datetime(previous_position.fix_time)
+            device_update_gap = max(0, int((fixed - previous_fixed).total_seconds()))
+            device_update_delay = max(0, device_update_gap - expected_interval)
     timestamp_warning = (
         latest_position.quarantine_reason
         if latest_position is not None
@@ -396,8 +413,16 @@ def _serialize_provider_health(
         "consecutive_errors": health.consecutive_errors if health else 0,
         "provider_contact_age_seconds": contact_age,
         "latest_device_time": source_time,
+        "latest_accepted_received_at": (
+            current_position.received_at if current_position else None
+        ),
+        "previous_device_time": (
+            previous_position.fix_time if previous_position else None
+        ),
         "device_data_age_seconds": source_age,
         "latest_delivery_delay_seconds": latest_delivery_delay,
+        "device_update_gap_seconds": device_update_gap,
+        "device_update_delay_seconds": device_update_delay,
         "device_clock_ahead_seconds": device_clock_ahead_seconds,
         "timestamp_warning": timestamp_warning,
         "latitude": state.latitude if state else None,
