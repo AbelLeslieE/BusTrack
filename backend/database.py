@@ -199,6 +199,24 @@ def _add_pass_credential_columns(database_engine=engine) -> None:
                 connection.execute(text("ALTER TABLE bus_passes ADD COLUMN credential_version INTEGER NOT NULL DEFAULT 1"))
 
 
+def _add_provider_position_quarantine_column(database_engine=engine) -> None:
+    """Keep invalid provider packets visible without applying them to live state."""
+
+    inspector = inspect(database_engine)
+    if "provider_gps_positions" not in inspector.get_table_names():
+        return
+    columns = {
+        column["name"]
+        for column in inspector.get_columns("provider_gps_positions")
+    }
+    if "quarantine_reason" not in columns:
+        with database_engine.begin() as connection:
+            connection.execute(text(
+                "ALTER TABLE provider_gps_positions "
+                "ADD COLUMN quarantine_reason VARCHAR(300) NULL"
+            ))
+
+
 def initialize_database() -> None:
     """
     Create the database schema.
@@ -248,6 +266,7 @@ def initialize_database() -> None:
     _make_live_trip_driver_optional()
     _add_trip_reset_columns()
     _add_pass_credential_columns()
+    _add_provider_position_quarantine_column()
 
     # This project currently has no migration framework. Keep existing local
     # deployments compatible with the student route assignment introduced by

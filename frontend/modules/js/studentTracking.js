@@ -332,7 +332,7 @@ function formatLastUpdate(
      * timezone.
      */
 
-    return date.toLocaleTimeString(
+    return new Intl.DateTimeFormat(
         "en-IN",
         {
             timeZone:
@@ -347,10 +347,16 @@ function formatLastUpdate(
             second:
                 "2-digit",
 
+            day:
+                "2-digit",
+
+            month:
+                "short",
+
             hour12:
                 true
         }
-    );
+    ).format(date);
 
 }
 
@@ -375,6 +381,7 @@ function vehicleTravelStatus() {
     const telemetry = getTelemetry();
 
     if (!state.liveTrip) return "Not live";
+    if (telemetry.clock_error) return "Invalid GPS device time";
     if (state.liveTrip.terminal_reached) {
         return telemetry.is_fresh ? "Trip completed at terminal" : "Completed trip · last known";
     }
@@ -414,6 +421,20 @@ function getTrackingStatus() {
 
             label:
                 "Bus Not Live",
+
+            className:
+                "student-tracking-status-warning"
+
+        };
+
+    }
+
+    if (telemetry.clock_error) {
+
+        return {
+
+            label:
+                "Invalid GPS time",
 
             className:
                 "student-tracking-status-warning"

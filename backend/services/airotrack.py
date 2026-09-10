@@ -25,6 +25,7 @@ from backend.routes.gps_provider import _position_from_current_state, _update_ac
 from backend.routes.models_tracking import BusGPSState, GPSDeviceMapping, ProviderGPSPosition
 from backend.services.provider_health import record_provider_error, record_provider_success
 from backend.services.vehicle_gps import GPS_OFFLINE_GRACE_SECONDS
+from backend.services.gps_timestamp import future_timestamp_quarantine_reason
 
 
 AIROTRACK_ENDPOINT = "https://api.airotrack.in/api/vehicle-live-data"
@@ -180,6 +181,7 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
         speed = None
     ignition = _ignition(data.get("ignition"))
     now = datetime.now(timezone.utc)
+    quarantine_reason = future_timestamp_quarantine_reason(fix_time, now)
     position = {
         "latitude": latitude,
         "longitude": longitude,
@@ -202,7 +204,8 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
         fix_time=fix_time, received_at=now,
         status="Running" if ignition else "Parked", ignition=ignition,
         motion=None if speed is None else speed > 1, valid=True,
-        protocol="airotrack", raw_payload=raw_json,
+        protocol="airotrack", quarantine_reason=quarantine_reason,
+        raw_payload=raw_json,
     )
     db.add(history)
     db.flush()
@@ -211,7 +214,10 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
     current_position_time = (state.fix_time or state.received_at) if state else None
     if current_position_time is not None and current_position_time.tzinfo is None:
         current_position_time = current_position_time.replace(tzinfo=timezone.utc)
-    apply = state is None or current_position_time is None or fix_time > current_position_time
+    apply = (
+        quarantine_reason is None
+        and (state is None or current_position_time is None or fix_time > current_position_time)
+    )
     active_trip_id = None
     if apply:
         if state is None:
@@ -226,12 +232,13 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
     # same source_date. This repairs a missing provider-owned route session
     # after assignments change without treating the repeated payload as a new
     # coordinate or allowing it to move the route backwards.
-    active_trip_id = _update_active_trip_from_vehicle(
-        db,
-        _position_from_current_state(state),
-        bus.id,
-        now,
-    )
+    if quarantine_reason is None and state is not None:
+        active_trip_id = _update_active_trip_from_vehicle(
+            db,
+            _position_from_current_state(state),
+            bus.id,
+            now,
+        )
     return {
         "bus_id": bus.id,
         "bus_number": bus.bus_number,
@@ -239,6 +246,8 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
         "imei": imei,
         "source_date": fix_time,
         "applied": apply,
+        "quarantined": quarantine_reason is not None,
+        "quarantine_reason": quarantine_reason,
         "provider_position_id": history.id,
         "active_trip_id": active_trip_id,
     }
@@ -323,7 +332,11 @@ def _refresh_airotrack_unlocked(db: Session, *, bus_id: int | None = None) -> di
                         protocol="airotrack",
                     )
                     continue
-                newest = max(stored, key=lambda item: item["source_date"])
+                accepted_positions = [item for item in stored if not item["quarantined"]]
+                newest = max(
+                    accepted_positions or stored,
+                    key=lambda item: item["source_date"],
+                )
                 newest["provider_requests"] = len(responses)
                 newest["stored_positions"] = len(stored)
                 newest["catch_up"] = catch_up
@@ -332,7 +345,11 @@ def _refresh_airotrack_unlocked(db: Session, *, bus_id: int | None = None) -> di
                     db,
                     bus.id,
                     protocol="airotrack",
-                    source_time=newest["source_date"],
+                    source_time=(
+                        newest["source_date"]
+                        if not newest["quarantined"]
+                        else None
+                    ),
                 )
             except (RuntimeError, ValueError) as error:
                 errors.append({"bus_id": bus.id, "keyword": keyword, "reason": str(error)})

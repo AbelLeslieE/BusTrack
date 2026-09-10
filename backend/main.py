@@ -21,6 +21,7 @@ from backend.services.telemetry_retention import (
     run_telemetry_retention,
     telemetry_retention_enabled,
 )
+from backend.services.gps_timestamp import repair_future_gps_states
 from backend.services.restore_state import restore_in_progress
 from backend.routes.auth import router as authentication_router
 from database.create_default_admin import create_default_admin
@@ -143,6 +144,18 @@ async def lifespan(_: FastAPI):
     validate_security_configuration()
     initialize_database()
     create_default_admin()
+    # Repair any snapshot selected before future-device-time validation was
+    # introduced. Raw provider history is retained and marked quarantined.
+    with SessionLocal() as database_session:
+        repair_result = repair_future_gps_states(database_session)
+        database_session.commit()
+        if any(repair_result.values()):
+            print(
+                "GPS future timestamp repair: "
+                f"{repair_result['quarantined_positions']} quarantined, "
+                f"{repair_result['repaired_states']} restored, "
+                f"{repair_result['cleared_states']} cleared."
+            )
     poll_task = None
     retention_task = None
     document_task = asyncio.create_task(_document_expiry_loop())

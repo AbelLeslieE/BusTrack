@@ -155,6 +155,39 @@ class AirotrackReconciliationTest(unittest.TestCase):
             self.assertEqual(trip.current_route_stop_id, route.route_stops[0].id)
             self.assertEqual((trip.current_latitude, trip.current_longitude), (10.0, 76.0))
 
+    def test_future_airotrack_source_date_is_quarantined(self) -> None:
+        with self.session_factory() as database_session:
+            bus = Bus(bus_number="AIRO-CLOCK", registration_number="KL-08-AIRO-CLOCK", capacity=40, manufacturer="Test", model="Coach", year=2026, fuel_type="Diesel", status="Active")
+            database_session.add(bus)
+            database_session.commit()
+
+            future_time = datetime.now(ZoneInfo("Asia/Kolkata")) + timedelta(days=2)
+            result = _store_position(database_session, bus, {
+                "vehicle_registration": bus.registration_number,
+                "latitude": 12.0,
+                "longitude": 78.0,
+                "imei_no": "AIRO-CLOCK-IMEI",
+                "source_date": future_time.strftime("%d-%m-%Y %I:%M:%S %p"),
+                "speed": 45,
+                "ignition": "ON",
+            })
+            database_session.commit()
+
+            history = database_session.query(ProviderGPSPosition).filter(
+                ProviderGPSPosition.bus_id == bus.id,
+            ).one()
+            state = database_session.query(BusGPSState).filter(
+                BusGPSState.bus_id == bus.id,
+            ).first()
+            trip = database_session.query(LiveTrip).filter(
+                LiveTrip.bus_id == bus.id,
+            ).first()
+            self.assertTrue(result["quarantined"])
+            self.assertFalse(result["applied"])
+            self.assertIsNotNone(history.quarantine_reason)
+            self.assertIsNone(state)
+            self.assertIsNone(trip)
+
 
 if __name__ == "__main__":
     unittest.main()

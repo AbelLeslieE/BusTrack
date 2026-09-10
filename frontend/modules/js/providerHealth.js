@@ -40,6 +40,7 @@ function statusLabel(value) {
     return {
         healthy: "Healthy",
         delayed: "Provider delayed",
+        clock_error: "Invalid device time",
         offline: "No recent contact",
         error: "Provider error",
         no_data: "No data",
@@ -83,13 +84,14 @@ function healthCard(item) {
         <dl>
             <div><dt>Provider contacted</dt><dd>${escapeHtml(formatDate(item.last_provider_success_at))}<small>${escapeHtml(formatAge(item.provider_contact_age_seconds))} ago</small></dd></div>
             <div><dt>Device coordinate time</dt><dd>${escapeHtml(formatDate(item.latest_device_time))}<small>${escapeHtml(formatAge(item.device_data_age_seconds))} old</small></dd></div>
-            <div><dt>Delay when received</dt><dd>${escapeHtml(formatAge(item.latest_delivery_delay_seconds))}</dd></div>
+            <div><dt>Accepted fix delay</dt><dd>${escapeHtml(formatAge(item.latest_delivery_delay_seconds))}</dd></div>
             <div><dt>Ignition / expected</dt><dd>${escapeHtml(ignitionLabel(item.ignition))}</dd></div>
             <div><dt>Latest coordinates</dt><dd><code>${escapeHtml(coordinates)}</code></dd></div>
             <div><dt>Tracking session</dt><dd>${escapeHtml(trip)}</dd></div>
         </dl>
         ${directionControl}
         ${item.reset_waiting_for_start ? `<p class="tech-muted">${escapeHtml(item.reset_message)}</p>` : ""}
+        ${item.timestamp_warning ? `<p class="provider-error-copy">${escapeHtml(item.timestamp_warning)} The packet was quarantined and did not update live tracking.</p>` : ""}
         ${item.last_provider_error ? `<p class="provider-error-copy">${escapeHtml(item.last_provider_error)}</p>` : ""}
     </article>`;
 }
@@ -98,10 +100,10 @@ function positionRow(item) {
     return `<tr>
         <td><strong>${escapeHtml(item.bus_number)}</strong><small>${escapeHtml(item.registration_number || "—")}</small></td>
         <td>${escapeHtml(formatDate(item.received_at))}</td>
-        <td>${escapeHtml(formatDate(item.fix_time))}<small>Delivery lag: ${escapeHtml(formatAge(item.delivery_delay_seconds))}</small></td>
+        <td>${escapeHtml(formatDate(item.fix_time))}<small>${item.quarantined ? `Clock ahead: ${escapeHtml(formatAge(item.device_clock_ahead_seconds))}` : `Delivery lag: ${escapeHtml(formatAge(item.delivery_delay_seconds))}`}</small></td>
         <td><code>${escapeHtml(coordinate(item.latitude))}</code><small><code>${escapeHtml(coordinate(item.longitude))}</code></small></td>
         <td>${escapeHtml(item.speed_kmh === null ? "—" : `${Number(item.speed_kmh).toFixed(1)} km/h`)}<small>${escapeHtml(ignitionLabel(item.ignition))}</small></td>
-        <td><span class="provider-applied ${item.applied_to_current_state ? "yes" : "no"}">${item.applied_to_current_state ? "CURRENT" : "HISTORY"}</span><small>${escapeHtml(item.protocol || "Unknown protocol")}</small></td>
+        <td><span class="provider-applied ${item.applied_to_current_state ? "yes" : "no"}">${item.quarantined ? "QUARANTINED" : item.applied_to_current_state ? "CURRENT" : "HISTORY"}</span><small>${escapeHtml(item.quarantine_reason || item.protocol || "Unknown protocol")}</small></td>
         <td><button class="tech-button secondary provider-raw-button" type="button" data-provider-position="${item.id}">Raw data</button></td>
     </tr>`;
 }
@@ -131,7 +133,7 @@ function renderPage() {
             ${summaryCard("Healthy", counts.healthy || 0, "fresh provider coordinates", "healthy")}
             ${summaryCard("Delayed", counts.delayed || 0, "provider answered with old data", "delayed")}
             ${summaryCard("Offline", counts.offline || 0, "provider contact overdue", "offline")}
-            ${summaryCard("Errors", counts.error || 0, "latest poll failed", "error")}
+            ${summaryCard("Errors", (counts.error || 0) + (counts.clock_error || 0), "provider or device clock problem", "error")}
             ${summaryCard("No data", counts.no_data || 0, "waiting for first coordinate")}
         </section>
         <section class="tech-panel provider-filter-panel"><div><label for="provider-bus-filter">Filter by exact bus</label><select id="provider-bus-filter"><option value="">All buses</option>${busOptions}</select></div><p>Auto-refreshes every ${escapeHtml(String(state.health?.poll_interval_seconds || 20))} seconds. Raw history is retained for ${escapeHtml(formatAge((state.health?.history_retention_minutes || 0) * 60))}.</p></section>

@@ -27,6 +27,7 @@ from backend.routes.gps_provider import (
 )
 from backend.routes.models_tracking import BusGPSState, GPSIngestToken, LiveTrip, ProviderGPSPosition
 from backend.routes.student import get_student_live_tracking
+from backend.services.gps_timestamp import repair_future_gps_states
 
 
 class ProviderGpsFreshnessTest(unittest.TestCase):
@@ -306,6 +307,97 @@ class ProviderGpsFreshnessTest(unittest.TestCase):
             self.assertFalse(last_known["trip"]["telemetry"]["is_fresh"])
             self.assertEqual((last_known["trip"]["latitude"], last_known["trip"]["longitude"]), (stops[1].latitude, stops[1].longitude))
             self.assertEqual([item["tracking_status"] for item in last_known["stops"]], ["completed", "reached", "pending"])
+
+    def test_future_webhook_fix_is_quarantined_without_replacing_live_state(self) -> None:
+        with self.session_factory() as database_session:
+            bus = Bus(bus_number="CLOCK-01", registration_number="CLOCK-REG", capacity=40, manufacturer="Test", model="Coach", year=2026, fuel_type="Diesel", status="Active", device_id="CLOCK-DEVICE")
+            token = GPSIngestToken(label="clock", token_hash=hashlib.sha256(b"clock-token").hexdigest(), is_active=True)
+            database_session.add_all([bus, token])
+            database_session.commit()
+
+            current_time = datetime.now(timezone.utc)
+            accepted_time = current_time - timedelta(minutes=1)
+            accepted = self._payload(10.0, accepted_time)
+            accepted["uniqueId"] = "CLOCK-DEVICE"
+            ingest_positions(self._request(), accepted, "clock-token", database_session)
+
+            future_time = current_time + timedelta(days=2)
+            future = self._payload(12.0, future_time)
+            future["uniqueId"] = "CLOCK-DEVICE"
+            result = ingest_positions(self._request(), future, "clock-token", database_session)
+
+            state = database_session.query(BusGPSState).filter(BusGPSState.bus_id == bus.id).one()
+            rows = database_session.query(ProviderGPSPosition).filter(
+                ProviderGPSPosition.bus_id == bus.id,
+            ).order_by(ProviderGPSPosition.id.desc()).all()
+            self.assertEqual(result["accepted"], [])
+            self.assertTrue(result["ignored"][0]["quarantined"])
+            self.assertEqual(state.latitude, 10.0)
+            self.assertEqual(state.fix_time.replace(tzinfo=timezone.utc), accepted_time)
+            self.assertIsNotNone(rows[0].quarantine_reason)
+
+            response = Response()
+            health = get_provider_health(
+                response=response,
+                bus_id=bus.id,
+                db=database_session,
+                _technician=SimpleNamespace(),
+            )["buses"][0]
+            self.assertEqual(health["health_status"], "clock_error")
+            self.assertIsNotNone(health["timestamp_warning"])
+            self.assertGreater(health["device_clock_ahead_seconds"], 24 * 60 * 60)
+            self.assertEqual(
+                health["latest_device_time"].replace(tzinfo=timezone.utc),
+                accepted_time,
+            )
+
+            history = list_provider_positions(
+                response=Response(),
+                bus_id=bus.id,
+                limit=100,
+                offset=0,
+                db=database_session,
+                _technician=SimpleNamespace(),
+            )
+            self.assertTrue(history["positions"][0]["quarantined"])
+            self.assertFalse(history["positions"][0]["applied_to_current_state"])
+
+    def test_startup_repair_restores_newest_nonfuture_provider_state(self) -> None:
+        with self.session_factory() as database_session:
+            current_time = datetime.now(timezone.utc)
+            valid_time = current_time - timedelta(minutes=2)
+            future_time = current_time + timedelta(days=3)
+            bus = Bus(bus_number="REPAIR-01", registration_number="REPAIR-REG", capacity=40, manufacturer="Test", model="Coach", year=2026, fuel_type="Diesel", status="Active")
+            database_session.add(bus)
+            database_session.flush()
+            route = Route(route_code="REPAIR-R", route_name="Repair Route", bus_id=bus.id, driver_id=None, status="Active", total_stops=1)
+            stop = Stop(stop_code="REPAIR-A", stop_name="Repair Start", latitude=10.0, longitude=76.0, radius=100, status="Active")
+            database_session.add_all([route, stop])
+            database_session.flush()
+            route_stop = RouteStop(route_id=route.id, stop_id=stop.id, sequence=1)
+            valid = ProviderGPSPosition(bus_id=bus.id, external_device_id="REPAIR-DEVICE", latitude=10.0, longitude=76.0, speed_kmh=0, fix_time=valid_time, received_at=valid_time + timedelta(seconds=1), protocol="test", raw_payload="{}")
+            poisoned = ProviderGPSPosition(bus_id=bus.id, external_device_id="REPAIR-DEVICE", latitude=12.0, longitude=78.0, speed_kmh=50, fix_time=future_time, received_at=current_time, protocol="test", raw_payload="{}")
+            database_session.add_all([route_stop, valid, poisoned])
+            database_session.flush()
+            state = BusGPSState(bus_id=bus.id, provider_position_id=poisoned.id, external_device_id="REPAIR-DEVICE", latitude=poisoned.latitude, longitude=poisoned.longitude, speed_kmh=poisoned.speed_kmh, fix_time=future_time, received_at=current_time, protocol="test", raw_payload="{}")
+            trip = LiveTrip(bus_id=bus.id, route_id=route.id, driver_id=None, status="Running", route_direction="forward", current_route_stop_id=route_stop.id, current_stop_status="Approaching", current_latitude=poisoned.latitude, current_longitude=poisoned.longitude, current_speed=poisoned.speed_kmh, last_location_update=future_time, current_location_source="vehicle_gps", started_at=future_time, route_reset_at=current_time - timedelta(minutes=1), reset_waiting_for_start=True, reset_version=1)
+            database_session.add_all([state, trip])
+            database_session.commit()
+
+            repair_result = repair_future_gps_states(database_session, now=current_time)
+            database_session.commit()
+
+            database_session.refresh(state)
+            database_session.refresh(trip)
+            database_session.refresh(poisoned)
+            self.assertGreaterEqual(repair_result["quarantined_positions"], 1)
+            self.assertEqual(repair_result["repaired_states"], 1)
+            self.assertEqual(state.provider_position_id, valid.id)
+            self.assertEqual((state.latitude, state.longitude), (10.0, 76.0))
+            self.assertEqual(trip.last_location_update.replace(tzinfo=timezone.utc), valid_time)
+            self.assertTrue(trip.reset_waiting_for_start)
+            self.assertEqual(trip.current_route_stop_id, route_stop.id)
+            self.assertIsNotNone(poisoned.quarantine_reason)
 
 
 if __name__ == "__main__":

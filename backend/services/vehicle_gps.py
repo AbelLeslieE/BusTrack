@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+from backend.services.gps_timestamp import future_timestamp_seconds
+
 
 # The MVD vendor normally publishes a moving bus fix every 20 seconds and a
 # parked (ignition-off) heartbeat every two minutes. The grace period only
@@ -34,6 +36,9 @@ def vehicle_gps_is_authoritative(state, now: datetime | None = None) -> bool:
     if position_time.tzinfo is None:
         position_time = position_time.replace(tzinfo=timezone.utc)
 
-    return position_time >= (now or datetime.now(timezone.utc)) - timedelta(
+    current_time = now or datetime.now(timezone.utc)
+    if future_timestamp_seconds(position_time, current_time) is not None:
+        return False
+    return position_time >= current_time - timedelta(
         seconds=GPS_OFFLINE_GRACE_SECONDS
     )

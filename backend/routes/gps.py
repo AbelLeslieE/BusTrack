@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.services.trip_reset import as_utc, lock_tracking_bus, observation_after_reset, reset_metadata
+from backend.services.gps_timestamp import future_timestamp_seconds
 
 from backend.routes.models_tracking import (
     LiveTrip,
@@ -90,17 +91,28 @@ def build_gps_freshness(
         timestamp = timestamp.replace(tzinfo=timezone.utc)
 
     expected_interval = vehicle_gps_expected_interval_seconds(ignition)
+    current_time = datetime.now(timezone.utc)
+    clock_ahead_seconds = future_timestamp_seconds(timestamp, current_time)
     age_seconds = max(
         0,
-        int((datetime.now(timezone.utc) - timestamp).total_seconds()),
+        int((current_time - timestamp).total_seconds()),
     )
-    is_fresh = age_seconds <= GPS_OFFLINE_GRACE_SECONDS
+    is_fresh = (
+        clock_ahead_seconds is None
+        and age_seconds <= GPS_OFFLINE_GRACE_SECONDS
+    )
 
     return {
         "age_seconds": age_seconds,
         "expected_interval_seconds": expected_interval,
         "is_fresh": is_fresh,
-        "label": "GPS fresh" if is_fresh else "GPS signal stale",
+        "clock_error": clock_ahead_seconds is not None,
+        "device_clock_ahead_seconds": clock_ahead_seconds,
+        "label": (
+            "Invalid device clock"
+            if clock_ahead_seconds is not None
+            else "GPS fresh" if is_fresh else "GPS signal stale"
+        ),
     }
 
 

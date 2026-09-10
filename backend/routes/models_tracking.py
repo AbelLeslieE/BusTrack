@@ -342,6 +342,9 @@ class ProviderGPSPosition(Base):
     motion: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     valid: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     protocol: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Invalid packets remain available to technicians for diagnosis, but a
+    # quarantined row can never become the current vehicle or route state.
+    quarantine_reason: Mapped[str | None] = mapped_column(String(300), nullable=True)
     raw_payload: Mapped[str] = mapped_column(Text, nullable=False)
 
 

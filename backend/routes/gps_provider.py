@@ -53,6 +53,11 @@ from backend.services.trip_direction import direction_from_start_position, order
 from backend.services.telemetry_retention import trim_active_trip_location_history
 from backend.services.telemetry_retention import provider_history_retention_minutes
 from backend.services.provider_health import record_provider_success
+from backend.services.gps_timestamp import (
+    allowed_future_skew_seconds,
+    future_timestamp_quarantine_reason,
+    future_timestamp_seconds,
+)
 from backend.models import RouteStop
 
 
@@ -243,8 +248,9 @@ def _serialize_state(state: BusGPSState, bus: Bus, *, include_raw: bool = False)
     position_time = state.fix_time or state.received_at
     if position_time.tzinfo is None:
         position_time = position_time.replace(tzinfo=timezone.utc)
+    clock_ahead_seconds = future_timestamp_seconds(position_time, now)
     age_seconds = max(0, int((now - position_time).total_seconds()))
-    fresh = age_seconds <= GPS_OFFLINE_GRACE_SECONDS
+    fresh = clock_ahead_seconds is None and age_seconds <= GPS_OFFLINE_GRACE_SECONDS
     result = {
         "bus_id": bus.id,
         "bus_number": bus.bus_number,
@@ -266,6 +272,8 @@ def _serialize_state(state: BusGPSState, bus: Bus, *, include_raw: bool = False)
         "expected_interval_seconds": expected_interval_seconds,
         "age_seconds": age_seconds,
         "is_fresh": fresh,
+        "clock_error": clock_ahead_seconds is not None,
+        "device_clock_ahead_seconds": clock_ahead_seconds,
         # A delayed module fix is still a real vehicle position.  Keep it
         # available to every portal as the last known location instead of
         # making the bus disappear after the freshness grace period.
@@ -311,6 +319,7 @@ def _serialize_provider_health(
     state: BusGPSState | None,
     health: GPSProviderHealthState | None,
     latest_position: ProviderGPSPosition | None,
+    current_position: ProviderGPSPosition | None,
 ) -> dict[str, Any]:
     expected_interval = vehicle_gps_expected_interval_seconds(
         state.ignition if state is not None else None
@@ -326,10 +335,20 @@ def _serialize_provider_health(
     source_age = _age_seconds(source_time, now)
     contact_age = _age_seconds(provider_contact_at, now)
     latest_delivery_delay = None
-    if latest_position and latest_position.fix_time:
-        received = _normalized_datetime(latest_position.received_at)
-        fixed = _normalized_datetime(latest_position.fix_time)
+    if current_position and current_position.fix_time:
+        received = _normalized_datetime(current_position.received_at)
+        fixed = _normalized_datetime(current_position.fix_time)
         latest_delivery_delay = max(0, int((received - fixed).total_seconds()))
+    timestamp_warning = (
+        latest_position.quarantine_reason
+        if latest_position is not None
+        else None
+    )
+    device_clock_ahead_seconds = (
+        future_timestamp_seconds(latest_position.fix_time, latest_position.received_at)
+        if latest_position is not None
+        else None
+    )
 
     active_error = bool(
         health
@@ -341,12 +360,14 @@ def _serialize_provider_health(
         )
     )
     contact_late_after = max(GPS_OFFLINE_GRACE_SECONDS, expected_interval + 60)
-    if state is None:
-        health_status = "error" if active_error else "no_data"
-    elif active_error:
+    if active_error:
         health_status = "error"
     elif contact_age is None or contact_age > contact_late_after:
         health_status = "offline"
+    elif timestamp_warning:
+        health_status = "clock_error"
+    elif state is None:
+        health_status = "no_data"
     elif source_age is None or source_age > GPS_OFFLINE_GRACE_SECONDS:
         # The provider is answering, but its device timestamp is old. This is
         # the exact lag condition that must not be presented as live tracking.
@@ -377,6 +398,8 @@ def _serialize_provider_health(
         "latest_device_time": source_time,
         "device_data_age_seconds": source_age,
         "latest_delivery_delay_seconds": latest_delivery_delay,
+        "device_clock_ahead_seconds": device_clock_ahead_seconds,
+        "timestamp_warning": timestamp_warning,
         "latitude": state.latitude if state else None,
         "longitude": state.longitude if state else None,
         "speed_kmh": state.speed_kmh if state else None,
@@ -401,7 +424,7 @@ def _serialize_provider_position(
     fixed = _normalized_datetime(item.fix_time)
     delivery_delay = (
         max(0, int((received - fixed).total_seconds()))
-        if received is not None and fixed is not None
+        if received is not None and fixed is not None and item.quarantine_reason is None
         else None
     )
     return {
@@ -419,6 +442,12 @@ def _serialize_provider_position(
         "fix_time": item.fix_time,
         "received_at": item.received_at,
         "delivery_delay_seconds": delivery_delay,
+        "device_clock_ahead_seconds": future_timestamp_seconds(
+            item.fix_time,
+            item.received_at,
+        ),
+        "quarantined": item.quarantine_reason is not None,
+        "quarantine_reason": item.quarantine_reason,
         "status": item.status,
         "ignition": item.ignition,
         "motion": item.motion,
@@ -594,6 +623,9 @@ def _update_active_trip_from_vehicle(db: Session, position: dict[str, Any], bus_
 
     previous_location = db.query(LiveLocation).filter(
         LiveLocation.trip_id == trip.id,
+        LiveLocation.recorded_at <= received_at + timedelta(
+            seconds=allowed_future_skew_seconds()
+        ),
     ).order_by(LiveLocation.recorded_at.desc()).first()
     route_stops = db.query(RouteStop).filter(
         RouteStop.route_id == trip.route_id,
@@ -998,6 +1030,10 @@ def ingest_positions(
         bus = lock_tracking_bus(db, bus.id)
 
         now = _utc_now()
+        quarantine_reason = future_timestamp_quarantine_reason(
+            position["fix_time"],
+            now,
+        )
         external_device_id = position["external_ids"][0]
         raw_json = json.dumps(position["raw"], separators=(",", ":"), default=str)
         history = ProviderGPSPosition(
@@ -1005,10 +1041,29 @@ def ingest_positions(
             latitude=position["latitude"], longitude=position["longitude"], speed_kmh=position["speed_kmh"],
             course=position["course"], altitude=position["altitude"], accuracy=position["accuracy"],
             fix_time=position["fix_time"], received_at=now, status=position["status"], ignition=position["ignition"],
-            motion=position["motion"], valid=position["valid"], protocol=position["protocol"], raw_payload=raw_json,
+            motion=position["motion"], valid=position["valid"], protocol=position["protocol"],
+            quarantine_reason=quarantine_reason, raw_payload=raw_json,
         )
         db.add(history)
         db.flush()
+        if quarantine_reason is not None:
+            record_provider_success(
+                db,
+                bus.id,
+                protocol=position["protocol"] or "provider_webhook",
+                attempted_at=now,
+                source_time=None,
+            )
+            ignored.append({
+                "index": index,
+                "bus_id": bus.id,
+                "bus_number": bus.bus_number,
+                "external_device_ids": position["external_ids"],
+                "reason": quarantine_reason,
+                "quarantined": True,
+                "provider_position_id": history.id,
+            })
+            continue
         state = db.query(BusGPSState).filter(BusGPSState.bus_id == bus.id).first()
         state_time = None
         if state is not None:
@@ -1115,6 +1170,12 @@ def get_provider_health(
             ProviderGPSPosition.received_at.desc(),
             ProviderGPSPosition.id.desc(),
         ).first()
+        current_position = (
+            db.get(ProviderGPSPosition, states[bus.id].provider_position_id)
+            if states.get(bus.id) is not None
+            and states[bus.id].provider_position_id is not None
+            else None
+        )
         rows.append(_serialize_provider_health(
             db,
             bus,
@@ -1122,11 +1183,12 @@ def get_provider_health(
             state=states.get(bus.id),
             health=health_states.get(bus.id),
             latest_position=latest_position,
+            current_position=current_position,
         ))
 
     counts = {
         state_name: sum(1 for item in rows if item["health_status"] == state_name)
-        for state_name in ("healthy", "delayed", "offline", "error", "no_data")
+        for state_name in ("healthy", "delayed", "offline", "error", "clock_error", "no_data")
     }
     try:
         poll_interval = max(20, int(os.getenv("AIROTRACK_POLL_INTERVAL_SECONDS", "20")))

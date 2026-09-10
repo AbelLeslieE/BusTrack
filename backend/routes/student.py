@@ -40,6 +40,7 @@ from backend.services.tracking_engine import (
 )
 from backend.services.trip_direction import ordered_route_stops
 from backend.services.vehicle_gps import GPS_OFFLINE_GRACE_SECONDS
+from backend.services.gps_timestamp import future_timestamp_seconds
 from backend.schemas import StudentAssignmentUpdate
 
 
@@ -658,13 +659,19 @@ def get_student_live_tracking(
         else trip.last_location_update if trip is not None else None
     )
     location_age_seconds = None
+    device_clock_ahead_seconds = None
     if location_timestamp is not None:
         timestamp = (
             location_timestamp.replace(tzinfo=timezone.utc)
             if location_timestamp.tzinfo is None
             else location_timestamp
         )
-        location_age_seconds = max(0, int((datetime.now(timezone.utc) - timestamp).total_seconds()))
+        current_time = datetime.now(timezone.utc)
+        device_clock_ahead_seconds = future_timestamp_seconds(
+            timestamp,
+            current_time,
+        )
+        location_age_seconds = max(0, int((current_time - timestamp).total_seconds()))
     active_speed = (
         provider_state.speed_kmh if use_provider_position
         else trip.current_speed if trip is not None else None
@@ -681,6 +688,7 @@ def get_student_live_tracking(
     )
     location_is_fresh = (
         location_age_seconds is not None
+        and device_clock_ahead_seconds is None
         and location_age_seconds <= freshness_limit_seconds
     )
     telemetry = {
@@ -690,6 +698,8 @@ def get_student_live_tracking(
         "last_seen_seconds": location_age_seconds,
         "moving": is_moving if tracking_available else None,
         "ignition_on": provider_state.ignition if tracking_source == "vehicle_gps" and provider_state is not None else None,
+        "clock_error": device_clock_ahead_seconds is not None,
+        "device_clock_ahead_seconds": device_clock_ahead_seconds,
     }
     # ======================================================
     # 5. LOAD ORDERED ROUTE STOPS
