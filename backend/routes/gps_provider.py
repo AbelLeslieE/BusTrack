@@ -14,7 +14,7 @@ import math
 import os
 import re
 import secrets
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request, Response, status
 from sqlalchemy import or_
@@ -404,7 +404,11 @@ def _serialize_provider_health(
         "configured_device_id": bus.device_id,
         "external_device_id": state.external_device_id if state else None,
         "health_status": health_status,
-        "protocol": (health.protocol if health else None) or (state.protocol if state else None),
+        "protocol": (
+            (health.protocol if health else None)
+            or (state.protocol if state else None)
+            or (bus.gps_provider if bus.gps_provider != "auto" else None)
+        ),
         "expected_interval_seconds": expected_interval,
         "last_provider_attempt_at": health.last_attempt_at if health else None,
         "last_provider_success_at": provider_contact_at,
@@ -1158,10 +1162,25 @@ def refresh_airotrack_positions(
         raise HTTPException(status_code=503, detail=str(error)) from error
 
 
+@router.post("/providers/refresh")
+def refresh_provider_positions(
+    bus_id: int | None = Query(default=None, ge=1),
+    provider: Literal["airotrack", "kingstrack"] | None = None,
+    db: Session = Depends(get_db),
+    _technician: User = Depends(require_gps_technician),
+):
+    """Refresh one provider or the full configured provider fleet now."""
+
+    from backend.services.gps_providers import refresh_gps_providers
+
+    return refresh_gps_providers(db, bus_id=bus_id, provider=provider)
+
+
 @router.get("/provider-health")
 def get_provider_health(
     response: Response,
     bus_id: int | None = Query(default=None, ge=1),
+    provider: Literal["airotrack", "kingstrack"] | None = None,
     db: Session = Depends(get_db),
     _technician: User = Depends(require_gps_technician),
 ):
@@ -1211,12 +1230,21 @@ def get_provider_health(
             current_position=current_position,
         ))
 
+    if provider is not None:
+        rows = [item for item in rows if item["protocol"] == provider]
+
     counts = {
         state_name: sum(1 for item in rows if item["health_status"] == state_name)
         for state_name in ("healthy", "delayed", "offline", "error", "clock_error", "no_data")
     }
     try:
-        poll_interval = max(20, int(os.getenv("AIROTRACK_POLL_INTERVAL_SECONDS", "20")))
+        poll_interval = max(
+            20,
+            int(os.getenv(
+                "GPS_PROVIDER_POLL_INTERVAL_SECONDS",
+                os.getenv("AIROTRACK_POLL_INTERVAL_SECONDS", "20"),
+            )),
+        )
     except ValueError:
         poll_interval = 20
     return {
@@ -1225,6 +1253,7 @@ def get_provider_health(
         "history_retention_minutes": provider_history_retention_minutes(),
         "counts": counts,
         "buses": rows,
+        "provider": provider,
     }
 
 
@@ -1232,6 +1261,7 @@ def get_provider_health(
 def list_provider_positions(
     response: Response,
     bus_id: int | None = Query(default=None, ge=1),
+    provider: Literal["airotrack", "kingstrack"] | None = None,
     limit: int = Query(default=100, ge=1, le=250),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -1245,6 +1275,8 @@ def list_provider_positions(
     query = db.query(ProviderGPSPosition)
     if bus_id is not None:
         query = query.filter(ProviderGPSPosition.bus_id == bus_id)
+    if provider is not None:
+        query = query.filter(ProviderGPSPosition.protocol == provider)
     total = query.count()
     positions = query.order_by(
         ProviderGPSPosition.received_at.desc(),
@@ -1274,6 +1306,7 @@ def list_provider_positions(
         "total": total,
         "has_more": offset + len(positions) < total,
         "bus_id": bus_id,
+        "provider": provider,
         "history_retention_minutes": provider_history_retention_minutes(),
     }
 

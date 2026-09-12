@@ -146,6 +146,24 @@ bounded catch-up read and applies only the greatest device timestamp. Set
 `AIROTRACK_CATCHUP_MAX_REQUESTS` to tune the maximum (default 8). A production
 cold start completes its first provider refresh before serving tracking pages.
 
+## Kingstrack pull integration
+
+Configure `KINGSTRACK_ACCOUNTS` in the server secret store as comma-separated
+`company_id:user_id` pairs. BusTrack fetches each account once per polling
+cycle because the Kingstrack endpoint returns its full fleet. It matches each
+`plate_no` to the registration number saved in Bus Management and records the
+returned IMEI automatically. No provider field or device ID needs to be typed
+when adding the bus.
+
+After its first matching response, a bus is persistently assigned to
+Kingstrack. Airotrack then excludes that bus from its own lookups, so failures
+or delayed data from one provider cannot replace the other provider's state.
+Both adapters write the canonical GPS state and use the same route progression,
+reset, skipped-stop and terminal-reversal safeguards. Provider Health labels
+each bus and raw response as Airotrack or Kingstrack and supports exact provider
+filtering. `GPS_PROVIDER_POLL_INTERVAL_SECONDS` controls the shared schedule;
+the minimum remains 20 seconds.
+
 A suspended free web service cannot run outbound polling code while suspended.
 For uninterrupted collection during that period, configure the provider to
 push heartbeats to the webhook endpoint or run the service on an always-on

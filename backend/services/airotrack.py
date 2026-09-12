@@ -158,6 +158,10 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
     # lock, two concurrent workers could both compare against an old value and
     # let the slower transaction overwrite a newer device timestamp.
     bus = lock_tracking_bus(db, bus.id)
+    if (bus.gps_provider or "auto") not in {"auto", "airotrack"}:
+        raise ValueError(
+            f"{bus.bus_number} is assigned to {bus.gps_provider}, not Airotrack."
+        )
     returned_registration = str(data.get("vehicle_registration") or "").strip()
     if not returned_registration:
         raise ValueError("Airotrack response has no vehicle registration.")
@@ -197,6 +201,7 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
     ).first()
     if mapping is not None and mapping.bus_id != bus.id:
         raise ValueError("Airotrack IMEI is mapped to a different bus.")
+    bus.gps_provider = "airotrack"
     history = ProviderGPSPosition(
         bus_id=bus.id, device_mapping_id=mapping.id if mapping else None,
         external_device_id=imei, latitude=latitude, longitude=longitude,
@@ -259,7 +264,7 @@ def _refresh_airotrack_unlocked(db: Session, *, bus_id: int | None = None) -> di
     token = os.getenv("AIROTRACK_API_TOKEN", "").strip()
     if not token:
         raise RuntimeError("AIROTRACK_API_TOKEN is not configured.")
-    query = db.query(Bus)
+    query = db.query(Bus).filter(Bus.gps_provider.in_(("auto", "airotrack")))
     if bus_id is not None:
         query = query.filter(Bus.id == bus_id)
     buses = query.order_by(Bus.id).all()

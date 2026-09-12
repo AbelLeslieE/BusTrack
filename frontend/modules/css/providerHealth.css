@@ -6,3 +6,7 @@
 
 .provider-direction-control{flex-wrap:wrap;gap:8px}.provider-direction-control>span{margin-right:auto}
 #provider-reset-direction{display:block;width:100%;margin:10px 0;padding:10px;border-radius:8px}#provider-reset-error{color:var(--danger,#ff8585)}
+
+.provider-filter-controls{display:grid!important;grid-template-columns:repeat(2,minmax(180px,1fr));gap:12px!important;width:min(100%,620px)}.provider-filter-controls>div{display:grid;gap:7px}.provider-card-badges{display:flex;align-items:flex-end;flex-direction:column;gap:7px}.provider-source-pill{display:inline-flex;padding:5px 9px;border:1px solid rgba(126,218,255,.34);border-radius:999px;background:rgba(42,142,196,.13);color:#aeeaff;font-size:.66rem;font-weight:850;letter-spacing:.35px;white-space:nowrap}.provider-source-pill.airotrack{border-color:rgba(99,218,255,.42);background:rgba(34,137,197,.16);color:#a8edff}.provider-source-pill.kingstrack{border-color:rgba(178,142,255,.48);background:rgba(114,73,203,.18);color:#d5c4ff}.provider-source-pill.unknown{color:#a7bdc8}
+
+@media(max-width:700px){.provider-filter-controls{grid-template-columns:1fr;width:100%}.provider-card-badges{align-items:flex-end}}

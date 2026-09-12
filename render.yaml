@@ -30,6 +30,12 @@ services:
       - key: AIROTRACK_POLL_INTERVAL_SECONDS
         value: 20
 
+      - key: GPS_PROVIDER_POLL_INTERVAL_SECONDS
+        value: 20
+
+      - key: KINGSTRACK_ACCOUNTS
+        sync: false
+
       - key: GPS_MAX_FUTURE_SKEW_SECONDS
         value: 300
 

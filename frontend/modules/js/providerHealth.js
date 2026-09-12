@@ -6,6 +6,7 @@ const state = {
     health: null,
     positions: [],
     selectedBusId: "",
+    selectedProvider: "",
     loading: true,
     refreshing: false,
     changingDirectionBusId: null,
@@ -57,6 +58,13 @@ function coordinate(value) {
     return Number.isFinite(Number(value)) ? Number(value).toFixed(6) : "—";
 }
 
+function providerLabel(value) {
+    return {
+        airotrack: "Airotrack",
+        kingstrack: "Kingstrack",
+    }[String(value || "").toLowerCase()] || "Awaiting detection";
+}
+
 function selectedHealthRows() {
     const rows = state.health?.buses || [];
     return state.selectedBusId
@@ -90,7 +98,7 @@ function healthCard(item) {
         ? `<div class="provider-direction-control"><span>Manual route control</span><button class="tech-button secondary provider-direction-button" type="button" data-provider-direction-bus="${item.bus_id}" data-provider-next-direction="${nextDirection}" ${state.changingDirectionBusId === item.bus_id || state.resettingBusId === item.bus_id ? "disabled" : ""}>${state.changingDirectionBusId === item.bus_id ? "Changing…" : nextDirection === "reverse" ? "↔ Change to return" : "↔ Change to outbound"}</button><button class="tech-button secondary" type="button" data-provider-reset-bus="${item.bus_id}" ${state.resettingBusId === item.bus_id || state.changingDirectionBusId === item.bus_id ? "disabled" : ""}>${state.resettingBusId === item.bus_id ? "Resetting…" : "Reset to first stop"}</button></div>`
         : "";
     return `<article class="provider-bus-card ${escapeHtml(item.health_status)}">
-        <header><div><p>${escapeHtml(item.bus_number)}</p><strong>${escapeHtml(item.registration_number || "No registration")}</strong></div><span class="provider-health-pill ${escapeHtml(item.health_status)}">${escapeHtml(statusLabel(item.health_status))}</span></header>
+        <header><div><p>${escapeHtml(item.bus_number)}</p><strong>${escapeHtml(item.registration_number || "No registration")}</strong></div><div class="provider-card-badges"><span class="provider-source-pill ${escapeHtml(item.protocol || "unknown")}">${escapeHtml(providerLabel(item.protocol))}</span><span class="provider-health-pill ${escapeHtml(item.health_status)}">${escapeHtml(statusLabel(item.health_status))}</span></div></header>
         <dl>
             <div><dt>Latest provider contact</dt><dd>${escapeHtml(formatDate(item.last_provider_success_at))}<small>${escapeHtml(formatAge(item.provider_contact_age_seconds))} ago · valid or quarantined response</small></dd></div>
             <div><dt>Accepted by BusTrack</dt><dd>${escapeHtml(formatDate(item.latest_accepted_received_at))}<small>Receipt time for the accepted fix below</small></dd></div>
@@ -111,6 +119,7 @@ function healthCard(item) {
 function positionRow(item) {
     return `<tr>
         <td><strong>${escapeHtml(item.bus_number)}</strong><small>${escapeHtml(item.registration_number || "—")}</small></td>
+        <td><span class="provider-source-pill ${escapeHtml(item.protocol || "unknown")}">${escapeHtml(providerLabel(item.protocol))}</span></td>
         <td>${escapeHtml(formatDate(item.received_at))}</td>
         <td>${escapeHtml(formatDate(item.fix_time))}<small>${item.quarantined ? `Clock ahead: ${escapeHtml(formatAge(item.device_clock_ahead_seconds))}` : `Delivery lag: ${escapeHtml(formatAge(item.delivery_delay_seconds))}`}</small></td>
         <td><code>${escapeHtml(coordinate(item.latitude))}</code><small><code>${escapeHtml(coordinate(item.longitude))}</code></small></td>
@@ -136,10 +145,10 @@ function renderPage() {
         : `<p class="tech-empty">No buses match this filter.</p>`;
     const positionRows = state.positions.length
         ? state.positions.map(positionRow).join("")
-        : `<tr><td colspan="7" class="tech-empty">No provider coordinates are retained for this bus yet.</td></tr>`;
+        : `<tr><td colspan="8" class="tech-empty">No provider coordinates are retained for this filter yet.</td></tr>`;
 
     page.innerHTML = `<section class="tech-page provider-health-page">
-        <header class="tech-hero provider-health-hero"><div><p class="tech-eyebrow">GPS PROVIDER OBSERVABILITY</p><h1>Provider Health</h1><p>See every retained provider response, its device timestamp, when BusTrack received it, and whether it advanced live tracking.</p></div><button class="tech-button primary" id="provider-pull-now" type="button" ${state.refreshing ? "disabled" : ""}>${state.refreshing ? "Fetching…" : "↻ Fetch provider now"}</button></header>
+        <header class="tech-hero provider-health-hero"><div><p class="tech-eyebrow">GPS PROVIDER OBSERVABILITY</p><h1>Provider Health</h1><p>Compare Airotrack and Kingstrack responses, device timestamps, BusTrack receipt times, and route usage.</p></div><button class="tech-button primary" id="provider-pull-now" type="button" ${state.refreshing ? "disabled" : ""}>${state.refreshing ? "Fetching…" : "↻ Fetch providers now"}</button></header>
         ${state.lastRefreshError ? `<p class="provider-page-error">${escapeHtml(state.lastRefreshError)}</p>` : ""}
         <section class="tech-stat-grid provider-stat-grid">
             ${summaryCard("Healthy", counts.healthy || 0, "fresh provider coordinates", "healthy")}
@@ -148,9 +157,9 @@ function renderPage() {
             ${summaryCard("Errors", (counts.error || 0) + (counts.clock_error || 0), "provider or device clock problem", "error")}
             ${summaryCard("No data", counts.no_data || 0, "waiting for first coordinate")}
         </section>
-        <section class="tech-panel provider-filter-panel"><div><label for="provider-bus-filter">Filter by exact bus</label><select id="provider-bus-filter"><option value="">All buses</option>${busOptions}</select></div><p>Auto-refreshes every ${escapeHtml(String(state.health?.poll_interval_seconds || 20))} seconds. Raw history is retained for ${escapeHtml(formatAge((state.health?.history_retention_minutes || 0) * 60))}.</p></section>
+        <section class="tech-panel provider-filter-panel"><div class="provider-filter-controls"><div><label for="provider-source-filter">Filter by provider</label><select id="provider-source-filter"><option value="" ${state.selectedProvider === "" ? "selected" : ""}>All providers</option><option value="airotrack" ${state.selectedProvider === "airotrack" ? "selected" : ""}>Airotrack</option><option value="kingstrack" ${state.selectedProvider === "kingstrack" ? "selected" : ""}>Kingstrack</option></select></div><div><label for="provider-bus-filter">Filter by exact bus</label><select id="provider-bus-filter"><option value="">All buses</option>${busOptions}</select></div></div><p>Auto-refreshes every ${escapeHtml(String(state.health?.poll_interval_seconds || 20))} seconds. Raw history is retained for ${escapeHtml(formatAge((state.health?.history_retention_minutes || 0) * 60))}.</p></section>
         <section class="provider-health-grid">${healthCards}</section>
-        <section class="tech-panel"><div class="tech-panel-heading"><div><p class="tech-eyebrow">COORDINATE FEED</p><h2>${state.selectedBusId ? "Selected bus provider data" : "All provider data"}</h2><p>Rows are ordered by BusTrack receipt time. “Current” is the newest device timestamp used by the tracker; replays remain visible as history but cannot move the route backward.</p></div><span class="tech-muted">Newest 100 retained responses</span></div><div class="tech-table-wrap"><table class="provider-position-table"><thead><tr><th>Bus</th><th>Received by BusTrack</th><th>Device timestamp</th><th>Coordinates</th><th>Movement</th><th>Tracker use</th><th></th></tr></thead><tbody>${positionRows}</tbody></table></div></section>
+        <section class="tech-panel"><div class="tech-panel-heading"><div><p class="tech-eyebrow">COORDINATE FEED</p><h2>${state.selectedBusId ? "Selected bus provider data" : state.selectedProvider ? `${providerLabel(state.selectedProvider)} data` : "All provider data"}</h2><p>Rows are ordered by BusTrack receipt time. “Current” is the newest device timestamp used by the tracker; replays remain visible as history but cannot move the route backward.</p></div><span class="tech-muted">Newest 100 retained responses</span></div><div class="tech-table-wrap"><table class="provider-position-table"><thead><tr><th>Bus</th><th>Provider</th><th>Received by BusTrack</th><th>Device timestamp</th><th>Coordinates</th><th>Movement</th><th>Tracker use</th><th></th></tr></thead><tbody>${positionRows}</tbody></table></div></section>
     </section>`;
     bindEvents();
 }
@@ -161,6 +170,11 @@ function bindEvents() {
     });
     page?.querySelector("#provider-bus-filter")?.addEventListener("change", event => {
         state.selectedBusId = event.target.value;
+        void refreshData();
+    });
+    page?.querySelector("#provider-source-filter")?.addEventListener("change", event => {
+        state.selectedProvider = event.target.value;
+        state.selectedBusId = "";
         void refreshData();
     });
     page?.querySelector("#provider-pull-now")?.addEventListener("click", () => void pullProviderNow());
@@ -284,10 +298,17 @@ async function refreshData({ preserveError = false, force = false } = {}) {
     state.refreshing = true;
     if (!preserveError) state.lastRefreshError = "";
     try {
-        const suffix = state.selectedBusId ? `?bus_id=${encodeURIComponent(state.selectedBusId)}&limit=100` : "?limit=100";
+        const parameters = new URLSearchParams({limit: "100"});
+        if (state.selectedBusId) parameters.set("bus_id", state.selectedBusId);
+        if (state.selectedProvider) parameters.set("provider", state.selectedProvider);
+        const healthParameters = new URLSearchParams();
+        if (state.selectedBusId) healthParameters.set("bus_id", state.selectedBusId);
+        if (state.selectedProvider) healthParameters.set("provider", state.selectedProvider);
+        const healthQuery = healthParameters.toString();
+        const healthSuffix = healthQuery ? `?${healthQuery}` : "";
         const [health, feed] = await Promise.all([
-            request("/integrations/gps/provider-health"),
-            request(`/integrations/gps/provider-health/positions${suffix}`),
+            request(`/integrations/gps/provider-health${healthSuffix}`),
+            request(`/integrations/gps/provider-health/positions?${parameters}`),
         ]);
         if (requestId !== state.refreshRequestId) return;
         state.health = health;
@@ -309,8 +330,12 @@ async function pullProviderNow() {
     renderPage();
     let providerNotice = "";
     try {
-        const suffix = state.selectedBusId ? `?bus_id=${encodeURIComponent(state.selectedBusId)}` : "";
-        const result = await request(`/integrations/gps/airotrack/refresh${suffix}`, { method: "POST" });
+        const parameters = new URLSearchParams();
+        if (state.selectedBusId) parameters.set("bus_id", state.selectedBusId);
+        if (state.selectedProvider) parameters.set("provider", state.selectedProvider);
+        const query = parameters.toString();
+        const suffix = query ? `?${query}` : "";
+        const result = await request(`/integrations/gps/providers/refresh${suffix}`, { method: "POST" });
         if (result.errors?.length) {
             providerNotice = `${result.errors.length} provider request${result.errors.length === 1 ? "" : "s"} failed. Details are shown on the affected bus.`;
         }

@@ -310,6 +310,16 @@ class Bus(Base):
         nullable=True,
     )
 
+    # Provider ownership is detected from the registration number. Keeping it
+    # on the bus prevents independent pollers from competing for the same live
+    # route after the first successful provider match.
+    gps_provider: Mapped[str] = mapped_column(
+        String(32),
+        default="auto",
+        server_default="auto",
+        nullable=False,
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

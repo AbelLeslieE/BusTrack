@@ -217,6 +217,21 @@ def _add_provider_position_quarantine_column(database_engine=engine) -> None:
             ))
 
 
+def _add_bus_gps_provider_column(database_engine=engine) -> None:
+    """Persist which pull provider owns a bus without changing assignments."""
+
+    inspector = inspect(database_engine)
+    if "buses" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("buses")}
+    if "gps_provider" not in columns:
+        with database_engine.begin() as connection:
+            connection.execute(text(
+                "ALTER TABLE buses ADD COLUMN gps_provider "
+                "VARCHAR(32) NOT NULL DEFAULT 'auto'"
+            ))
+
+
 def initialize_database() -> None:
     """
     Create the database schema.
@@ -267,6 +282,7 @@ def initialize_database() -> None:
     _add_trip_reset_columns()
     _add_pass_credential_columns()
     _add_provider_position_quarantine_column()
+    _add_bus_gps_provider_column()
 
     # This project currently has no migration framework. Keep existing local
     # deployments compatible with the student route assignment introduced by
