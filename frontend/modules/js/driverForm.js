@@ -51,7 +51,9 @@ function renderDriverInformation(driver){
                     label:"Driver Code",
                     value:driver.driver_code || "",
                     placeholder:"DRV001",
-                    required:true
+                    required:true,
+                    readOnly:true,
+                    hint:"Permanent system code"
                 })}
 
                 ${createInput({
@@ -135,7 +137,9 @@ function createInput({
     type = "text",
     value = "",
     placeholder = "",
-    required = false
+    required = false,
+    readOnly = false,
+    hint = ""
 
 }){
 
@@ -157,7 +161,10 @@ function createInput({
                 type="${type}"
                 value="${value}"
                 placeholder="${placeholder}"
+                ${readOnly ? "readonly" : ""}
             >
+
+            ${hint ? `<small class="modal-field-hint">${hint}</small>` : ""}
 
         </div>
 

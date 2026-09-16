@@ -24,6 +24,7 @@ from fastapi import (
     UploadFile,
     File,
 )
+from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 from openpyxl import load_workbook
 from io import BytesIO
@@ -33,6 +34,7 @@ from backend.models import (
     Route,
     RouteStop,
 )
+from backend.schemas import StopCreate, StopUpdate
 from backend.security import require_management
 from backend.services.stop_codes import (
     format_stop_code,
@@ -41,6 +43,7 @@ from backend.services.stop_codes import (
     lock_stop_code_writes,
     next_stop_code,
 )
+from backend.services.generated_codes import lock_generated_code_writes
 # ==========================================================
 # ROUTER
 # ==========================================================
@@ -100,6 +103,66 @@ def get_stops(
         })
 
     return data
+
+
+# ==========================================================
+# STOPS PAGE OVERVIEW
+# ==========================================================
+
+@router.get("/overview")
+def get_stops_overview(
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
+):
+    """Return the stop list and authoritative KPI values in one request.
+
+    A master stop can belong to more than one route, so route totals and the
+    average cannot be inferred from the number of master stops.  Calculate
+    them from the Route and RouteStop tables in the same request that refreshes
+    the page.
+    """
+
+    stops = (
+        db.query(Stop)
+        .options(selectinload(Stop.route_stops))
+        .order_by(Stop.stop_name.asc())
+        .all()
+    )
+
+    total_routes = db.query(func.count(Route.id)).scalar() or 0
+    route_stop_assignments = db.query(func.count(RouteStop.id)).scalar() or 0
+    mapped_stops = (
+        db.query(func.count(func.distinct(RouteStop.stop_id))).scalar() or 0
+    )
+
+    return {
+        "stops": [
+            {
+                "id": stop.id,
+                "stop_code": stop.stop_code,
+                "stop_name": stop.stop_name,
+                "latitude": stop.latitude,
+                "longitude": stop.longitude,
+                "radius": stop.radius,
+                "status": stop.status,
+                "route_ids": sorted({
+                    route_stop.route_id
+                    for route_stop in stop.route_stops
+                }),
+            }
+            for stop in stops
+        ],
+        "statistics": {
+            "total_stops": len(stops),
+            "total_routes": total_routes,
+            "average_stops_per_route": round(
+                route_stop_assignments / total_routes,
+                1,
+            ) if total_routes else 0,
+            "mapped_stops": mapped_stops,
+            "route_stop_assignments": route_stop_assignments,
+        },
+    }
 # ==========================================================
 # EXPORT STOPS TO EXCEL
 # ==========================================================
@@ -294,7 +357,7 @@ def get_stop(
 @router.post("")
 def create_stop(
 
-    stop_data: dict,
+    stop_data: StopCreate,
 
     db: Session = Depends(get_db),
     _current_user = Depends(require_management),
@@ -302,7 +365,12 @@ def create_stop(
 ):
     """Create a master stop with a server-assigned sequential code."""
 
-    stop_name = str(stop_data.get("stop_name") or "").strip()
+    # Direct service-level callers are retained for the regression suite and
+    # internal scripts; FastAPI already supplies a validated model over HTTP.
+    if isinstance(stop_data, dict):
+        stop_data = StopCreate.model_validate(stop_data)
+
+    stop_name = stop_data.stop_name.strip()
     if not stop_name:
         raise HTTPException(status_code=400, detail="Stop name is required.")
     if len(stop_name) > 150:
@@ -321,7 +389,7 @@ def create_stop(
         db.query(Stop)
 
         .filter(
-            Stop.stop_name == stop_name
+            func.lower(Stop.stop_name) == stop_name.casefold()
         )
 
         .first()
@@ -348,13 +416,13 @@ def create_stop(
 
         stop_name = stop_name,
 
-        latitude = stop_data.get("latitude"),
+        latitude = stop_data.latitude,
 
-        longitude = stop_data.get("longitude"),
+        longitude = stop_data.longitude,
 
-        radius = stop_data.get("radius", 50),
+        radius = stop_data.radius,
 
-        status = stop_data.get("status", "Active"),
+        status = stop_data.status,
 
     )
 
@@ -398,7 +466,7 @@ def update_stop(
 
     stop_id: int,
 
-    stop_data: dict,
+    stop_data: StopUpdate,
 
     db: Session = Depends(get_db),
     _current_user = Depends(require_management),
@@ -407,6 +475,13 @@ def update_stop(
     """
     Updates an existing master stop.
     """
+
+    if isinstance(stop_data, dict):
+        stop_data = StopUpdate.model_validate(stop_data)
+
+    stop_name = stop_data.stop_name.strip()
+    if not stop_name:
+        raise HTTPException(status_code=400, detail="Stop name is required.")
 
     stop = (
 
@@ -439,7 +514,7 @@ def update_stop(
         db.query(Stop)
 
         .filter(
-            Stop.stop_name == stop_data["stop_name"],
+            func.lower(Stop.stop_name) == stop_name.casefold(),
             Stop.id != stop_id
         )
 
@@ -461,15 +536,15 @@ def update_stop(
     # UPDATE VALUES
     # ======================================================
 
-    stop.stop_name = stop_data["stop_name"]
+    stop.stop_name = stop_name
 
-    stop.latitude = stop_data.get("latitude")
+    stop.latitude = stop_data.latitude
 
-    stop.longitude = stop_data.get("longitude")
+    stop.longitude = stop_data.longitude
 
-    stop.radius = stop_data.get("radius", 50)
+    stop.radius = stop_data.radius
 
-    stop.status = stop_data.get("status", "Active")
+    stop.status = stop_data.status
 
     db.commit()
 
@@ -576,6 +651,9 @@ async def import_stops(
     # Imports that omit a stop code share the same allocator as the Add Stop
     # form. Explicit codes in complete backup files remain supported.
     lock_stop_code_writes(db)
+    # A complete backup can also create routes with explicit codes. Serialize
+    # it with manual route creation so both paths remain race safe.
+    lock_generated_code_writes(db, "route")
     existing_stops = db.query(Stop).all()
     stops_by_code = {stop.stop_code.strip().casefold(): stop for stop in existing_stops}
     stops_by_name = {stop.stop_name.strip().casefold(): stop for stop in existing_stops}

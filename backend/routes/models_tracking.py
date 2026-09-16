@@ -337,6 +337,11 @@ class ProviderGPSPosition(Base):
     accuracy: Mapped[float | None] = mapped_column(Float, nullable=True)
     fix_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    # ``fix_time`` always preserves the provider's original device value.
+    # ``effective_time`` is the separately derived ordering/freshness clock
+    # used only after the device clock has been proven unreliable.
+    effective_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    timestamp_basis: Mapped[str] = mapped_column(String(32), default="device", nullable=False)
     status: Mapped[str | None] = mapped_column(String(40), nullable=True)
     ignition: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     motion: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
@@ -393,6 +398,8 @@ class BusGPSState(Base):
     accuracy: Mapped[float | None] = mapped_column(Float, nullable=True)
     fix_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    effective_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    timestamp_basis: Mapped[str] = mapped_column(String(32), default="device", nullable=False)
     status: Mapped[str | None] = mapped_column(String(40), nullable=True)
     ignition: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     motion: Mapped[bool | None] = mapped_column(Boolean, nullable=True)

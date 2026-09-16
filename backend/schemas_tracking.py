@@ -24,19 +24,6 @@ class TripStartRequest(BaseModel):
 
 
 # ==========================================================
-# START TRIP / MOBILE FALLBACK
-# ==========================================================
-
-class TripStartRequest(BaseModel):
-    """Phone position used only when the vehicle GPS is unavailable."""
-
-    latitude: float
-    longitude: float
-    speed: float | None = None  # Browser Geolocation reports metres/second.
-    accuracy: float | None = None
-
-
-# ==========================================================
 # GPS UPDATE
 # ==========================================================
 
@@ -100,10 +87,6 @@ class LiveLocationResponse(BaseModel):
     recorded_at: datetime
 
 
-
-# ==========================================================
-# LIVE TRIP RESPONSE
-# ==========================================================
 
 # ==========================================================
 # LIVE TRIP RESPONSE

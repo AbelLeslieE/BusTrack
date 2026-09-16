@@ -1,1 +1,170 @@
-/* Profile module styles placeholder. TODO: Add module-scoped styles. */
+.profile-page {
+    display: grid;
+    gap: 24px;
+}
+
+.profile-loading,
+.profile-hero,
+.profile-card {
+    border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.profile-loading {
+    padding: 28px;
+    color: #94a3b8;
+}
+
+.profile-hero {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 20px;
+    padding: 28px;
+}
+
+.profile-avatar {
+    display: grid;
+    width: 72px;
+    height: 72px;
+    place-items: center;
+    border-radius: 22px;
+    background: linear-gradient(135deg, #38bdf8, #2563eb);
+    color: #fff;
+    font-size: 24px;
+    font-weight: 800;
+    box-shadow: 0 16px 35px rgba(37, 99, 235, 0.28);
+}
+
+.profile-heading h1,
+.profile-card h2 {
+    margin: 4px 0 6px;
+    color: #f8fafc;
+}
+
+.profile-heading p:last-child {
+    margin: 0;
+    color: #94a3b8;
+}
+
+.profile-eyebrow {
+    margin: 0;
+    color: #38bdf8;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.profile-settings-link,
+.profile-refresh {
+    border: 1px solid rgba(56, 189, 248, 0.34);
+    border-radius: 12px;
+    background: rgba(14, 165, 233, 0.12);
+    color: #bae6fd;
+    padding: 11px 16px;
+    font: inherit;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.profile-settings-link:hover,
+.profile-refresh:hover:not(:disabled) {
+    background: rgba(14, 165, 233, 0.2);
+}
+
+.profile-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.75fr);
+    gap: 20px;
+}
+
+.profile-card {
+    padding: 24px;
+}
+
+.profile-card-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.profile-status {
+    border-radius: 999px;
+    background: rgba(34, 197, 94, 0.14);
+    color: #86efac;
+    padding: 7px 11px;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.profile-details {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    margin: 22px 0 0;
+}
+
+.profile-details.compact {
+    grid-template-columns: 1fr;
+    margin-bottom: 22px;
+}
+
+.profile-details div {
+    min-width: 0;
+    border-radius: 14px;
+    background: rgba(15, 23, 42, 0.42);
+    padding: 14px;
+}
+
+.profile-details dt {
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.profile-details dd {
+    overflow-wrap: anywhere;
+    margin: 6px 0 0;
+    color: #e2e8f0;
+    font-weight: 650;
+}
+
+.profile-message {
+    min-height: 20px;
+    margin: -12px 0;
+    color: #94a3b8;
+}
+
+.profile-message.is-error {
+    color: #fca5a5;
+}
+
+.profile-refresh:disabled {
+    cursor: wait;
+    opacity: 0.65;
+}
+
+@media (max-width: 800px) {
+    .profile-hero,
+    .profile-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .profile-settings-link {
+        justify-self: start;
+    }
+}
+
+@media (max-width: 520px) {
+    .profile-hero,
+    .profile-card {
+        padding: 20px;
+    }
+
+    .profile-details {
+        grid-template-columns: 1fr;
+    }
+}

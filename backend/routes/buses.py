@@ -16,6 +16,10 @@ from backend.database import get_db
 from backend.models import Bus, Driver, FleetNotification, Route, Student
 from backend.schemas import BusCreate, BusUpdate, BusResponse
 from backend.security import require_management
+from backend.services.generated_codes import (
+    lock_generated_code_writes,
+    next_bus_number,
+)
 from backend.routes.models_tracking import (
     BusGPSState,
     GPSDeviceMapping,
@@ -31,16 +35,19 @@ from backend.routes.models_tracking import (
 # BUILD BUS RESPONSE
 # ======================================================
 
-def build_bus_response(bus: Bus, db: Session) -> BusResponse:
+def build_bus_response(
+    bus: Bus,
+    db: Session,
+    drivers_by_id: dict[int, Driver] | None = None,
+) -> BusResponse:
 
     driver_name = None
 
     if bus.driver_id:
-
         driver = (
-            db.query(Driver)
-            .filter(Driver.id == bus.driver_id)
-            .first()
+            drivers_by_id.get(bus.driver_id)
+            if drivers_by_id is not None
+            else db.get(Driver, bus.driver_id)
         )
 
         if driver and driver.user:
@@ -102,14 +109,33 @@ def get_buses(
 ):
 
     buses = db.query(Bus).order_by(Bus.bus_number).all()
+    driver_ids = {bus.driver_id for bus in buses if bus.driver_id is not None}
+    drivers_by_id = {
+        driver.id: driver
+        for driver in (
+            db.query(Driver).filter(Driver.id.in_(driver_ids)).all()
+            if driver_ids
+            else []
+        )
+    }
 
     return [
 
-        build_bus_response(bus, db)
+        build_bus_response(bus, db, drivers_by_id)
 
         for bus in buses
 
     ]
+
+
+@router.get("/next-number")
+def get_next_bus_number(
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
+):
+    """Preview the next bus number; creation recalculates it under a lock."""
+
+    return {"bus_number": next_bus_number(db)}
 
 
 @router.get("/export")
@@ -183,6 +209,7 @@ async def import_buses(
     def clean_text(value) -> str:
         return "" if value is None else str(value).strip()
 
+    lock_generated_code_writes(db, "bus")
     buses = db.query(Bus).all()
     buses_by_number = {bus.bus_number.strip().casefold(): bus for bus in buses}
     buses_by_registration = {bus.registration_number.strip().casefold(): bus for bus in buses}
@@ -204,6 +231,14 @@ async def import_buses(
             "device_id": clean_text(value_for(row, "GPS Device ID")) or None,
             "status": clean_text(value_for(row, "Status")) or "Active",
         }
+        if not payload["bus_number"]:
+            skipped_buses.append({
+                "row": row_number,
+                "bus_number": None,
+                "registration_number": payload["registration_number"] or None,
+                "reason": "Bus Number is required for an imported row",
+            })
+            continue
         try:
             validated = BusCreate.model_validate(payload)
         except ValidationError as error:
@@ -270,22 +305,8 @@ def create_bus(
 ):
     """Create a new bus."""
 
-    existing_bus = (
-        db.query(Bus)
-        .filter(Bus.bus_number == bus.bus_number)
-        .first()
-    )
-
-    if existing_bus:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f'Bus number "{bus.bus_number}" is already registered '
-                f'as {existing_bus.bus_number} (registration '
-                f'"{existing_bus.registration_number}"). Choose a different '
-                "bus number or edit the existing bus."
-            ),
-        )
+    lock_generated_code_writes(db, "bus")
+    generated_bus_number = next_bus_number(db)
 
     existing_registration = (
         db.query(Bus)
@@ -304,7 +325,7 @@ def create_bus(
         )
 
     new_bus = Bus(
-        bus_number=bus.bus_number,
+        bus_number=generated_bus_number,
         registration_number=bus.registration_number,
         capacity=bus.capacity,
         manufacturer=bus.manufacturer,
@@ -364,26 +385,6 @@ def update_bus(
             detail="Bus not found.",
         )
 
-    duplicate_bus = (
-        db.query(Bus)
-        .filter(
-            Bus.bus_number == bus.bus_number,
-            Bus.id != bus_id,
-        )
-        .first()
-    )
-
-    if duplicate_bus:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f'Bus number "{bus.bus_number}" is already registered '
-                f'as {duplicate_bus.bus_number} (registration '
-                f'"{duplicate_bus.registration_number}"). Choose a different '
-                "bus number or edit the existing bus."
-            ),
-        )
-
     duplicate_registration = (
         db.query(Bus)
         .filter(
@@ -403,7 +404,6 @@ def update_bus(
             ),
         )
 
-    existing.bus_number = bus.bus_number
     existing.registration_number = bus.registration_number
     existing.capacity = bus.capacity
     existing.manufacturer = bus.manufacturer

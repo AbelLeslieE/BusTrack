@@ -18,6 +18,7 @@ export async function createUserForm(user = {}) {
     const wrapper = document.createElement("div");
 
     wrapper.className = "user-form";
+    wrapper.dataset.mode = user.id ? "edit" : "create";
 
     wrapper.innerHTML = `
 
@@ -34,6 +35,8 @@ export async function createUserForm(user = {}) {
     `;
 
     await initializeDropdowns(wrapper, user);
+
+    await populateGeneratedCodes(wrapper, user);
 
     return wrapper;
 
@@ -247,7 +250,11 @@ function renderDriverInformation(user) {
                     label: "Driver Code",
                     value: user.driver_code || "",
                     placeholder: "DRV001",
-                    required: true
+                    required: true,
+                    readOnly: true,
+                    hint: user.id
+                        ? "Permanent system code"
+                        : "Next available code; confirmed when saved"
                 })}
 
                 ${createInput({
@@ -322,7 +329,13 @@ function renderStudentInformation(user) {
 
                     placeholder: "STU001",
 
-                    required: true
+                    required: true,
+
+                    readOnly: true,
+
+                    hint: user.id
+                        ? "Permanent system code"
+                        : "Next available code; confirmed when saved"
 
                 })}
 
@@ -350,7 +363,9 @@ function createInput({
     type = "text",
     value = "",
     placeholder = "",
-    required = false
+    required = false,
+    readOnly = false,
+    hint = ""
 
 }) {
 
@@ -384,7 +399,11 @@ function createInput({
 
                 placeholder="${placeholder}"
 
+                ${readOnly ? "readonly" : ""}
+
             >
+
+            ${hint ? `<small class="modal-field-hint">${hint}</small>` : ""}
 
         </div>
 
@@ -839,6 +858,36 @@ async function initializeDropdowns(wrapper, user) {
 
 
 }
+
+
+async function populateGeneratedCodes(wrapper, user) {
+
+    if (user.id) {
+        return;
+    }
+
+    try {
+        const response = await fetch("/api/users/next-code", { cache: "no-store" });
+
+        if (!response.ok) {
+            throw new Error("Unable to preview generated user codes.");
+        }
+
+        const codes = await response.json();
+        const driverCode = wrapper.querySelector("#driver_code");
+        const studentCode = wrapper.querySelector("#student_code");
+
+        if (driverCode) {
+            driverCode.value = codes.driver_code || "";
+        }
+        if (studentCode) {
+            studentCode.value = codes.student_code || "";
+        }
+    } catch (error) {
+        console.warn(error);
+    }
+
+}
 /* ==========================================================================
    FORM DATA
 ========================================================================== */
@@ -1091,6 +1140,7 @@ export function getUserFormData() {
 export function validateUserForm() {
 
     const data = getUserFormData();
+    const editing = document.querySelector(".user-form")?.dataset.mode === "edit";
 
     if (!data.full_name) {
 
@@ -1148,6 +1198,7 @@ export function validateUserForm() {
     ---------------------------------------------------------- */
 
     if (
+        editing &&
         data.role === "User" &&
         !data.student_code
     ) {
@@ -1167,7 +1218,7 @@ export function validateUserForm() {
 
     if (data.role === "Driver") {
 
-        if (!data.driver_code) {
+        if (editing && !data.driver_code) {
 
             throw new Error(
                 "Driver Code is required."
@@ -1283,7 +1334,7 @@ export function resetUserForm() {
         document.querySelector("#address");
 
 
-    if (driverCode) {
+    if (driverCode && !driverCode.readOnly) {
         driverCode.value = "";
     }
 
@@ -1308,7 +1359,7 @@ export function resetUserForm() {
         document.querySelector("#student_code");
 
 
-    if (studentCode) {
+    if (studentCode && !studentCode.readOnly) {
         studentCode.value = "";
     }
 

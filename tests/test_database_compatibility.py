@@ -9,10 +9,42 @@ from uuid import uuid4
 
 from sqlalchemy import create_engine, inspect
 
-from backend.database import _add_bus_gps_provider_column, _make_live_trip_driver_optional
+from backend.database import (
+    _add_bus_gps_provider_column,
+    _add_provider_effective_time_columns,
+    _make_live_trip_driver_optional,
+)
 
 
 class DatabaseCompatibilityTest(unittest.TestCase):
+    def test_provider_clock_columns_upgrade_existing_tables(self) -> None:
+        database_path = Path(tempfile.gettempdir()) / f"provider_clock_upgrade_{uuid4().hex}.db"
+        database_engine = create_engine(f"sqlite:///{database_path.as_posix()}")
+        try:
+            with database_engine.begin() as connection:
+                connection.exec_driver_sql(
+                    "CREATE TABLE provider_gps_positions (id INTEGER PRIMARY KEY)"
+                )
+                connection.exec_driver_sql(
+                    "CREATE TABLE bus_gps_states (id INTEGER PRIMARY KEY)"
+                )
+
+            _add_provider_effective_time_columns(database_engine)
+            _add_provider_effective_time_columns(database_engine)
+
+            database_inspector = inspect(database_engine)
+            for table_name in ("provider_gps_positions", "bus_gps_states"):
+                columns = {
+                    column["name"]: column
+                    for column in database_inspector.get_columns(table_name)
+                }
+                self.assertIn("effective_time", columns)
+                self.assertIn("timestamp_basis", columns)
+                self.assertFalse(columns["timestamp_basis"]["nullable"])
+        finally:
+            database_engine.dispose()
+            database_path.unlink(missing_ok=True)
+
     def test_existing_bus_table_receives_persistent_provider_assignment(self) -> None:
         database_path = Path(tempfile.gettempdir()) / f"bus_provider_migration_{uuid4().hex}.db"
         database_engine = create_engine(f"sqlite:///{database_path.as_posix()}")

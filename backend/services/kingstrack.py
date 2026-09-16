@@ -28,13 +28,23 @@ from backend.routes.models_tracking import (
     GPSDeviceMapping,
     ProviderGPSPosition,
 )
-from backend.services.gps_timestamp import future_timestamp_quarantine_reason
+from backend.services.gps_timestamp import (
+    DEVICE_TIME_BASIS,
+    device_timestamp_quarantine_reason,
+    latest_clock_observation,
+    observation_is_newer,
+    select_effective_observation_time,
+)
 from backend.services.provider_health import record_provider_error, record_provider_success
 from backend.services.trip_reset import lock_tracking_bus
 
 
 KINGSTRACK_ENDPOINT = "https://mvt.apmkingstrack.com/fleettracking/api/live/json"
 _REFRESH_LOCK = Lock()
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 def _registration_key(value: Any) -> str:
@@ -142,8 +152,7 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
     ignition_value = data.get("ignition")
     ignition = ignition_value if isinstance(ignition_value, bool) else None
     gps_enabled = str(data.get("gps") or "").strip().upper() != "OFF"
-    now = datetime.now(timezone.utc)
-    quarantine_reason = future_timestamp_quarantine_reason(fix_time, now)
+    now = _utc_now()
     raw_json = json.dumps(data, separators=(",", ":"), default=str)
 
     mapping = db.query(GPSDeviceMapping).filter(
@@ -154,6 +163,25 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
         raise ValueError("Kingstrack IMEI is mapped to a different bus.")
 
     bus.gps_provider = "kingstrack"
+    state = db.query(BusGPSState).filter(BusGPSState.bus_id == bus.id).first()
+    previous_observation = latest_clock_observation(
+        db,
+        bus_id=bus.id,
+        protocol="kingstrack",
+        external_device_id=imei,
+    )
+    effective_time, timestamp_basis = select_effective_observation_time(
+        fix_time,
+        now,
+        state,
+        previous_observation,
+    )
+    clock_warning = device_timestamp_quarantine_reason(fix_time, now)
+    quarantine_reason = (
+        clock_warning if clock_warning and timestamp_basis == DEVICE_TIME_BASIS else None
+    )
+    if quarantine_reason is not None:
+        effective_time = None
     motion = None if speed is None else speed > 1
     history = ProviderGPSPosition(
         bus_id=bus.id,
@@ -167,6 +195,8 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
         accuracy=None,
         fix_time=fix_time,
         received_at=now,
+        effective_time=effective_time,
+        timestamp_basis=timestamp_basis,
         status="Running" if ignition else "Parked",
         ignition=ignition,
         motion=motion,
@@ -178,14 +208,17 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
     db.add(history)
     db.flush()
 
-    state = db.query(BusGPSState).filter(BusGPSState.bus_id == bus.id).first()
-    current_time = (state.fix_time or state.received_at) if state else None
-    if current_time is not None and current_time.tzinfo is None:
-        current_time = current_time.replace(tzinfo=timezone.utc)
     apply = (
         gps_enabled
         and quarantine_reason is None
-        and (state is None or current_time is None or fix_time > current_time)
+        and effective_time is not None
+        and observation_is_newer(
+            state,
+            fix_time=fix_time,
+            effective_time=effective_time,
+            timestamp_basis=timestamp_basis,
+            received_at=now,
+        )
     )
     active_trip_id = None
     if apply:
@@ -208,12 +241,15 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
         state.accuracy = None
         state.fix_time = fix_time
         state.received_at = now
+        state.effective_time = effective_time
+        state.timestamp_basis = timestamp_basis
         state.status = history.status
         state.ignition = ignition
         state.motion = motion
         state.valid = True
         state.protocol = "kingstrack"
         state.raw_payload = raw_json
+        db.flush()
 
     # The same guarded progression function handles outbound/return order,
     # reset boundaries, skipped stops and legitimate terminal reversal.
@@ -231,6 +267,8 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
         "registration_number": bus.registration_number,
         "imei": imei,
         "source_date": fix_time,
+        "effective_time": effective_time,
+        "timestamp_basis": timestamp_basis,
         "applied": apply,
         "quarantined": quarantine_reason is not None,
         "quarantine_reason": quarantine_reason,

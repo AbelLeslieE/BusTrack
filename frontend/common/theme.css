@@ -143,7 +143,7 @@ body.admin-theme{
             rgba(5,15,30,.45),
             rgba(5,15,30,.60)
         ),
-        url("/static/assets/images/fleet-bg.png");
+        url("/static/assets/images/admin-campus-bg.jpg");
 
     background-size:cover;
     background-position:center;

@@ -159,21 +159,6 @@ def update_driver(
             detail="Driver not found.",
         )
 
-    duplicate_driver = (
-        db.query(Driver)
-        .filter(
-            Driver.driver_code == driver.driver_code,
-            Driver.id != driver_id,
-        )
-        .first()
-    )
-
-    if duplicate_driver:
-        raise HTTPException(
-            status_code=400,
-            detail="Driver code already exists.",
-        )
-
     duplicate_license = (
         db.query(Driver)
         .filter(
@@ -189,21 +174,8 @@ def update_driver(
             detail="License number already exists.",
         )
 
-    if driver.bus_id is not None:
-        bus = (
-            db.query(Bus)
-            .filter(Bus.id == driver.bus_id)
-            .first()
-        )
-
-        if not bus:
-            raise HTTPException(
-                status_code=400,
-                detail="Assigned bus does not exist.",
-            )
-
     # Bus assignment is managed centrally in the Assignments workspace.
-    for key, value in driver.model_dump(exclude={"bus_id"}).items():
+    for key, value in driver.model_dump(exclude={"driver_code"}).items():
         setattr(existing, key, value)
 
     db.commit()

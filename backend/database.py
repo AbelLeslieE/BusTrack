@@ -1,7 +1,4 @@
-"""SQLAlchemy database configuration for development and production.
-
-TODO: Add Alembic migrations before evolving production database schemas.
-"""
+"""Database configuration, startup schema creation, and compatibility upgrades."""
 
 from collections.abc import Generator
 import os
@@ -217,6 +214,31 @@ def _add_provider_position_quarantine_column(database_engine=engine) -> None:
             ))
 
 
+def _add_provider_effective_time_columns(database_engine=engine) -> None:
+    """Add the persisted, derived GPS ordering clock without rewriting raw time."""
+
+    inspector = inspect(database_engine)
+    table_names = set(inspector.get_table_names())
+    for table_name in ("provider_gps_positions", "bus_gps_states"):
+        if table_name not in table_names:
+            continue
+        columns = {
+            column["name"]
+            for column in inspect(database_engine).get_columns(table_name)
+        }
+        with database_engine.begin() as connection:
+            if "effective_time" not in columns:
+                connection.execute(text(
+                    f"ALTER TABLE {table_name} "
+                    "ADD COLUMN effective_time TIMESTAMP NULL"
+                ))
+            if "timestamp_basis" not in columns:
+                connection.execute(text(
+                    f"ALTER TABLE {table_name} ADD COLUMN timestamp_basis "
+                    "VARCHAR(32) NOT NULL DEFAULT 'device'"
+                ))
+
+
 def _add_bus_gps_provider_column(database_engine=engine) -> None:
     """Persist which pull provider owns a bus without changing assignments."""
 
@@ -282,6 +304,7 @@ def initialize_database() -> None:
     _add_trip_reset_columns()
     _add_pass_credential_columns()
     _add_provider_position_quarantine_column()
+    _add_provider_effective_time_columns()
     _add_bus_gps_provider_column()
 
     # This project currently has no migration framework. Keep existing local

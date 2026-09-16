@@ -2,7 +2,7 @@ import { request } from "/static/common/api.js";
 import { escapeHtml } from "/static/common/security.js";
 import { formatDateTime } from "/static/common/portal.js";
 
-const HISTORY_REFRESH_INTERVAL_MS = 2000;
+const HISTORY_REFRESH_INTERVAL_MS = 60_000;
 const state = { buses: [], selectedBusId: null, history: null, type: "all", search: "", historyRequestId: 0 };
 
 function eventMarkup(event) {
@@ -103,7 +103,9 @@ export function render() {
         destination.focus({ preventScroll: true });
         destination.scrollIntoView({ block: "center", behavior: "auto" });
     });
-    const refreshTimer = window.setInterval(refreshSelectedBus, HISTORY_REFRESH_INTERVAL_MS);
+    const refreshTimer = window.setInterval(() => {
+        if (!document.hidden) refreshSelectedBus();
+    }, HISTORY_REFRESH_INTERVAL_MS);
     document.addEventListener("visibilitychange", refreshWhenVisible);
     page.cleanup = () => {
         window.clearInterval(refreshTimer);

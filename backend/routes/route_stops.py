@@ -28,7 +28,6 @@ from backend.schemas import (
     RouteStopCreate,
     RouteStopUpdate,
     RouteStopResponse,
-    RouteStopReorder,
 ) 
 from backend.security import require_management
 from backend.routes.models_tracking import LiveTrip, TripStopEvent
@@ -146,6 +145,49 @@ def resequence_route_stops(
 
     for index, stop in enumerate(stops, start=1):
         stop.sequence = index
+
+
+def remove_route_stop_records(
+    db: Session,
+    route_stops: list[RouteStop],
+) -> None:
+    """Remove route-stop rows without corrupting trip progression or history.
+
+    Arrival/departure history is immutable and keeps a required route-stop
+    reference.  A transient current-stop pointer can safely be cleared because
+    the next accepted GPS observation will select from the newly saved route.
+    """
+
+    route_stop_ids = [item.id for item in route_stops]
+    if not route_stop_ids:
+        return
+
+    has_history = db.query(TripStopEvent.id).filter(
+        TripStopEvent.route_stop_id.in_(route_stop_ids)
+    ).first()
+    if has_history:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "A removed stop is referenced by trip history and cannot be "
+                "deleted. Keep the stop or create a new route."
+            ),
+        )
+
+    db.query(LiveTrip).filter(
+        LiveTrip.current_route_stop_id.in_(route_stop_ids)
+    ).update(
+        {
+            LiveTrip.current_route_stop_id: None,
+            LiveTrip.current_stop_status: "Approaching",
+            LiveTrip.current_stop_arrived_at: None,
+            LiveTrip.current_stop_departed_at: None,
+        },
+        synchronize_session=False,
+    )
+    db.query(RouteStop).filter(RouteStop.id.in_(route_stop_ids)).delete(
+        synchronize_session=False
+    )
 # ==========================================================
 # GET STOPS OF A ROUTE
 # ==========================================================
@@ -268,40 +310,7 @@ def replace_route_stops(
             if item.stop_id not in requested_stop_ids
         ]
 
-        removed_ids = [item.id for item in removed_stops]
-        if removed_ids:
-            # Stop-arrival history is immutable.  Do not silently delete or
-            # rewrite that audit trail when someone edits a route.
-            has_history = db.query(TripStopEvent.id).filter(
-                TripStopEvent.route_stop_id.in_(removed_ids)
-            ).first()
-            if has_history:
-                raise HTTPException(
-                    status_code=409,
-                    detail=(
-                        "A removed stop is referenced by trip history and "
-                        "cannot be deleted. Keep the stop or create a new route."
-                    ),
-                )
-
-            # A removed stop may still be the current stop of an active or
-            # completed trip.  The historical trip remains intact; clearing
-            # this transient pointer lets the next GPS update choose from the
-            # newly saved route instead of violating the foreign key.
-            db.query(LiveTrip).filter(
-                LiveTrip.current_route_stop_id.in_(removed_ids)
-            ).update(
-                {
-                    LiveTrip.current_route_stop_id: None,
-                    LiveTrip.current_stop_status: "Approaching",
-                    LiveTrip.current_stop_arrived_at: None,
-                    LiveTrip.current_stop_departed_at: None,
-                },
-                synchronize_session=False,
-            )
-            db.query(RouteStop).filter(RouteStop.id.in_(removed_ids)).delete(
-                synchronize_session=False
-            )
+        remove_route_stop_records(db, removed_stops)
 
         for sequence, item in enumerate(stop_data, start=1):
             route_stop = existing_by_stop_id.get(item.stop_id)
@@ -484,12 +493,13 @@ def add_stop_to_route(
 # REORDER ROUTE STOPS
 # ==========================================================
 
+@router.put("/{route_stop_id}")
 @router.put("/{route_stop_id}/sequence")
 def update_stop_sequence(
 
     route_stop_id: int,
 
-    data: dict,
+    data: RouteStopUpdate,
 
     db: Session = Depends(get_db),
     _current_user = Depends(require_management),
@@ -499,28 +509,19 @@ def update_stop_sequence(
     Moves a stop up or down within a route.
     """
 
+    if isinstance(data, dict):
+        data = RouteStopUpdate.model_validate(data)
+
     route_stop = get_route_stop_or_404(db, route_stop_id)
 
-    if route_stop is None:
-
+    new_sequence = data.sequence
+    route_stop_count = db.query(RouteStop).filter(
+        RouteStop.route_id == route_stop.route_id
+    ).count()
+    if new_sequence > route_stop_count:
         raise HTTPException(
-
-            status_code=404,
-
-            detail="Route stop not found."
-
-        )
-
-    new_sequence = data.get("sequence")
-
-    if new_sequence is None:
-
-        raise HTTPException(
-
-            status_code=400,
-
-            detail="New sequence is required."
-
+            status_code=422,
+            detail=f"Sequence must be between 1 and {route_stop_count}.",
         )
 
     # ======================================================
@@ -553,6 +554,18 @@ def update_stop_sequence(
 
     route_stop.sequence = new_sequence
 
+    # The compatibility endpoint can also save route-specific metadata.  A
+    # field that was not sent remains unchanged, matching the previous
+    # sequence-only behavior.
+    for field in (
+        "scheduled_time",
+        "fare",
+        "distance_from_previous",
+        "estimated_minutes",
+    ):
+        if field in data.model_fields_set:
+            setattr(route_stop, field, getattr(data, field))
+
     db.commit()
 
     return {
@@ -572,12 +585,17 @@ def clear_route_stops(
     db: Session = Depends(get_db),
     _current_user = Depends(require_management),
 ):
-
-    db.query(RouteStop).filter(
+    route = get_route_or_404(db, route_id)
+    route_stops = db.query(RouteStop).filter(
         RouteStop.route_id == route_id
-    ).delete()
-
-    db.commit()
+    ).all()
+    try:
+        remove_route_stop_records(db, route_stops)
+        route.total_stops = 0
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
     return {
         "message": "Route stops cleared."
@@ -603,22 +621,16 @@ def remove_stop_from_route(
         db,
         route_stop_id,
     )
-
-    db.delete(route_stop)
-
-    db.flush()
-
-    update_route_stop_count(
-        db,
-        route_stop.route_id,
-    )
-
-    resequence_route_stops(
-        db,
-        route_stop.route_id,
-    )
-
-    db.commit()
+    route_id = route_stop.route_id
+    try:
+        remove_route_stop_records(db, [route_stop])
+        db.flush()
+        update_route_stop_count(db, route_id)
+        resequence_route_stops(db, route_id)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
     return {
 

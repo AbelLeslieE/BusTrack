@@ -133,6 +133,40 @@ async function requestRoadPath(start, target, signal) {
         .filter(point => Number.isFinite(point.lat) && Number.isFinite(point.lng));
 }
 
+function knownRoutePath(start, target, routePath) {
+    if (!Array.isArray(routePath) || routePath.length < 2) return null;
+    const points = routePath
+        .map(point => Array.isArray(point)
+            ? { lat: Number(point[0]), lng: Number(point[1]) }
+            : { lat: Number(point?.lat), lng: Number(point?.lng) })
+        .filter(point => Number.isFinite(point.lat) && Number.isFinite(point.lng));
+    if (points.length < 2) return null;
+
+    const nearestIndex = location => points.reduce(
+        (best, point, index) => {
+            const distance = distanceMeters(location, point);
+            return distance < best.distance ? { index, distance } : best;
+        },
+        { index: 0, distance: Infinity },
+    );
+    const startMatch = nearestIndex(start);
+    const targetMatch = nearestIndex(target);
+    // The path is ordered in the active trip direction. If GPS jitter appears
+    // to move backwards, a short direct segment is safer than traversing the
+    // complete route in reverse.
+    if (targetMatch.index < startMatch.index) return [start, target];
+    return [
+        start,
+        ...points.slice(startMatch.index, targetMatch.index + 1),
+        target,
+    ];
+}
+
+function resolveRoadPath(start, target, motion, signal) {
+    const cachedPath = knownRoutePath(start, target, motion.routePath);
+    return cachedPath ? Promise.resolve(cachedPath) : requestRoadPath(start, target, signal);
+}
+
 export async function snapVehicleMarkerToRoad(marker, latitude, longitude, motion = {}) {
     if (!marker || !Number.isFinite(Number(latitude)) || !Number.isFinite(Number(longitude))) return;
 
@@ -204,8 +238,8 @@ export async function animateVehicleMarker(marker, latitude, longitude, motion, 
     try {
         if (previousAnimationIsRunning) {
             const [catchUpPath, nextPath] = await Promise.all([
-                requestRoadPath(start, previousTarget, controller.signal),
-                requestRoadPath(previousTarget, target, controller.signal),
+                resolveRoadPath(start, previousTarget, motion, controller.signal),
+                resolveRoadPath(previousTarget, target, motion, controller.signal),
             ]);
             const remainingDistance = distanceMeters(start, previousTarget);
             const catchUpDuration = Math.min(
@@ -227,7 +261,7 @@ export async function animateVehicleMarker(marker, latitude, longitude, motion, 
                 },
             ];
         } else {
-            const roadPath = await requestRoadPath(start, target, controller.signal);
+            const roadPath = await resolveRoadPath(start, target, motion, controller.signal);
             stages = [{
                 path: roadPath,
                 target: roadPath[roadPath.length - 1],

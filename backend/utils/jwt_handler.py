@@ -14,7 +14,7 @@ from jose import JWTError, jwt
 PROJECT_DIR = Path(__file__).resolve().parents[2]
 DEVELOPMENT_SECRET_FILE = PROJECT_DIR / "database" / ".dev_jwt_secret"
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "480"))
 JWT_ISSUER = os.getenv("JWT_ISSUER", "bustrack")
 JWT_AUDIENCE = os.getenv("JWT_AUDIENCE", "bustrack-web")
 

@@ -5,25 +5,35 @@ import { installHardRefreshShortcut } from "/static/common/cacheRefresh.js";
 
 installHardRefreshShortcut();
 
-const TOKEN_KEY = "bus_tracker_access_token";
+// Kept only to remove/migrate sessions created by older frontend versions.
+// New browser sessions authenticate exclusively with the HttpOnly cookie.
+const LEGACY_TOKEN_KEY = "bus_tracker_access_token";
 const PROFILE_KEY = "bus_tracker_profile";
 const EXPIRY_KEY = "bus_tracker_session_expires_at";
 let authenticatedFetchInstalled = false;
 let sessionExpiryTimer = null;
 let sessionMonitorTimer = null;
 let sessionCheckInFlight = false;
+let sessionVisibilityHandler = null;
+let lastSessionCheckAt = 0;
 
-export function getAccessToken() {
-  return localStorage.getItem(TOKEN_KEY);
-}
+// Normal API calls already redirect on an explicit 401.  This slower monitor
+// exists only to notice a remotely revoked session while the user is idle.
+const SESSION_MONITOR_INTERVAL_MS = 60 * 60 * 1000;
+const SESSION_FOCUS_RECHECK_AGE_MS = 60 * 60 * 1000;
 
 export function clearSession() {
   if (sessionExpiryTimer) window.clearTimeout(sessionExpiryTimer);
   sessionExpiryTimer = null;
   if (sessionMonitorTimer) window.clearInterval(sessionMonitorTimer);
   sessionMonitorTimer = null;
+  if (sessionVisibilityHandler) {
+    document.removeEventListener("visibilitychange", sessionVisibilityHandler);
+    sessionVisibilityHandler = null;
+  }
   sessionCheckInFlight = false;
-  localStorage.removeItem(TOKEN_KEY);
+  lastSessionCheckAt = 0;
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
   localStorage.removeItem(PROFILE_KEY);
   localStorage.removeItem(EXPIRY_KEY);
 }
@@ -33,19 +43,26 @@ export function replaceSession(session) {
   if (!session?.access_token || !session?.user) {
     throw new Error("The server did not return a refreshed session.");
   }
-  localStorage.setItem(TOKEN_KEY, session.access_token);
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
   localStorage.setItem(PROFILE_KEY, JSON.stringify(session.user));
   if (session.expires_at) localStorage.setItem(EXPIRY_KEY, session.expires_at);
-  scheduleSessionExpiry(session.access_token);
+  scheduleSessionExpiry();
   startSessionMonitor();
 }
 
 /** Keep active devices visible to Admins and honour a remote kick promptly. */
 export function startSessionMonitor() {
   if (sessionMonitorTimer) window.clearInterval(sessionMonitorTimer);
+  if (sessionVisibilityHandler) {
+    document.removeEventListener("visibilitychange", sessionVisibilityHandler);
+  }
+  // Login or portal bootstrap has just validated this session. Treat that as
+  // the first check so an ordinary tab switch cannot trigger a duplicate GET.
+  lastSessionCheckAt = Date.now();
   const verify = async () => {
-    if (sessionCheckInFlight || !getAccessToken()) return;
+    if (sessionCheckInFlight || document.hidden) return;
     sessionCheckInFlight = true;
+    lastSessionCheckAt = Date.now();
     try {
       const response = await fetch("/api/auth/me", { credentials: "same-origin" });
       // A transient server failure must not be treated as a revoked session.
@@ -63,7 +80,16 @@ export function startSessionMonitor() {
       sessionCheckInFlight = false;
     }
   };
-  sessionMonitorTimer = window.setInterval(verify, 15_000);
+  sessionMonitorTimer = window.setInterval(verify, SESSION_MONITOR_INTERVAL_MS);
+  sessionVisibilityHandler = () => {
+    if (
+      document.visibilityState === "visible"
+      && Date.now() - lastSessionCheckAt >= SESSION_FOCUS_RECHECK_AGE_MS
+    ) {
+      void verify();
+    }
+  };
+  document.addEventListener("visibilitychange", sessionVisibilityHandler);
 }
 
 function tokenExpiry(token) {
@@ -79,7 +105,7 @@ function tokenExpiry(token) {
   }
 }
 
-export function scheduleSessionExpiry(token = getAccessToken()) {
+export function scheduleSessionExpiry(token = null) {
   if (sessionExpiryTimer) window.clearTimeout(sessionExpiryTimer);
   const expiresAt = tokenExpiry(token);
   if (!Number.isFinite(expiresAt)) return;
@@ -108,9 +134,8 @@ export async function logoutSession() {
 }
 
 /**
- * Add the current bearer token to every same-origin API request.  A single
- * wrapper keeps older modules that call fetch directly from accidentally
- * bypassing the session when the backend enforces authorization.
+ * Ensure every same-origin API request includes the HttpOnly session cookie
+ * and consistently handles an explicit authentication failure.
  */
 export function installAuthenticatedFetch() {
   if (authenticatedFetchInstalled) return;
@@ -124,14 +149,7 @@ export function installAuthenticatedFetch() {
     const isLoginRequest = url.pathname === "/api/auth/login";
 
     if (isApiRequest && !isLoginRequest) {
-      const headers = new Headers(
-        options.headers || (typeof Request !== "undefined" && input instanceof Request ? input.headers : undefined),
-      );
-      if (!headers.has("Authorization")) {
-        const token = getAccessToken();
-        if (token) headers.set("Authorization", `Bearer ${token}`);
-      }
-      options = { ...options, headers, credentials: options.credentials || "same-origin" };
+      options = { ...options, credentials: options.credentials || "same-origin" };
     }
 
     const response = await originalFetch(input, options);
@@ -146,17 +164,20 @@ export function installAuthenticatedFetch() {
 }
 
 export async function requireAuthenticatedSession() {
-  const token = getAccessToken();
-  const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-  const response = await fetch("/api/auth/me", { headers, credentials: "same-origin" });
+  // Existing releases set the cookie and the legacy token together. Verify
+  // with the cookie so a stale readable token can never override a newer
+  // valid session, then remove that legacy copy.
+  const legacyToken = localStorage.getItem(LEGACY_TOKEN_KEY);
+  const response = await fetch("/api/auth/me", { credentials: "same-origin" });
   if (!response.ok) {
     clearSession();
     window.location.replace("/");
     return null;
   }
   const profile = await response.json();
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
   localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
-  scheduleSessionExpiry(token);
+  scheduleSessionExpiry(legacyToken);
   installAuthenticatedFetch();
   startSessionMonitor();
   return profile;

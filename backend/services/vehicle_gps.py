@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from backend.services.gps_timestamp import future_timestamp_seconds
+from backend.services.gps_timestamp import effective_state_time, future_timestamp_seconds
 
 
 # The MVD vendor normally publishes a moving bus fix every 20 seconds and a
@@ -30,7 +30,7 @@ def vehicle_gps_is_authoritative(state, now: datetime | None = None) -> bool:
     if state is None:
         return False
 
-    position_time = state.fix_time or state.received_at
+    position_time = effective_state_time(state)
     if position_time is None:
         return False
     if position_time.tzinfo is None:

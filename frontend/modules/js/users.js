@@ -1171,11 +1171,80 @@ const form = await createUserForm(editUser);
  * ============================================================================
  */
 
+function showUserFormError(message) {
+
+    const form = document.querySelector(".user-form");
+
+    if (!form) {
+        return;
+    }
+
+    form.querySelectorAll(".modal-error").forEach((field) => {
+        field.classList.remove("modal-error");
+        field.removeAttribute("aria-invalid");
+    });
+
+    const normalized = String(message || "").toLowerCase();
+    const fieldId = normalized.includes("username")
+        ? "username"
+        : normalized.includes("email")
+            ? "email"
+            : normalized.includes("license number")
+                ? "license_number"
+                : normalized.includes("license expiry")
+                    ? "license_expiry"
+                    : normalized.includes("password")
+                        ? "password"
+                        : normalized.includes("full name")
+                            ? "full_name"
+                            : normalized.includes("phone")
+                                ? "phone"
+                                : normalized.includes("student code")
+                                    ? "student_code"
+                                    : normalized.includes("driver code")
+                                        ? "driver_code"
+                                        : null;
+    const guidance = fieldId === "username"
+        ? "Change the username and try again."
+        : fieldId === "email"
+            ? "Use a different email address and try again."
+            : fieldId === "license_number"
+                ? "Check the licence number or use the driver account that already owns it."
+                : fieldId === "license_expiry"
+                    ? "Select the licence expiry date."
+                    : fieldId === "password"
+                        ? "Correct the password fields and try again."
+                        : fieldId
+                            ? "Correct the highlighted field and try again."
+                            : "Correct the indicated details and try again.";
+
+    let error = form.querySelector(".user-save-error");
+
+    if (!error) {
+        error = document.createElement("p");
+        error.className = "modal-error-text user-save-error";
+        error.setAttribute("role", "alert");
+        form.prepend(error);
+    }
+
+    error.textContent = `${message} ${guidance} Your other entered details have been kept.`;
+
+    const field = fieldId ? form.querySelector(`#${fieldId}`) : null;
+
+    if (field) {
+        field.classList.add("modal-error");
+        field.setAttribute("aria-invalid", "true");
+        field.focus();
+    }
+
+}
+
 async function saveUser(userId = null) {
 
     try {
 
         let user;
+        let savedUser;
 
         if (userId) {
 
@@ -1200,7 +1269,7 @@ async function saveUser(userId = null) {
                 student_code: formData.student_code,
             };
 
-            await updateUser(
+            savedUser = await updateUser(
 
                 userId,
 
@@ -1216,9 +1285,9 @@ async function saveUser(userId = null) {
 
             console.log("USER SENT:", user);
 
-            const result = await createUser(user);
+            savedUser = await createUser(user);
 
-            console.log("CREATE RESULT:", result);
+            console.log("CREATE RESULT:", savedUser);
 
         }
 
@@ -1248,7 +1317,11 @@ async function saveUser(userId = null) {
 
             subtitle: userId
                 ? "User updated successfully."
-                : "User created successfully."
+                : savedUser?.student_code
+                    ? `${savedUser.student_code} was assigned automatically to the new student.`
+                    : savedUser?.driver_code
+                        ? `${savedUser.driver_code} was assigned automatically to the new driver.`
+                        : "User created successfully."
 
         });
 
@@ -1262,16 +1335,11 @@ async function saveUser(userId = null) {
 
         console.error("FULL:", JSON.stringify(error, null, 2));
 
-        Modal.error({
-
-            title: "Unable to Save User",
-
-            subtitle:
-                error.detail ||
-                error.message ||
-                JSON.stringify(error)
-
-        });
+        showUserFormError(
+            error.detail ||
+            error.message ||
+            "Unable to save this user."
+        );
 
     }
 

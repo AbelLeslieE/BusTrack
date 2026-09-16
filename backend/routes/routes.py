@@ -24,6 +24,10 @@ from backend.schemas import (
     RouteResponse,
 )
 from backend.security import require_management
+from backend.services.generated_codes import (
+    lock_generated_code_writes,
+    next_route_code,
+)
 # ==========================================================
 # BUILD ROUTE RESPONSE
 # ==========================================================
@@ -31,17 +35,19 @@ from backend.security import require_management
 def build_route_response(
     route: Route,
     db: Session,
+    drivers_by_id: dict[int, Driver] | None = None,
+    buses_by_id: dict[int, Bus] | None = None,
+    stop_counts_by_route_id: dict[int, int] | None = None,
 ) -> RouteResponse:
 
     driver_name = None
     bus_number = None
 
     if route.driver_id:
-
         driver = (
-            db.query(Driver)
-            .filter(Driver.id == route.driver_id)
-            .first()
+            drivers_by_id.get(route.driver_id)
+            if drivers_by_id is not None
+            else db.get(Driver, route.driver_id)
         )
 
         if driver and driver.user:
@@ -49,11 +55,10 @@ def build_route_response(
             driver_name = driver.user.full_name
 
     if route.bus_id:
-
         bus = (
-            db.query(Bus)
-            .filter(Bus.id == route.bus_id)
-            .first()
+            buses_by_id.get(route.bus_id)
+            if buses_by_id is not None
+            else db.get(Bus, route.bus_id)
         )
 
         if bus:
@@ -61,9 +66,9 @@ def build_route_response(
             bus_number = bus.bus_number
 
     total_stops = (
-        db.query(RouteStop)
-        .filter(RouteStop.route_id == route.id)
-        .count()
+        stop_counts_by_route_id.get(route.id, 0)
+        if stop_counts_by_route_id is not None
+        else db.query(RouteStop).filter(RouteStop.route_id == route.id).count()
     )
 
     return RouteResponse(
@@ -93,6 +98,18 @@ router = APIRouter(
     prefix="/api/routes",
     tags=["Routes"],
 )
+
+
+@router.get("/next-code")
+def get_next_route_code(
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
+):
+    """Preview the next route code; creation recalculates it under a lock."""
+
+    return {"route_code": next_route_code(db)}
+
+
 # ==========================================================
 # CREATE ROUTE
 # ==========================================================
@@ -107,23 +124,27 @@ def create_route(
     _current_user = Depends(require_management),
 ):
 
+    lock_generated_code_writes(db, "route")
+    generated_code = next_route_code(db)
+
     existing = (
         db.query(Route)
         .filter(
-            (func.lower(Route.route_code) == route.route_code.strip().lower())
-            | (func.lower(Route.route_name) == route.route_name.strip().lower())
+            func.lower(Route.route_name) == route.route_name.strip().lower()
         )
         .first()
     )
 
     if existing:
-        conflict = "code" if existing.route_code.casefold() == route.route_code.strip().casefold() else "name"
         raise HTTPException(
             status_code=409,
-            detail=f"A route with this {conflict} already exists ({existing.route_code} — {existing.route_name}). Edit that route or choose a different {conflict}.",
+            detail=f"Route name already exists ({existing.route_code} — {existing.route_name}). Change the route name or edit the existing route.",
         )
 
-    new_route = Route(**route.model_dump())
+    new_route = Route(**{
+        **route.model_dump(),
+        "route_code": generated_code,
+    })
 
     db.add(new_route)
     db.commit()
@@ -151,12 +172,45 @@ def get_routes(
         .order_by(Route.route_name)
         .all()
     )
+    driver_ids = {route.driver_id for route in routes if route.driver_id is not None}
+    bus_ids = {route.bus_id for route in routes if route.bus_id is not None}
+    route_ids = [route.id for route in routes]
+    drivers_by_id = {
+        driver.id: driver
+        for driver in (
+            db.query(Driver).filter(Driver.id.in_(driver_ids)).all()
+            if driver_ids
+            else []
+        )
+    }
+    buses_by_id = {
+        bus.id: bus
+        for bus in (
+            db.query(Bus).filter(Bus.id.in_(bus_ids)).all()
+            if bus_ids
+            else []
+        )
+    }
+    stop_counts_by_route_id = {
+        route_id: stop_count
+        for route_id, stop_count in (
+            db.query(RouteStop.route_id, func.count(RouteStop.id))
+            .filter(RouteStop.route_id.in_(route_ids))
+            .group_by(RouteStop.route_id)
+            .all()
+            if route_ids
+            else []
+        )
+    }
 
     return [
 
         build_route_response(
             route,
             db,
+            drivers_by_id,
+            buses_by_id,
+            stop_counts_by_route_id,
         )
 
         for route in routes
@@ -193,6 +247,7 @@ def get_route(
     return build_route_response(
         route,
         db,
+        stop_counts_by_route_id={route.id: route.total_stops},
     )
 # ==========================================================
 # UPDATE ROUTE
@@ -219,19 +274,17 @@ def update_route(
 
     duplicate = db.query(Route).filter(
         Route.id != route_id,
-        (func.lower(Route.route_code) == updated.route_code.strip().lower())
-        | (func.lower(Route.route_name) == updated.route_name.strip().lower()),
+        func.lower(Route.route_name) == updated.route_name.strip().lower(),
     ).first()
     if duplicate:
-        conflict = "code" if duplicate.route_code.casefold() == updated.route_code.strip().casefold() else "name"
         raise HTTPException(
             status_code=409,
-            detail=f"A route with this {conflict} already exists ({duplicate.route_code} — {duplicate.route_name}).",
+            detail=f"Route name already exists ({duplicate.route_code} — {duplicate.route_name}). Change the route name or edit the existing route.",
         )
 
     # Assignments have their own workflow. Editing route details must never
     # accidentally clear the bus or driver selected there.
-    for key, value in updated.model_dump().items():
+    for key, value in updated.model_dump(exclude={"route_code"}).items():
         setattr(route, key, value)
     db.commit()
     db.refresh(route)

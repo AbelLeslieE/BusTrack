@@ -1,7 +1,4 @@
-/**
- * SPA router and shared application-shell coordinator.
- * TODO: Add browser-history support and route-level authorization when APIs are available.
- */
+/** Role-aware hash router and shared application-shell coordinator. */
 
 import { createLoader } from "./loader.js";
 import { canonicalRole, ROLE_ADMIN, ROLE_DRIVER, ROLE_TECHNICIAN, ROLE_USER } from "./roles.js";

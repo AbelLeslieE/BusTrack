@@ -192,8 +192,12 @@ async function refresh() {
             limit: state.requestPageSize,
             offset: (state.requestPage - 1) * state.requestPageSize,
         });
+        const allTokensRequest = request("/integrations/gps/tokens");
+        const filteredTokensRequest = tokenFilters
+            ? request(`/integrations/gps/tokens${tokenFilters}`)
+            : allTokensRequest;
         const [tokens, allTokens, devices, buses, statuses, translator, audit, requestLog] = await Promise.all([
-            request(`/integrations/gps/tokens${tokenFilters}`), request("/integrations/gps/tokens"), request("/integrations/gps/devices"), request("/integrations/gps/buses"), request("/integrations/gps/status"), request("/integrations/gps/translator"), request("/integrations/gps/audit?limit=100&offset=0"), request(`/integrations/gps/requests${requestFilters}`),
+            filteredTokensRequest, allTokensRequest, request("/integrations/gps/devices"), request("/integrations/gps/buses"), request("/integrations/gps/status"), request("/integrations/gps/translator"), request("/integrations/gps/audit?limit=100&offset=0"), request(`/integrations/gps/requests${requestFilters}`),
         ]);
         Object.assign(state, {
             tokens, allTokens, devices, buses, statuses, translator,

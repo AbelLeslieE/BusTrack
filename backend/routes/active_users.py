@@ -14,7 +14,10 @@ from backend.security import require_admin
 
 
 router = APIRouter(prefix="/api/active-users", tags=["Active Users"])
-ACTIVE_WINDOW_SECONDS = 45
+# The low-request browser heartbeat runs every hour. A valid, unrevoked
+# session remains visible between those checks instead of requiring a request
+# every few seconds solely for the Admin Active Users page.
+ACTIVE_WINDOW_SECONDS = 65 * 60
 
 
 def _as_utc(value: datetime) -> datetime:

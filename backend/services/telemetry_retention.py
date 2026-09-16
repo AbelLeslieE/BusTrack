@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.database import engine
+from backend.models import APIRequestLog
 from backend.routes.models_tracking import (
     BusGPSState,
     LiveLocation,
@@ -149,6 +150,26 @@ def provider_history_retention_minutes() -> int:
     )
 
 
+def request_audit_retention_days() -> int:
+    """Return the bounded operational API-request history window."""
+
+    return _bounded_int(
+        "REQUEST_AUDIT_RETENTION_DAYS", 30, minimum=1, maximum=365
+    )
+
+
+def purge_api_request_history(db: Session, *, now: datetime | None = None) -> int:
+    """Delete expired request summaries; security audit events are unaffected."""
+
+    current_time = now or datetime.now(timezone.utc)
+    cutoff = current_time - timedelta(days=request_audit_retention_days())
+    return (
+        db.query(APIRequestLog)
+        .filter(APIRequestLog.created_at < cutoff)
+        .delete(synchronize_session=False)
+    )
+
+
 def purge_provider_position_history(db: Session, *, now: datetime | None = None) -> int:
     """Delete expired provider fixes while always retaining every bus's latest state."""
 
@@ -176,4 +197,5 @@ def run_telemetry_retention(db: Session, *, now: datetime | None = None) -> dict
     return {
         "deleted_completed_trip_locations": purge_ended_trip_coordinates(db),
         "deleted_expired_provider_positions": purge_provider_position_history(db, now=now),
+        "deleted_expired_api_request_logs": purge_api_request_history(db, now=now),
     }

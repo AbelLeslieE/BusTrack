@@ -25,11 +25,22 @@ from backend.routes.gps_provider import _position_from_current_state, _update_ac
 from backend.routes.models_tracking import BusGPSState, GPSDeviceMapping, ProviderGPSPosition
 from backend.services.provider_health import record_provider_error, record_provider_success
 from backend.services.vehicle_gps import GPS_OFFLINE_GRACE_SECONDS
-from backend.services.gps_timestamp import future_timestamp_quarantine_reason
+from backend.services.gps_timestamp import (
+    DEVICE_TIME_BASIS,
+    device_timestamp_quarantine_reason,
+    effective_state_time,
+    latest_clock_observation,
+    observation_is_newer,
+    select_effective_observation_time,
+)
 
 
 AIROTRACK_ENDPOINT = "https://api.airotrack.in/api/vehicle-live-data"
 _REFRESH_LOCK = Lock()
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 def _registration_key(value: Any) -> str:
@@ -184,16 +195,7 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
     if speed is not None and speed < 0:
         speed = None
     ignition = _ignition(data.get("ignition"))
-    now = datetime.now(timezone.utc)
-    quarantine_reason = future_timestamp_quarantine_reason(fix_time, now)
-    position = {
-        "latitude": latitude,
-        "longitude": longitude,
-        "speed_kmh": speed,
-        "accuracy": None,
-        "fix_time": fix_time,
-        "valid": True,
-    }
+    now = _utc_now()
     raw_json = json.dumps(data, separators=(",", ":"), default=str)
     mapping = db.query(GPSDeviceMapping).filter(
         GPSDeviceMapping.external_device_id == imei,
@@ -202,11 +204,31 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
     if mapping is not None and mapping.bus_id != bus.id:
         raise ValueError("Airotrack IMEI is mapped to a different bus.")
     bus.gps_provider = "airotrack"
+    state = db.query(BusGPSState).filter(BusGPSState.bus_id == bus.id).first()
+    previous_observation = latest_clock_observation(
+        db,
+        bus_id=bus.id,
+        protocol="airotrack",
+        external_device_id=imei,
+    )
+    effective_time, timestamp_basis = select_effective_observation_time(
+        fix_time,
+        now,
+        state,
+        previous_observation,
+    )
+    clock_warning = device_timestamp_quarantine_reason(fix_time, now)
+    quarantine_reason = (
+        clock_warning if clock_warning and timestamp_basis == DEVICE_TIME_BASIS else None
+    )
+    if quarantine_reason is not None:
+        effective_time = None
     history = ProviderGPSPosition(
         bus_id=bus.id, device_mapping_id=mapping.id if mapping else None,
         external_device_id=imei, latitude=latitude, longitude=longitude,
         speed_kmh=speed, course=None, altitude=None, accuracy=None,
         fix_time=fix_time, received_at=now,
+        effective_time=effective_time, timestamp_basis=timestamp_basis,
         status="Running" if ignition else "Parked", ignition=ignition,
         motion=None if speed is None else speed > 1, valid=True,
         protocol="airotrack", quarantine_reason=quarantine_reason,
@@ -215,13 +237,16 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
     db.add(history)
     db.flush()
 
-    state = db.query(BusGPSState).filter(BusGPSState.bus_id == bus.id).first()
-    current_position_time = (state.fix_time or state.received_at) if state else None
-    if current_position_time is not None and current_position_time.tzinfo is None:
-        current_position_time = current_position_time.replace(tzinfo=timezone.utc)
     apply = (
         quarantine_reason is None
-        and (state is None or current_position_time is None or fix_time > current_position_time)
+        and effective_time is not None
+        and observation_is_newer(
+            state,
+            fix_time=fix_time,
+            effective_time=effective_time,
+            timestamp_basis=timestamp_basis,
+            received_at=now,
+        )
     )
     active_trip_id = None
     if apply:
@@ -232,7 +257,9 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
         state.latitude, state.longitude, state.speed_kmh = latitude, longitude, speed
         state.course, state.altitude, state.accuracy, state.fix_time = None, None, None, fix_time
         state.received_at, state.status, state.ignition, state.motion = now, history.status, ignition, history.motion
+        state.effective_time, state.timestamp_basis = effective_time, timestamp_basis
         state.valid, state.protocol, state.raw_payload = True, "airotrack", raw_json
+        db.flush()
     # Reconcile from the canonical saved state even when Airotrack repeats the
     # same source_date. This repairs a missing provider-owned route session
     # after assignments change without treating the repeated payload as a new
@@ -250,6 +277,8 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
         "registration_number": bus.registration_number,
         "imei": imei,
         "source_date": fix_time,
+        "effective_time": effective_time,
+        "timestamp_basis": timestamp_basis,
         "applied": apply,
         "quarantined": quarantine_reason is not None,
         "quarantine_reason": quarantine_reason,
@@ -291,9 +320,7 @@ def _refresh_airotrack_unlocked(db: Session, *, bus_id: int | None = None) -> di
             )
             continue
         state = current_states.get(bus.id)
-        state_time = (state.fix_time or state.received_at) if state else None
-        if state_time is not None and state_time.tzinfo is None:
-            state_time = state_time.replace(tzinfo=timezone.utc)
+        state_time = effective_state_time(state) if state else None
         catch_up = state_time is None or state_time < (
             refresh_started_at - timedelta(seconds=GPS_OFFLINE_GRACE_SECONDS)
         )

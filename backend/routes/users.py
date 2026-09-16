@@ -27,6 +27,11 @@ from backend.schemas import (
     UserResponse,
     UserListResponse,
 )
+from backend.services.generated_codes import (
+    lock_generated_code_writes,
+    next_driver_code,
+    next_student_code,
+)
 
 
 # ==========================================================
@@ -55,6 +60,19 @@ ALLOWED_STATUS = {
     "Inactive",
     "Locked",
 }
+
+
+@router.get("/next-code")
+def get_next_user_codes(
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_admin),
+):
+    """Preview role-specific codes; creation recalculates under a lock."""
+
+    return {
+        "driver_code": next_driver_code(db),
+        "student_code": next_student_code(db),
+    }
 
 
 def build_user_response(user: User, db: Session) -> dict:
@@ -132,6 +150,14 @@ async def create_user(
             status_code=400,
             detail="Invalid status.",
         )
+
+    generated_profile_code = None
+    if user.role == ROLE_DRIVER:
+        lock_generated_code_writes(db, "driver")
+        generated_profile_code = next_driver_code(db)
+    elif user.role == ROLE_USER:
+        lock_generated_code_writes(db, "student")
+        generated_profile_code = next_student_code(db)
 
 
     # ======================================================
@@ -266,18 +292,6 @@ async def create_user(
         if new_user.role == ROLE_DRIVER:
 
             # ----------------------------------------------
-            # Validate driver code
-            # ----------------------------------------------
-
-            if not user.driver_code:
-
-                raise HTTPException(
-                    status_code=400,
-                    detail="Driver Code is required.",
-                )
-
-
-            # ----------------------------------------------
             # Validate license number
             # ----------------------------------------------
 
@@ -302,27 +316,6 @@ async def create_user(
 
 
             # ----------------------------------------------
-            # Check duplicate driver code
-            # ----------------------------------------------
-
-            existing_driver = (
-                db.query(Driver)
-                .filter(
-                    Driver.driver_code
-                    == user.driver_code
-                )
-                .first()
-            )
-
-            if existing_driver:
-
-                raise HTTPException(
-                    status_code=400,
-                    detail="Driver code already exists.",
-                )
-
-
-            # ----------------------------------------------
             # Create Driver profile
             # ----------------------------------------------
 
@@ -330,7 +323,7 @@ async def create_user(
 
                 user_id=new_user.id,
 
-                driver_code=user.driver_code,
+                driver_code=generated_profile_code,
 
                 license_number=user.license_number,
 
@@ -351,40 +344,6 @@ async def create_user(
         # ==================================================
 
         if new_user.role == ROLE_USER:
-
-            # ----------------------------------------------
-            # Student code is required
-            # ----------------------------------------------
-
-            if not user.student_code:
-
-                raise HTTPException(
-                    status_code=400,
-                    detail="Student Code is required.",
-                )
-
-
-            # ----------------------------------------------
-            # Check duplicate student code
-            # ----------------------------------------------
-
-            existing_student = (
-                db.query(Student)
-                .filter(
-                    Student.student_code
-                    == user.student_code
-                )
-                .first()
-            )
-
-            if existing_student:
-
-                raise HTTPException(
-                    status_code=400,
-                    detail="Student code already exists.",
-                )
-
-
             # Student transport assignment belongs exclusively to the
             # Students workspace. A newly created student starts unassigned.
 
@@ -392,7 +351,7 @@ async def create_user(
 
                 user_id=new_user.id,
 
-                student_code=user.student_code,
+                student_code=generated_profile_code,
 
                 route_id=None,
 
@@ -535,6 +494,17 @@ def update_user(
             detail="Invalid status.",
         )
 
+    if updated_user.email:
+        duplicate_email = db.query(User).filter(
+            User.email == updated_user.email,
+            User.id != user_id,
+        ).first()
+        if duplicate_email:
+            raise HTTPException(
+                status_code=400,
+                detail="Email already exists. Use a different email address.",
+            )
+
 
     # ======================================================
     # UPDATE USER
@@ -560,21 +530,14 @@ def update_user(
         driver = user.driver
         if driver is None:
             raise HTTPException(status_code=400, detail="This user has no driver profile.")
-        if not updated_user.driver_code or not updated_user.license_number or not updated_user.license_expiry:
-            raise HTTPException(status_code=400, detail="Driver code, license number, and license expiry are required.")
-        duplicate_driver_code = db.query(Driver).filter(
-            Driver.driver_code == updated_user.driver_code,
-            Driver.id != driver.id,
-        ).first()
-        if duplicate_driver_code:
-            raise HTTPException(status_code=400, detail="Driver code already exists.")
+        if not updated_user.license_number or not updated_user.license_expiry:
+            raise HTTPException(status_code=400, detail="License number and license expiry are required.")
         duplicate_license = db.query(Driver).filter(
             Driver.license_number == updated_user.license_number,
             Driver.id != driver.id,
         ).first()
         if duplicate_license:
             raise HTTPException(status_code=400, detail="License number already exists.")
-        driver.driver_code = updated_user.driver_code
         driver.license_number = updated_user.license_number
         driver.license_expiry = updated_user.license_expiry
         driver.address = updated_user.address
@@ -583,8 +546,7 @@ def update_user(
         student = user.student
         if student is None:
             raise HTTPException(status_code=400, detail="This user has no student profile.")
-        if updated_user.student_code:
-            student.student_code = updated_user.student_code
+        # Student codes are permanent system identifiers and are never edited.
 
 
     # ======================================================

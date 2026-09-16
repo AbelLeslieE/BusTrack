@@ -53,6 +53,31 @@ export async function refreshStops() {
 
 }
 
+
+/* ==========================================================================
+   GET STOPS WITH KPI STATISTICS
+========================================================================== */
+
+export async function getStopsOverview() {
+
+    const response = await fetch(`${BASE_URL}/overview`, {
+
+        cache: "no-store"
+
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+
+        throw new Error(result.detail || "Failed to load stop statistics.");
+
+    }
+
+    return result;
+
+}
+
 /* ==========================================================================
    PREVIEW NEXT AUTOMATIC STOP CODE
 ========================================================================== */

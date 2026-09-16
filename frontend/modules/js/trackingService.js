@@ -1,7 +1,7 @@
 /* ==========================================================
    DRIVER TRACKING SERVICE
 ========================================================== */
-import { animateVehicleMarker, snapVehicleMarkerToRoad } from "/static/common/vehicleMotion.js?v=road-safe-6";
+import { animateVehicleMarker, snapVehicleMarkerToRoad } from "/static/common/vehicleMotion.js?v=road-safe-7";
 import { createVehicleMarkerIcon } from "/static/common/vehicleMarker.js";
 
 console.log("trackingService.js loaded");
@@ -26,8 +26,6 @@ let tracking = false;
 // it on or off must never start or stop the bus's server-side tracking.
 let mobileTrackingEnabled = false;
 
-let trackingAccessToken = null;
-
 // The persisted direction belongs to the live trip, not the route itself.
 // Keeping it locally lets the driver UI update at once while other portals
 // receive the same value from their normal polling response.
@@ -40,6 +38,11 @@ let terminalMessageTimer = null;
 // The MVD unit is primary. Phone GPS runs only while that signal is stale.
 let activeTrackingSource = "unavailable";
 let sourcePollTimer = null;
+let sourceVisibilityHandler = null;
+let sourceEventStream = null;
+let sourceStreamRetryTimer = null;
+const DRIVER_SOURCE_REFRESH_MS = 5_000;
+const DRIVER_SOURCE_JITTER_MS = 1_000;
 
 /*
  * Timestamp of the last GPS position successfully sent
@@ -47,9 +50,10 @@ let sourcePollTimer = null;
  *
  * The driver map can update immediately from GPS,
  * but the server/database will receive an update
- * at most once every two seconds.
+ * at most once every five seconds.
  */
 let lastServerUpdateTime = 0;
+let lastPublishedLocation = null;
 
 // GPS callbacks and network responses are independent. Queue the most recent
 // fix so a slow request cannot cause stale positions to be written afterward.
@@ -60,9 +64,11 @@ let locationFlushTimer = null;
 /*
  * Server update interval.
  *
- * Two seconds keeps student tracking responsive without flooding the API.
+ * Five seconds keeps student tracking responsive without flooding the API.
  */
-const SERVER_UPDATE_INTERVAL = 2000;
+const SERVER_UPDATE_INTERVAL = 5_000;
+const MOBILE_STATIONARY_HEARTBEAT_MS = 30_000;
+const MOBILE_MIN_UPLOAD_MOVEMENT_METERS = 10;
 
 const MOBILE_GPS_INITIAL_FIX_TIMEOUT_MS = 45_000;
 
@@ -248,7 +254,6 @@ export async function startTrip() {
         // attaches an additional location source to that existing session.
         currentTripId = source.active_trip_id;
         tracking = true;
-        trackingAccessToken = localStorage.getItem("bus_tracker_access_token");
         updateDirectionControls(source.route_direction || "forward");
 
         const initialPosition = await requestLocationPermission();
@@ -372,13 +377,6 @@ async function startTripUsingMobileGpsFallback() {
         // NOW CREATE THE SERVER-SIDE TRIP
         // ==================================================
 
-        const token =
-            localStorage.getItem(
-                "bus_tracker_access_token"
-            );
-        trackingAccessToken = token;
-
-
         const response = await fetch(
 
             "/api/gps/start",
@@ -388,10 +386,6 @@ async function startTripUsingMobileGpsFallback() {
                 method: "POST",
 
                 headers: {
-
-                    "Authorization":
-                        `Bearer ${token}`,
-
                     "Content-Type":
                         "application/json"
 
@@ -600,6 +594,7 @@ export async function stopTrip() {
     stopMobileLocationTracking();
     pendingLocation = null;
     lastServerUpdateTime = 0;
+    lastPublishedLocation = null;
     activeTrackingSource = "vehicle_gps";
 
     setText("gpsStatus", "Phone GPS sharing paused · vehicle GPS continues");
@@ -680,8 +675,8 @@ function completeTripInDriverUi() {
 
     tracking = false;
     currentTripId = null;
-    trackingAccessToken = null;
     lastServerUpdateTime = 0;
+    lastPublishedLocation = null;
     previousGpsSample = null;
     updateDirectionControls("forward");
 
@@ -705,8 +700,8 @@ function stopTripBecauseAdminEndedIt() {
 
     tracking = false;
     currentTripId = null;
-    trackingAccessToken = null;
     lastServerUpdateTime = 0;
+    lastPublishedLocation = null;
     pendingLocation = null;
     updateDirectionControls("forward");
 
@@ -889,7 +884,7 @@ function applyTrackingSource(source) {
         );
         // Once browser permission has been granted, this begins automatically
         // whenever the fresh MVD signal disappears. Do not recreate the
-        // watcher on every two-second source poll.
+        // watcher on every source update.
         if (mobilePublishingEnabled && watchId === null) {
             startLocationTracking();
         }
@@ -912,14 +907,68 @@ function applyTrackingSource(source) {
     );
 }
 
-async function refreshTrackingSource() {
+async function refreshTrackingSource(streamData = null) {
     const requestId = ++sourceRequestId;
     const session = trackingSession;
-    const response = await fetch("/api/integrations/gps/driver/source");
-    if (!response.ok) throw new Error("Unable to check vehicle GPS status.");
-    const source = await response.json();
+    let source = streamData;
+    if (!source) {
+        const response = await fetch("/api/integrations/gps/driver/source");
+        if (!response.ok) throw new Error("Unable to check vehicle GPS status.");
+        source = await response.json();
+    }
     if (requestId === sourceRequestId && session === trackingSession) applyTrackingSource(source);
     return source;
+}
+
+function startDriverSourcePollingFallback() {
+    if (sourcePollTimer !== null || document.hidden) return;
+    sourcePollTimer = window.setInterval(() => {
+        if (document.hidden) return;
+        void refreshTrackingSource().catch(() => {});
+    }, DRIVER_SOURCE_REFRESH_MS + Math.floor(Math.random() * DRIVER_SOURCE_JITTER_MS));
+}
+
+function closeDriverSourceStream() {
+    sourceEventStream?.close();
+    sourceEventStream = null;
+}
+
+function connectDriverSourceStream() {
+    if (document.hidden || typeof window.EventSource !== "function") return false;
+    closeDriverSourceStream();
+    if (sourceStreamRetryTimer !== null) window.clearTimeout(sourceStreamRetryTimer);
+    sourceStreamRetryTimer = null;
+    const session = trackingSession;
+    const stream = new window.EventSource(
+        "/api/integrations/gps/driver/source/stream",
+        { withCredentials: true }
+    );
+    sourceEventStream = stream;
+    stream.onopen = () => {
+        if (stream !== sourceEventStream || session !== trackingSession) return;
+        if (sourcePollTimer !== null) window.clearInterval(sourcePollTimer);
+        sourcePollTimer = null;
+    };
+    stream.onmessage = event => {
+        if (stream !== sourceEventStream || session !== trackingSession || document.hidden) return;
+        try {
+            void refreshTrackingSource(JSON.parse(event.data));
+        } catch (error) {
+            console.error("Invalid driver source event.", error);
+        }
+    };
+    stream.onerror = () => {
+        if (stream !== sourceEventStream || session !== trackingSession) return;
+        closeDriverSourceStream();
+        startDriverSourcePollingFallback();
+        if (!document.hidden) {
+            sourceStreamRetryTimer = window.setTimeout(() => {
+                sourceStreamRetryTimer = null;
+                connectDriverSourceStream();
+            }, 30_000);
+        }
+    };
+    return true;
 }
 
 export function initializeTrackingSource() {
@@ -927,9 +976,23 @@ export function initializeTrackingSource() {
     if (fallbackButton) fallbackButton.hidden = true;
     void refreshTrackingSource().catch(error => setText("trackingSourceReason", error.message));
     if (sourcePollTimer !== null) window.clearInterval(sourcePollTimer);
-    sourcePollTimer = window.setInterval(() => {
+    if (sourceVisibilityHandler) document.removeEventListener("visibilitychange", sourceVisibilityHandler);
+    startDriverSourcePollingFallback();
+    connectDriverSourceStream();
+    sourceVisibilityHandler = () => {
+        if (document.hidden) {
+            closeDriverSourceStream();
+            if (sourcePollTimer !== null) window.clearInterval(sourcePollTimer);
+            sourcePollTimer = null;
+            if (sourceStreamRetryTimer !== null) window.clearTimeout(sourceStreamRetryTimer);
+            sourceStreamRetryTimer = null;
+            return;
+        }
         void refreshTrackingSource().catch(() => {});
-    }, 2_000);
+        startDriverSourcePollingFallback();
+        connectDriverSourceStream();
+    };
+    document.addEventListener("visibilitychange", sourceVisibilityHandler);
 }
 
 export async function reverseRouteDirection() {
@@ -942,13 +1005,12 @@ export async function reverseRouteDirection() {
     if (button) button.disabled = true;
 
     try {
-        const token = trackingAccessToken || localStorage.getItem("bus_tracker_access_token");
         const response = await fetch("/api/gps/direction", {
             method: "POST",
             headers: {
-                "Authorization": `Bearer ${token}`,
                 "Content-Type": "application/json",
             },
+            credentials: "same-origin",
             body: JSON.stringify({ trip_id: currentTripId, direction: nextDirection }),
         });
         const result = await response.json().catch(() => ({}));
@@ -979,11 +1041,9 @@ export async function reverseRouteDirection() {
  * the bus and route context without the driver having to enter it.
  */
 export async function sendDriverFeedback(feedbackType, message = "") {
-    const token = trackingAccessToken || localStorage.getItem("bus_tracker_access_token");
     const response = await fetch("/api/notifications/feedback", {
         method: "POST",
         headers: {
-            "Authorization": `Bearer ${token}`,
             "Content-Type": "application/json",
         },
         credentials: "same-origin",
@@ -1008,9 +1068,7 @@ async function startTripUsingVehicleGps() {
     const stopButton = document.getElementById("stopTripBtn");
     if (startButton) startButton.disabled = true;
     try {
-        const token = localStorage.getItem("bus_tracker_access_token");
         const headers = { "Content-Type": "application/json" };
-        if (token) headers.Authorization = `Bearer ${token}`;
         const response = await fetch("/api/gps/start", {
             method: "POST",
             headers,
@@ -1552,7 +1610,8 @@ async function onLocationSuccess(position) {
  * Therefore:
  *
  * - Driver map updates immediately.
- * - Backend receives a position at most every two seconds.
+ * - Backend receives a moving position at most every five seconds.
+ * - A stationary phone sends only a 30-second heartbeat.
  *
  * This prevents unnecessary database/API traffic while
  * keeping the student live-tracking page responsive.
@@ -1563,6 +1622,19 @@ function scheduleLocationFlush(delay) {
         locationFlushTimer = null;
         void flushPendingLocation();
     }, delay);
+}
+
+function gpsDistanceMeters(start, end) {
+    if (!start || !end) return Infinity;
+    const radians = value => value * Math.PI / 180;
+    const latitudeDelta = radians(end.latitude - start.latitude);
+    const longitudeDelta = radians(end.longitude - start.longitude);
+    const startLatitude = radians(start.latitude);
+    const endLatitude = radians(end.latitude);
+    const value = Math.sin(latitudeDelta / 2) ** 2
+        + Math.cos(startLatitude) * Math.cos(endLatitude)
+        * Math.sin(longitudeDelta / 2) ** 2;
+    return 6_371_000 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
 }
 
 async function flushPendingLocation() {
@@ -1576,22 +1648,25 @@ async function flushPendingLocation() {
 
     const location = pendingLocation;
     if (!location) return;
-    pendingLocation = null;
-
-    const token = trackingAccessToken || localStorage.getItem("bus_tracker_access_token");
-    if (!token) {
-        console.error("No authentication token found.");
+    const movement = gpsDistanceMeters(lastPublishedLocation, location);
+    if (
+        lastPublishedLocation
+        && movement < MOBILE_MIN_UPLOAD_MOVEMENT_METERS
+        && elapsed < MOBILE_STATIONARY_HEARTBEAT_MS
+    ) {
+        scheduleLocationFlush(MOBILE_STATIONARY_HEARTBEAT_MS - elapsed);
         return;
     }
+    pendingLocation = null;
 
     locationUpdateInFlight = true;
     try {
         const response = await fetch("/api/gps/update", {
             method: "POST",
             headers: {
-                "Authorization": `Bearer ${token}`,
                 "Content-Type": "application/json"
             },
+            credentials: "same-origin",
             body: JSON.stringify({
                 trip_id: currentTripId,
                 latitude: location.latitude,
@@ -1615,6 +1690,7 @@ async function flushPendingLocation() {
         }
 
         lastServerUpdateTime = Date.now();
+        lastPublishedLocation = location;
         const result = await response.json();
         console.log("GPS sent to server successfully:", result);
 
@@ -1651,19 +1727,12 @@ export async function loadCurrentTrip() {
 
     const session = trackingSession;
 
-    const token = localStorage.getItem(
-        "bus_tracker_access_token"
-    );
-    trackingAccessToken = token;
-
     try {
 
         const response = await fetch(
             "/api/gps/current",
             {
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
+                credentials: "same-origin"
             }
         );
 
@@ -1705,6 +1774,7 @@ export async function loadCurrentTrip() {
         * Allow the first GPS position to be sent immediately.
         */
         lastServerUpdateTime = 0;
+        lastPublishedLocation = null;
 
         /* ==========================================================
         RESTORE CURRENT BUS
@@ -1974,6 +2044,15 @@ export function cleanupTracking() {
         window.clearInterval(sourcePollTimer);
         sourcePollTimer = null;
     }
+    if (sourceVisibilityHandler) {
+        document.removeEventListener("visibilitychange", sourceVisibilityHandler);
+        sourceVisibilityHandler = null;
+    }
+    closeDriverSourceStream();
+    if (sourceStreamRetryTimer !== null) {
+        window.clearTimeout(sourceStreamRetryTimer);
+        sourceStreamRetryTimer = null;
+    }
 
 
     /* ======================================================
@@ -2001,9 +2080,8 @@ export function cleanupTracking() {
 
     currentTripId = null;
 
-    trackingAccessToken = null;
-
     lastServerUpdateTime = 0;
+    lastPublishedLocation = null;
     locationUpdateInFlight = false;
     pendingLocation = null;
     if (locationFlushTimer !== null) {

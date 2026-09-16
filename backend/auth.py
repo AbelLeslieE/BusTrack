@@ -10,8 +10,9 @@ from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.database import get_db
+from backend.database import SessionLocal, get_db
 from backend.models import User, UserSession
+from backend.roles import canonical_role
 from backend.utils.jwt_handler import get_token_identity
 
 
@@ -100,6 +101,47 @@ def create_user(database_session: Session, username: str, password: str, role: s
     database_session.commit()
     database_session.refresh(user)
     return user
+
+
+def is_user_session_active(
+    user_id: int,
+    token_auth_version: int,
+    session_id: str | None,
+    *,
+    expected_role: str | None = None,
+) -> bool:
+    """Revalidate a long-lived response using a short database session."""
+
+    with SessionLocal() as database_session:
+        user = database_session.get(User, user_id)
+        if (
+            user is None
+            or user.status != "Active"
+            or user.auth_version != token_auth_version
+            or (
+                expected_role is not None
+                and canonical_role(user.role) != expected_role
+            )
+        ):
+            return False
+        # Legacy tokens issued before per-device sessions remain governed by
+        # their signed expiry, which get_token_identity already validates.
+        if not session_id:
+            return True
+        session = (
+            database_session.query(UserSession)
+            .filter(
+                UserSession.session_id == session_id,
+                UserSession.user_id == user_id,
+            )
+            .first()
+        )
+        if session is None or session.revoked_at is not None or session.expires_at is None:
+            return False
+        expires_at = session.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        return expires_at > datetime.now(timezone.utc)
 
 
 def get_current_user(

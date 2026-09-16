@@ -6,6 +6,8 @@ and GPS-token plaintext values are deliberately excluded.
 
 from __future__ import annotations
 
+import os
+import random
 import time
 
 from sqlalchemy.orm import Session
@@ -25,9 +27,29 @@ class RequestAuditMiddleware:
         "/api/integrations/gps/audit",
         "/api/integrations/gps/requests",
     }
+    READ_METHODS = {"GET", "HEAD"}
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
+        default_rate = (
+            "0.01"
+            if os.getenv("APP_ENV", "development").strip().casefold() == "production"
+            else "1.0"
+        )
+        try:
+            configured_rate = float(
+                os.getenv("REQUEST_AUDIT_SUCCESS_GET_SAMPLE_RATE", default_rate)
+            )
+        except ValueError:
+            configured_rate = float(default_rate)
+        self.successful_read_sample_rate = min(1.0, max(0.0, configured_rate))
+
+    def _should_save(self, *, method: str, status_code: int) -> bool:
+        """Keep mutations and failures while sampling routine successful reads."""
+
+        if method not in self.READ_METHODS or status_code >= 400:
+            return True
+        return random.random() < self.successful_read_sample_rate
 
     @staticmethod
     def _client_ip(scope: Scope) -> str | None:
@@ -87,4 +109,11 @@ class RequestAuditMiddleware:
             await self.app(scope, receive, capture_response)
         finally:
             duration_ms = int((time.perf_counter() - started) * 1000)
-            self._save(scope, method=method, path=path, status_code=response_status, duration_ms=duration_ms)
+            if self._should_save(method=method, status_code=response_status):
+                self._save(
+                    scope,
+                    method=method,
+                    path=path,
+                    status_code=response_status,
+                    duration_ms=duration_ms,
+                )

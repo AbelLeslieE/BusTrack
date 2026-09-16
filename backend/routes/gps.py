@@ -3,15 +3,22 @@ BusTrack
 GPS Tracking API
 """
 
+import asyncio
 from datetime import datetime, timezone
+import json
 from math import ceil
+import os
+import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from backend.database import get_db
+from backend.database import SessionLocal, get_db
+from backend.auth import SESSION_COOKIE_NAME, is_user_session_active
 from backend.services.trip_reset import as_utc, lock_tracking_bus, observation_after_reset, reset_metadata
-from backend.services.gps_timestamp import future_timestamp_seconds
+from backend.services.gps_timestamp import effective_state_time, future_timestamp_seconds
 
 from backend.routes.models_tracking import (
     LiveTrip,
@@ -40,6 +47,8 @@ from backend.services.trip_direction import (
     ordered_route_stops,
 )
 from backend.security import require_driver, require_management
+from backend.roles import ROLE_ADMIN
+from backend.utils.jwt_handler import get_token_identity
 from backend.audit import record_audit_event
 from backend.services.vehicle_gps import (
     GPS_OFFLINE_GRACE_SECONDS,
@@ -69,6 +78,12 @@ router = APIRouter(
     prefix="/api/gps",
     tags=["GPS Tracking"],
 )
+
+ADMIN_LIVE_STREAM_REFRESH_SECONDS = 10
+ADMIN_LIVE_STREAM_CACHE_SECONDS = 9.5
+ADMIN_LIVE_STREAM_MAX_SECONDS = 50 * 60
+_admin_live_stream_cache: tuple[float, list] | None = None
+_admin_live_stream_lock = asyncio.Lock()
 
 
 def build_gps_freshness(
@@ -1440,11 +1455,7 @@ def end_trip_as_admin(
 # GET LIVE TRACKING
 # ==========================================================
 
-@router.get("/live")
-def get_live_tracking(
-    db: Session = Depends(get_db),
-    _current_user: User = Depends(require_management),
-):
+def _build_live_tracking(db: Session):
 
     # ------------------------------------------------------
     # Get all currently running trips
@@ -1453,6 +1464,7 @@ def get_live_tracking(
     trips = (
         db.query(LiveTrip)
         .filter(
+            LiveTrip.status == "Running",
             LiveTrip.ended_at.is_(None)
         )
         .all()
@@ -1654,10 +1666,7 @@ def get_live_tracking(
         provider_gps = None
 
         if provider_state is not None:
-            provider_timestamp = (
-                provider_state.fix_time
-                or provider_state.received_at
-            )
+            provider_timestamp = effective_state_time(provider_state)
             provider_freshness = build_gps_freshness(
                 provider_timestamp,
                 ignition=provider_state.ignition,
@@ -1674,6 +1683,8 @@ def get_live_tracking(
                 "accuracy": provider_state.accuracy,
                 "fix_time": provider_state.fix_time,
                 "received_at": provider_state.received_at,
+                "effective_time": provider_timestamp,
+                "timestamp_basis": provider_state.timestamp_basis,
                 "ignition": provider_state.ignition,
                 "motion": provider_state.motion,
                 "valid": provider_state.valid,
@@ -1821,9 +1832,7 @@ def get_live_tracking(
         route = db.query(Route).filter(Route.bus_id == bus.id).first()
         assigned_driver_id = route.driver_id if route and route.driver_id else bus.driver_id
         driver = db.get(Driver, assigned_driver_id) if assigned_driver_id else None
-        position_time = provider_state.fix_time or provider_state.received_at
-        if position_time.tzinfo is None:
-            position_time = position_time.replace(tzinfo=timezone.utc)
+        position_time = effective_state_time(provider_state)
         provider_freshness = build_gps_freshness(
             position_time,
             ignition=provider_state.ignition,
@@ -1864,6 +1873,8 @@ def get_live_tracking(
                 "accuracy": provider_state.accuracy,
                 "fix_time": provider_state.fix_time,
                 "received_at": provider_state.received_at,
+                "effective_time": position_time,
+                "timestamp_basis": provider_state.timestamp_basis,
                 "ignition": provider_state.ignition,
                 "motion": provider_state.motion,
                 "valid": provider_state.valid,
@@ -1882,6 +1893,118 @@ def get_live_tracking(
         })
 
     return response
+
+
+@router.get("/live")
+def get_live_tracking(
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(require_management),
+):
+    """Return the established admin fleet payload used by polling clients."""
+
+    return _build_live_tracking(db)
+
+
+def _load_admin_live_tracking() -> list:
+    """Build a fleet snapshot without holding a stream-long DB session."""
+
+    with SessionLocal() as database_session:
+        return _build_live_tracking(database_session)
+
+
+async def _cached_admin_live_tracking() -> list:
+    """Share one fleet calculation across all connected management streams."""
+
+    global _admin_live_stream_cache
+    now = time.monotonic()
+    if (
+        _admin_live_stream_cache is not None
+        and now - _admin_live_stream_cache[0] < ADMIN_LIVE_STREAM_CACHE_SECONDS
+    ):
+        return _admin_live_stream_cache[1]
+
+    async with _admin_live_stream_lock:
+        now = time.monotonic()
+        if (
+            _admin_live_stream_cache is not None
+            and now - _admin_live_stream_cache[0] < ADMIN_LIVE_STREAM_CACHE_SECONDS
+        ):
+            return _admin_live_stream_cache[1]
+        payload = await asyncio.to_thread(_load_admin_live_tracking)
+        _admin_live_stream_cache = (time.monotonic(), payload)
+        return payload
+
+
+@router.get("/live/stream")
+def stream_admin_live_tracking(
+    request: Request,
+    _current_user: User = Depends(require_management, scope="function"),
+):
+    """Push fleet snapshots while retaining ``GET /live`` as a fallback."""
+
+    if os.getenv("ADMIN_LIVE_STREAM_ENABLED", "true").strip().casefold() in {
+        "false", "0", "no", "off"
+    }:
+        raise HTTPException(
+            status_code=503,
+            detail="Admin live streaming is temporarily disabled.",
+        )
+
+    authorization = request.headers.get("authorization", "")
+    bearer_token = authorization[7:].strip() if authorization.lower().startswith("bearer ") else ""
+    token = request.cookies.get(SESSION_COOKIE_NAME, "") or bearer_token
+    try:
+        _, token_auth_version, session_id = get_token_identity(token)
+    except Exception as error:
+        raise HTTPException(
+            status_code=401,
+            detail="Could not validate streaming credentials.",
+        ) from error
+    user_id = _current_user.id
+
+    async def events():
+        previous = None
+        started_at = time.monotonic()
+        last_keepalive = time.monotonic()
+        last_session_check = time.monotonic()
+        yield "retry: 5000\n\n"
+
+        while time.monotonic() - started_at < ADMIN_LIVE_STREAM_MAX_SECONDS:
+            if await request.is_disconnected():
+                return
+            if time.monotonic() - last_session_check >= 60:
+                session_active = await asyncio.to_thread(
+                    is_user_session_active,
+                    user_id,
+                    token_auth_version,
+                    session_id,
+                    expected_role=ROLE_ADMIN,
+                )
+                if not session_active:
+                    return
+                last_session_check = time.monotonic()
+            try:
+                payload = await _cached_admin_live_tracking()
+            except Exception:
+                return
+            encoded = json.dumps(jsonable_encoder(payload), separators=(",", ":"))
+            if encoded != previous:
+                yield f"data: {encoded}\n\n"
+                previous = encoded
+                last_keepalive = time.monotonic()
+            elif time.monotonic() - last_keepalive >= 15:
+                yield ": keep-alive\n\n"
+                last_keepalive = time.monotonic()
+            await asyncio.sleep(ADMIN_LIVE_STREAM_REFRESH_SECONDS)
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 # ==========================================================
 # GET CURRENT DRIVER TRIP

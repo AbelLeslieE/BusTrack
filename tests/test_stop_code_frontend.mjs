@@ -36,3 +36,27 @@ test('stop-code preview bypasses cache and create supports a server-assigned cod
     assert.equal(created.stop.stop_code, 'ST030');
     assert.deepEqual(JSON.parse(requests[1].options.body), {stop_name: 'Koparkala'});
 });
+
+
+test('stops overview bypasses cache and returns synchronized KPI data', async () => {
+    const requests = [];
+    const expected = {
+        stops: [{id: 1, stop_code: 'ST001'}],
+        statistics: {
+            total_stops: 1,
+            total_routes: 2,
+            average_stops_per_route: 0.5,
+            mapped_stops: 1,
+        },
+    };
+    const context = loadApi(async (path, options = {}) => {
+        requests.push({path, options});
+        return {ok: true, json: async () => expected};
+    });
+
+    const overview = await context.getStopsOverview();
+
+    assert.equal(requests[0].path, '/api/stops/overview');
+    assert.equal(requests[0].options.cache, 'no-store');
+    assert.deepEqual(overview, expected);
+});

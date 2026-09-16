@@ -9,7 +9,7 @@ import { request } from "/static/common/api.js";
 import { Modal } from "/static/common/modal.js";
 import { escapeHtml } from "/static/common/security.js";
 import { createVehicleMarkerIcon } from "/static/common/vehicleMarker.js";
-import { animateVehicleMarker, snapVehicleMarkerToRoad } from "/static/common/vehicleMotion.js?v=road-safe-6";
+import { animateVehicleMarker, snapVehicleMarkerToRoad } from "/static/common/vehicleMotion.js?v=road-safe-7";
 
 /* ==========================================================
    ADMIN LIVE TRACKING STATE
@@ -182,11 +182,17 @@ let fleetMarkerLayer = null;
 
 let refreshInterval = null;
 let visibilityRefreshHandler = null;
+let fleetEventStream = null;
 
 /*
     Used to invalidate old admin tracking requests.
 */
 let fleetSession = 0;
+const ADMIN_LIVE_REFRESH_MS = 10_000;
+const ADMIN_LIVE_JITTER_MS = 2_000;
+const ADMIN_BUS_CACHE_TTL_MS = 5 * 60 * 1000;
+let cachedFleetBuses = [];
+let cachedFleetBusesAt = 0;
 /* ==========================================================
    CLEAR ALL FLEET MARKERS
 ========================================================== */
@@ -1204,21 +1210,21 @@ export function initializeFleetMap(
 ========================================================== */
 
 export async function loadLiveTrips(
-    session = fleetSession
+    session = fleetSession,
+    { forceBusRefresh = false, streamTrips = null } = {}
 ) {
-
-    const token = localStorage.getItem(
-        "bus_tracker_access_token"
-    );
 
     try {
 
-        const headers = {
-            Authorization: `Bearer ${token}`
-        };
+        const busCacheExpired = Date.now() - cachedFleetBusesAt >= ADMIN_BUS_CACHE_TTL_MS;
+        const busesRequest = forceBusRefresh || !cachedFleetBusesAt || busCacheExpired
+            ? fetch("/api/buses/", { credentials: "same-origin" })
+            : Promise.resolve(null);
         const [response, busesResponse] = await Promise.all([
-            fetch("/api/gps/live", { headers }),
-            fetch("/api/buses/", { headers }),
+            streamTrips === null
+                ? fetch("/api/gps/live", { credentials: "same-origin" })
+                : Promise.resolve(null),
+            busesRequest,
         ]);
 
 
@@ -1237,7 +1243,7 @@ export async function loadLiveTrips(
         }
 
 
-        if (!response.ok) {
+        if (response && !response.ok) {
 
             console.error(
                 "Unable to load trips"
@@ -1248,11 +1254,31 @@ export async function loadLiveTrips(
         }
 
 
-        const trips =
-            await response.json();
-        const buses = busesResponse.ok
-            ? await busesResponse.json()
-            : [];
+        const trips = response
+            ? await response.json()
+            : streamTrips;
+        if (!Array.isArray(trips)) {
+
+            console.error(
+                "Unable to apply invalid live tracking data"
+            );
+
+            return;
+
+        }
+        if (busesResponse?.ok) {
+
+            const loadedBuses = await busesResponse.json();
+
+            if (Array.isArray(loadedBuses)) {
+
+                cachedFleetBuses = loadedBuses;
+                cachedFleetBusesAt = Date.now();
+
+            }
+
+        }
+        const buses = cachedFleetBuses;
 
 
         /* ======================================================
@@ -1292,6 +1318,108 @@ export async function loadLiveTrips(
 }
 
 
+function stopFleetPollingFallback() {
+
+    if (refreshInterval !== null) {
+
+        clearInterval(refreshInterval);
+        refreshInterval = null;
+
+    }
+
+}
+
+
+function startFleetPollingFallback(session) {
+
+    if (refreshInterval !== null || session !== fleetSession) return;
+
+    refreshInterval = setInterval(
+
+        () => {
+
+            if (document.hidden || session !== fleetSession) return;
+
+            loadLiveTrips(session);
+
+        },
+
+        ADMIN_LIVE_REFRESH_MS
+            + Math.floor(Math.random() * ADMIN_LIVE_JITTER_MS)
+
+    );
+
+}
+
+
+function closeFleetEventStream() {
+
+    if (fleetEventStream) {
+
+        fleetEventStream.close();
+        fleetEventStream = null;
+
+    }
+
+}
+
+
+function startFleetEventStream(session) {
+
+    if (document.hidden || session !== fleetSession) return;
+
+    if (!("EventSource" in window)) {
+
+        startFleetPollingFallback(session);
+        return;
+
+    }
+
+    closeFleetEventStream();
+    const eventStream = new window.EventSource(
+        "/api/gps/live/stream",
+        { withCredentials: true }
+    );
+    fleetEventStream = eventStream;
+
+    eventStream.onopen = () => {
+
+        if (session !== fleetSession || fleetEventStream !== eventStream) return;
+
+        stopFleetPollingFallback();
+
+    };
+
+    eventStream.onmessage = event => {
+
+        if (session !== fleetSession || fleetEventStream !== eventStream) return;
+
+        try {
+
+            const trips = JSON.parse(event.data);
+            loadLiveTrips(session, { streamTrips: trips });
+
+        } catch (error) {
+
+            console.error("Invalid admin tracking stream message:", error);
+
+        }
+
+    };
+
+    // EventSource reconnects itself. Polling remains active only while that
+    // connection is unavailable, so the map keeps its existing reliability.
+    eventStream.onerror = () => {
+
+        if (session !== fleetSession || fleetEventStream !== eventStream) return;
+
+        startFleetPollingFallback(session);
+
+    };
+
+}
+
+
 
 /* ==========================================================
    START LIVE REFRESH
@@ -1316,15 +1444,8 @@ export function startFleetRefresh() {
        STOP OLD TIMER
     ====================================================== */
 
-    if (refreshInterval) {
-
-        clearInterval(
-            refreshInterval
-        );
-
-        refreshInterval = null;
-
-    }
+    stopFleetPollingFallback();
+    closeFleetEventStream();
 
     if (visibilityRefreshHandler) {
 
@@ -1342,32 +1463,28 @@ export function startFleetRefresh() {
        FIRST LOAD
     ====================================================== */
 
-    loadLiveTrips(session);
+    loadLiveTrips(session, { forceBusRefresh: true });
 
 
     /* ======================================================
-       REFRESH EVERY 2 SECONDS
+       STREAM WHILE THE ADMIN IS WATCHING THE PAGE
     ====================================================== */
 
-    refreshInterval = setInterval(
-
-        () => {
-
-            loadLiveTrips(session);
-
-        },
-
-        2000
-
-    );
+    startFleetEventStream(session);
 
     // A user returning to the tab should see the newest saved GPS reading
     // immediately, rather than waiting for the next live-tracking refresh.
     visibilityRefreshHandler = () => {
 
-        if (document.visibilityState === "visible") {
+        if (document.visibilityState === "hidden") {
+
+            closeFleetEventStream();
+            stopFleetPollingFallback();
+
+        } else {
 
             loadLiveTrips(session);
+            startFleetEventStream(session);
 
         }
 
@@ -2186,7 +2303,7 @@ function updateFleet(trips, buses = []) {
                     Store the selected bus globally.
 
                     This allows the selection to survive the
-                    2-second fleet refresh.
+                    live fleet refresh.
                 */
                 /* ==================================================
                 SELECT BUS
@@ -2418,15 +2535,8 @@ export function cleanupFleetTracking() {
        STOP REFRESH TIMER
     ====================================================== */
 
-    if (refreshInterval !== null) {
-
-        clearInterval(
-            refreshInterval
-        );
-
-        refreshInterval = null;
-
-    }
+    stopFleetPollingFallback();
+    closeFleetEventStream();
 
     if (visibilityRefreshHandler) {
 

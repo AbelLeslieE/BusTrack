@@ -50,11 +50,9 @@ test('reset dialog previews both starts, submits once and retains its retry iden
     release(); await retry;
 });
 
-test('student reset discards pending old ETA, retains real map target and rejects older reset versions', async () => {
-    let release;
+test('student reset clears cached route ETA, retains real map target and rejects older reset versions', async () => {
     let modalClosed = 0;
     const context = portal('studentTracking', {
-        fetch: () => new Promise(resolve => {release = () => resolve({ok: true, json: async () => ({code: 'Ok', routes: [{distance: 500}]})});}),
         window: {clearTimeout() {}}, Modal: {close: () => {modalClosed++;}},
     });
     vm.runInContext(`
@@ -62,16 +60,18 @@ test('student reset discards pending old ETA, retains real map target and reject
         calculateRouteProgress = () => ({nextStop: {id: 2, latitude: 10.01, longitude: 76}});
         state.liveTrip = {id: 7, latitude: 10, longitude: 76, speed: 30, reset_version: 0};
         state.trackingData = {trip: state.liveTrip};
+        state.roadRoute = [[10, 76], [10.01, 76]];
+        state.roadRouteLoaded = true;
         state.busTargetLocation = {latitude: 10, longitude: 76};
         state.terminalNoticeTimer = 123;
     `, context);
-    const pendingETA = vm.runInContext('calculateNextStopETA()', context);
+    await vm.runInContext('calculateNextStopETA()', context);
+    assert.ok(vm.runInContext('state.etaMinutes', context) > 0);
     vm.runInContext(`fetchAuthenticated = async () => ({trip: {
         id: 7, latitude: 10, longitude: 76, speed: 30, reset_version: 1,
         route_direction: 'forward', reset_waiting_for_start: true
     }, stops: []});`, context);
     await vm.runInContext('loadStudentTracking()', context);
-    release(); await pendingETA;
     assert.equal(vm.runInContext('state.etaMinutes', context), null);
     assert.equal(vm.runInContext('state.etaLoading', context), false);
     assert.equal(vm.runInContext('state.busTargetLocation.latitude', context), 10);

@@ -1,7 +1,4 @@
-"""FastAPI entry point, database initialization, and frontend host for Bus Tracker.
-
-TODO: Register business-area routers after each fleet workflow is defined.
-"""
+"""FastAPI entry point, lifecycle coordinator, and frontend host for Bus Tracker."""
 
 from contextlib import asynccontextmanager, suppress
 import asyncio
@@ -51,6 +48,27 @@ from dotenv import load_dotenv
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = PROJECT_DIR / "frontend"
 load_dotenv(PROJECT_DIR / ".env")
+
+
+class FrontendStaticFiles(StaticFiles):
+    """Give versioned/revalidated frontend assets a bounded browser lifetime."""
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        if response.status_code in {200, 304}:
+            try:
+                max_age = max(0, int(os.getenv("STATIC_ASSET_CACHE_SECONDS", "3600")))
+            except ValueError:
+                max_age = 3600
+            response.headers["Cache-Control"] = f"public, max-age={max_age}, must-revalidate"
+        return response
+
+
+def background_jobs_enabled() -> bool:
+    """Allow an autoscaled web service to delegate scheduled work to one instance."""
+
+    configured = os.getenv("BACKGROUND_JOBS_ENABLED", "true").strip().casefold()
+    return configured not in {"false", "0", "no", "off"}
 
 
 async def _run_provider_refresh(label: str) -> None:
@@ -165,10 +183,13 @@ async def lifespan(_: FastAPI):
             )
     poll_task = None
     retention_task = None
-    document_task = asyncio.create_task(_document_expiry_loop())
+    document_task = None
     from backend.services.gps_providers import provider_polling_configured
 
-    if provider_polling_configured():
+    run_background_jobs = background_jobs_enabled()
+    if run_background_jobs:
+        document_task = asyncio.create_task(_document_expiry_loop())
+    if run_background_jobs and provider_polling_configured():
         initial_refresh_completed = False
         if os.getenv("APP_ENV", "development").strip().casefold() == "production":
             # On a Render cold start, refresh before the service reports ready.
@@ -179,7 +200,7 @@ async def lifespan(_: FastAPI):
         poll_task = asyncio.create_task(
             _provider_poll_loop(initial_delay=initial_refresh_completed)
         )
-    if telemetry_retention_enabled():
+    if run_background_jobs and telemetry_retention_enabled():
         # Run once at PostgreSQL startup so migration-era coordinate history is
         # reduced immediately; the periodic task keeps it bounded afterwards.
         database_session = SessionLocal()
@@ -195,9 +216,10 @@ async def lifespan(_: FastAPI):
     try:
         yield
     finally:
-        document_task.cancel()
-        with suppress(asyncio.CancelledError):
-            await document_task
+        if document_task is not None:
+            document_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await document_task
         if poll_task is not None:
             poll_task.cancel()
             with suppress(asyncio.CancelledError):
@@ -256,7 +278,7 @@ app.include_router(pass_validation_router)
 
 
 # Serve the self-contained frontend files without depending on external tooling.
-app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="frontend")
+app.mount("/static", FrontendStaticFiles(directory=FRONTEND_DIR), name="frontend")
 
 
 @app.get("/", include_in_schema=False)

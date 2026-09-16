@@ -51,12 +51,41 @@ estimate. Verify Free Tier eligibility and the remaining costs in the console.
 
 ## Cloud Run configuration to review
 
-The app polls its GPS provider from an in-process background task. Use
-instance-based billing (CPU allocated outside HTTP requests) and at least one
-minimum instance. Default scale-to-zero/request-only settings do not suit this
-background loop. Initially use one worker and a maximum of one instance to limit
-duplicate provider polling. Instance replacements/revision overlap can still
-briefly run two pollers; this is not a distributed singleton guarantee.
+Deploy the same image as two separately configured services:
+
+- Public web service: `BACKGROUND_JOBS_ENABLED=false`, request-based billing,
+  and normal autoscaling. It handles browser/API traffic without starting GPS,
+  retention, or document-reminder loops in every instance.
+- Background service: `BACKGROUND_JOBS_ENABLED=true`, instance-based billing,
+  with minimum and maximum instances both set to one. It owns provider polling,
+  telemetry/request-log retention, and document reminders.
+
+The background service still exposes the application health endpoint because
+Cloud Run services must listen on the configured port. Restrict ingress and do
+not route public browser traffic to it. During revision replacement Cloud Run
+can briefly overlap two background instances, so a provider webhook or a
+distributed lease remains the preferred long-term singleton guarantee.
+
+Keep `STUDENT_LIVE_STREAM_ENABLED=true` on the public service. Student tracking
+uses a cookie-authenticated Server-Sent Events response, renews it before the
+Cloud Run request limit, and falls back to five-second GET polling if the stream
+cannot open. Driver GPS-source status uses the same pattern when
+`DRIVER_SOURCE_STREAM_ENABLED=true`, with in-stream revocation checks. Admin fleet tracking uses the same
+stream-first policy when `ADMIN_LIVE_STREAM_ENABLED=true`; its established
+ten-second GET remains an automatic fallback. Driver and Admin streams renew
+after about 50 minutes while checking session validity once a minute. Configure a request timeout of at
+least 55 minutes. Successful GET
+request summaries are sampled at 1% in production by default; set
+`REQUEST_AUDIT_SUCCESS_GET_SAMPLE_RATE=0` to retain only mutations and failures.
+`REQUEST_AUDIT_RETENTION_DAYS=30` bounds the operational request table without
+removing the separate security/business audit trail.
+
+Keep `ACCESS_TOKEN_EXPIRE_MINUTES=480` for one bounded school/work-day session.
+The cookie remains HttpOnly/Secure in production, Admins can revoke an
+individual session, and an active Student stream revalidates that revocation
+once a minute without creating another browser HTTP request. The idle-session
+browser monitor runs hourly; every normal API call still rejects a revoked
+session immediately.
 
 This always-running setup incurs charges. Review the actual region-specific cost
 before creating resources. Platform restarts remain possible.

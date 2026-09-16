@@ -188,6 +188,52 @@ class AirotrackReconciliationTest(unittest.TestCase):
             self.assertIsNone(state)
             self.assertIsNone(trip)
 
+    def test_stable_future_airotrack_clock_uses_receipt_time_after_probe(self) -> None:
+        with self.session_factory() as database_session:
+            bus = Bus(bus_number="AIRO-CLOCK-FALLBACK", registration_number="KL-08-AIRO-FALLBACK", capacity=40, manufacturer="Test", model="Coach", year=2026, fuel_type="Diesel", status="Active")
+            database_session.add(bus)
+            database_session.commit()
+
+            first_receipt = datetime.now(ZoneInfo("UTC")).replace(microsecond=0)
+            future_local = first_receipt.astimezone(ZoneInfo("Asia/Kolkata")) + timedelta(days=2)
+            first_data = {
+                "vehicle_registration": bus.registration_number,
+                "latitude": 12.0,
+                "longitude": 78.0,
+                "imei_no": "AIRO-CLOCK-FALLBACK-IMEI",
+                "source_date": future_local.strftime("%d-%m-%Y %I:%M:%S %p"),
+                "speed": 45,
+                "ignition": "ON",
+            }
+            with patch("backend.services.airotrack._utc_now", return_value=first_receipt):
+                first = _store_position(database_session, bus, first_data)
+
+            second_receipt = first_receipt + timedelta(seconds=20)
+            second_data = {
+                **first_data,
+                "latitude": 12.1,
+                "source_date": (future_local + timedelta(seconds=20)).strftime(
+                    "%d-%m-%Y %I:%M:%S %p"
+                ),
+            }
+            with patch("backend.services.airotrack._utc_now", return_value=second_receipt):
+                second = _store_position(database_session, bus, second_data)
+            database_session.commit()
+
+            rows = database_session.query(ProviderGPSPosition).filter_by(
+                bus_id=bus.id
+            ).order_by(ProviderGPSPosition.id.asc()).all()
+            state = database_session.query(BusGPSState).filter_by(bus_id=bus.id).one()
+            self.assertTrue(first["quarantined"])
+            self.assertFalse(first["applied"])
+            self.assertTrue(second["applied"])
+            self.assertFalse(second["quarantined"])
+            self.assertIsNotNone(rows[0].quarantine_reason)
+            self.assertIsNone(rows[1].quarantine_reason)
+            self.assertEqual(state.timestamp_basis, "receipt_clock_fallback")
+            self.assertEqual(state.effective_time.replace(tzinfo=ZoneInfo("UTC")), second_receipt)
+            self.assertEqual(state.latitude, 12.1)
+
 
 if __name__ == "__main__":
     unittest.main()

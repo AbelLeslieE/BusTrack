@@ -2,7 +2,8 @@ import { request } from "/static/common/api.js";
 import { Modal } from "/static/common/modal.js";
 import { escapeHtml } from "/static/common/security.js";
 
-const state = { view: null, sessions: [], suspendedUsers: [], query: "", loading: false, timer: null, currentUserId: null };
+const state = { view: null, sessions: [], suspendedUsers: [], query: "", loading: false, timer: null, visibilityHandler: null, currentUserId: null };
+const ACTIVE_USERS_REFRESH_MS = 60_000;
 
 function formatDate(value) {
     if (!value) return "Not recorded";
@@ -82,7 +83,7 @@ function renderActiveUsers(data) {
         <section class="active-users-hero glass-card"><div><p class="active-eyebrow">Session security</p><h1>Active Users</h1><p>Review signed-in devices, end access immediately, and suspend accounts when required.</p></div><button id="refreshActiveUsers" class="active-refresh" type="button">Refresh</button></section>
         <p id="activeUsersMessage" class="active-users-message" role="status" aria-live="polite"></p>
         <section class="active-user-stats" aria-label="Active user summary"><article class="active-stat glass-card"><span>◉</span><div><small>Active users</small><strong id="activeUserCount">${data.active_users || 0}</strong></div></article><article class="active-stat glass-card"><span>▣</span><div><small>Active devices</small><strong id="activeDeviceCount">${data.active_sessions || 0}</strong></div></article><article class="active-stat glass-card"><span>⊘</span><div><small>Suspended accounts</small><strong id="suspendedCount">${state.suspendedUsers.length}</strong></div></article></section>
-        <section class="active-users-panel glass-card"><div class="active-panel-heading"><div><p class="active-eyebrow">Live devices</p><h2>Currently signed in</h2><p>Activity is refreshed automatically every 15 seconds.</p></div><label class="active-search">⌕<input id="activeUserSearch" type="search" placeholder="Search name, device, email or IP"></label></div><div id="activeSessionList" class="active-session-list"></div></section>
+        <section class="active-users-panel glass-card"><div class="active-panel-heading"><div><p class="active-eyebrow">Live devices</p><h2>Currently signed in</h2><p>Activity is refreshed once a minute while this page is visible.</p></div><label class="active-search">⌕<input id="activeUserSearch" type="search" placeholder="Search name, device, email or IP"></label></div><div id="activeSessionList" class="active-session-list"></div></section>
         <section class="active-suspended-panel glass-card"><div><p class="active-eyebrow">Access control</p><h2>Suspended accounts</h2></div><div id="suspendedUsers" class="suspended-user-list"></div></section>`;
     state.view.querySelector("#refreshActiveUsers").addEventListener("click", loadActiveUsers);
     state.view.querySelector("#activeUserSearch").addEventListener("input", (event) => { state.query = event.target.value; renderList(); });
@@ -159,7 +160,18 @@ export function render() {
         state.currentUserId = null;
     }
     loadActiveUsers();
-    state.timer = window.setInterval(loadActiveUsers, 15_000);
-    view.cleanup = () => { if (state.timer) window.clearInterval(state.timer); state.timer = null; };
+    state.timer = window.setInterval(() => {
+        if (!document.hidden) void loadActiveUsers();
+    }, ACTIVE_USERS_REFRESH_MS);
+    state.visibilityHandler = () => {
+        if (document.visibilityState === "visible") void loadActiveUsers();
+    };
+    document.addEventListener("visibilitychange", state.visibilityHandler);
+    view.cleanup = () => {
+        if (state.timer) window.clearInterval(state.timer);
+        state.timer = null;
+        if (state.visibilityHandler) document.removeEventListener("visibilitychange", state.visibilityHandler);
+        state.visibilityHandler = null;
+    };
     return view;
 }

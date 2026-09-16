@@ -8,6 +8,7 @@ from pathlib import Path
 import tempfile
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 from uuid import uuid4
 
 from sqlalchemy import create_engine
@@ -68,14 +69,15 @@ class ProviderGpsFreshnessTest(unittest.TestCase):
             database_session.commit()
 
             recorded_at = datetime(2026, 8, 24, 8, 30, tzinfo=timezone.utc)
-            first = ingest_positions(self._request(), self._payload(10.0, recorded_at), "freshness-token", database_session)
-            equal = ingest_positions(self._request(), self._payload(11.0, recorded_at), "freshness-token", database_session)
-            older = ingest_positions(
-                self._request(),
-                self._payload(12.0, recorded_at.replace(minute=29)),
-                "freshness-token",
-                database_session,
-            )
+            with patch("backend.routes.gps_provider._utc_now", return_value=recorded_at + timedelta(minutes=1)):
+                first = ingest_positions(self._request(), self._payload(10.0, recorded_at), "freshness-token", database_session)
+                equal = ingest_positions(self._request(), self._payload(11.0, recorded_at), "freshness-token", database_session)
+                older = ingest_positions(
+                    self._request(),
+                    self._payload(12.0, recorded_at.replace(minute=29)),
+                    "freshness-token",
+                    database_session,
+                )
 
             state = database_session.query(BusGPSState).filter(BusGPSState.bus_id == bus.id).one()
             self.assertEqual(first["accepted"][0]["applied_to_current_state"], True)
@@ -126,7 +128,8 @@ class ProviderGpsFreshnessTest(unittest.TestCase):
             payload = self._payload(10.5, fix_time)
             payload["uniqueId"] = "VALID-FLAG-DEVICE"
             payload["valid"] = False
-            result = ingest_positions(self._request(), payload, "valid-flag-token", database_session)
+            with patch("backend.routes.gps_provider._utc_now", return_value=fix_time + timedelta(minutes=1)):
+                result = ingest_positions(self._request(), payload, "valid-flag-token", database_session)
 
             state = database_session.query(BusGPSState).filter(BusGPSState.bus_id == bus.id).one()
             self.assertTrue(result["accepted"][0]["applied_to_current_state"])
@@ -149,7 +152,75 @@ class ProviderGpsFreshnessTest(unittest.TestCase):
             state = database_session.query(BusGPSState).filter(BusGPSState.bus_id == bus.id).one()
             self.assertTrue(result["accepted"][0]["applied_to_current_state"])
             self.assertIsNone(state.fix_time)
+            self.assertEqual(state.timestamp_basis, "receipt_missing")
             self.assertEqual((state.latitude, state.longitude), (10.25, 76.0))
+
+    def test_old_but_regular_device_clock_uses_safe_receipt_ordering(self) -> None:
+        with self.session_factory() as database_session:
+            bus = Bus(bus_number="OFFSET-01", registration_number="OFFSET-REG", capacity=40, manufacturer="Test", model="Coach", year=2026, fuel_type="Diesel", status="Active", device_id="OFFSET-DEVICE")
+            token = GPSIngestToken(label="offset", token_hash=hashlib.sha256(b"offset-token").hexdigest(), is_active=True)
+            database_session.add_all([bus, token])
+            database_session.commit()
+
+            second_receipt = datetime.now(timezone.utc).replace(microsecond=0)
+            first_receipt = second_receipt - timedelta(minutes=2)
+            first_device_time = first_receipt - timedelta(days=2)
+            second_device_time = first_device_time + timedelta(minutes=2)
+
+            first_payload = self._payload(10.0, first_device_time)
+            first_payload["uniqueId"] = "OFFSET-DEVICE"
+            with patch("backend.routes.gps_provider._utc_now", return_value=first_receipt):
+                first_result = ingest_positions(self._request(), first_payload, "offset-token", database_session)
+
+            second_payload = self._payload(10.1, second_device_time)
+            second_payload["uniqueId"] = "OFFSET-DEVICE"
+            with patch("backend.routes.gps_provider._utc_now", return_value=second_receipt):
+                result = ingest_positions(self._request(), second_payload, "offset-token", database_session)
+
+            state = database_session.query(BusGPSState).filter_by(bus_id=bus.id).one()
+            current_history = database_session.get(ProviderGPSPosition, state.provider_position_id)
+            self.assertEqual(first_result["accepted"], [])
+            self.assertTrue(first_result["ignored"][0]["quarantined"])
+            self.assertTrue(result["accepted"][0]["applied_to_current_state"])
+            self.assertEqual(state.timestamp_basis, "receipt_clock_fallback")
+            self.assertEqual(state.fix_time.replace(tzinfo=timezone.utc), second_device_time)
+            self.assertEqual(state.effective_time.replace(tzinfo=timezone.utc), second_receipt)
+            self.assertEqual(current_history.fix_time.replace(tzinfo=timezone.utc), second_device_time)
+
+            with patch("backend.routes.gps_provider._utc_now", return_value=second_receipt + timedelta(seconds=1)):
+                health = get_provider_health(
+                    response=Response(),
+                    bus_id=bus.id,
+                    db=database_session,
+                    _technician=SimpleNamespace(),
+                )["buses"][0]
+            self.assertEqual(health["health_status"], "healthy")
+            self.assertTrue(health["clock_fallback_active"])
+            self.assertEqual(
+                health["latest_tracking_time"].replace(tzinfo=timezone.utc),
+                second_receipt,
+            )
+            self.assertEqual(
+                health["latest_device_time"].replace(tzinfo=timezone.utc),
+                second_device_time,
+            )
+
+            # A duplicate device timestamp and a rapidly replayed queued fix
+            # remain history only; neither can replace the corrected state.
+            duplicate = self._payload(11.0, second_device_time)
+            duplicate["uniqueId"] = "OFFSET-DEVICE"
+            with patch("backend.routes.gps_provider._utc_now", return_value=second_receipt + timedelta(seconds=1)):
+                duplicate_result = ingest_positions(self._request(), duplicate, "offset-token", database_session)
+            queued = self._payload(12.0, second_device_time + timedelta(minutes=2))
+            queued["uniqueId"] = "OFFSET-DEVICE"
+            with patch("backend.routes.gps_provider._utc_now", return_value=second_receipt + timedelta(seconds=2)):
+                queued_result = ingest_positions(self._request(), queued, "offset-token", database_session)
+
+            database_session.refresh(state)
+            self.assertTrue(duplicate_result["ignored"][0]["quarantined"])
+            self.assertTrue(queued_result["ignored"][0]["quarantined"])
+            self.assertEqual(state.latitude, 10.1)
+            self.assertEqual(state.timestamp_basis, "receipt_clock_fallback")
 
     def test_equal_poll_recovers_trip_after_route_is_assigned(self) -> None:
         """A saved provider fix must seed route state after a late assignment."""
@@ -163,7 +234,9 @@ class ProviderGpsFreshnessTest(unittest.TestCase):
             fix_time = datetime(2026, 8, 24, 8, 30, tzinfo=timezone.utc)
             first_payload = self._payload(10.0, fix_time)
             first_payload["uniqueId"] = "RECOVER-DEVICE"
-            first = ingest_positions(self._request(), first_payload, "recover-token", database_session)
+            then_now = fix_time + timedelta(minutes=1)
+            with patch("backend.routes.gps_provider._utc_now", return_value=then_now):
+                first = ingest_positions(self._request(), first_payload, "recover-token", database_session)
             self.assertIsNone(first["accepted"][0]["active_trip_id"])
 
             route = Route(route_code="RECOVER-R", route_name="Recovered Route", bus_id=bus.id, driver_id=None, status="Active", total_stops=2)
@@ -179,7 +252,8 @@ class ProviderGpsFreshnessTest(unittest.TestCase):
 
             repeated_payload = self._payload(11.0, fix_time)
             repeated_payload["uniqueId"] = "RECOVER-DEVICE"
-            repeated = ingest_positions(self._request(), repeated_payload, "recover-token", database_session)
+            with patch("backend.routes.gps_provider._utc_now", return_value=then_now + timedelta(seconds=1)):
+                repeated = ingest_positions(self._request(), repeated_payload, "recover-token", database_session)
 
             state = database_session.query(BusGPSState).filter(BusGPSState.bus_id == bus.id).one()
             trip = database_session.query(LiveTrip).filter(LiveTrip.bus_id == bus.id).one()
@@ -393,6 +467,55 @@ class ProviderGpsFreshnessTest(unittest.TestCase):
             )
             self.assertTrue(history["positions"][0]["quarantined"])
             self.assertFalse(history["positions"][0]["applied_to_current_state"])
+
+    def test_stable_future_webhook_clock_recovers_after_quarantined_probe(self) -> None:
+        with self.session_factory() as database_session:
+            bus = Bus(bus_number="CLOCK-FALLBACK", registration_number="CLOCK-FALLBACK-REG", capacity=40, manufacturer="Test", model="Coach", year=2026, fuel_type="Diesel", status="Active", device_id="CLOCK-FALLBACK-DEVICE")
+            token = GPSIngestToken(label="clock-fallback", token_hash=hashlib.sha256(b"clock-fallback-token").hexdigest(), is_active=True)
+            database_session.add_all([bus, token])
+            database_session.commit()
+
+            first_receipt = datetime.now(timezone.utc).replace(microsecond=0)
+            first_device_time = first_receipt + timedelta(days=2)
+            first = self._payload(10.0, first_device_time)
+            first["uniqueId"] = "CLOCK-FALLBACK-DEVICE"
+            with patch("backend.routes.gps_provider._utc_now", return_value=first_receipt):
+                first_result = ingest_positions(
+                    self._request(), first, "clock-fallback-token", database_session
+                )
+
+            second_receipt = first_receipt + timedelta(seconds=20)
+            second = self._payload(10.1, first_device_time + timedelta(seconds=20))
+            second["uniqueId"] = "CLOCK-FALLBACK-DEVICE"
+            with patch("backend.routes.gps_provider._utc_now", return_value=second_receipt):
+                second_result = ingest_positions(
+                    self._request(), second, "clock-fallback-token", database_session
+                )
+
+            state = database_session.query(BusGPSState).filter_by(bus_id=bus.id).one()
+            rows = database_session.query(ProviderGPSPosition).filter_by(
+                bus_id=bus.id
+            ).order_by(ProviderGPSPosition.id.asc()).all()
+            self.assertEqual(first_result["accepted"], [])
+            self.assertTrue(first_result["ignored"][0]["quarantined"])
+            self.assertTrue(second_result["accepted"][0]["applied_to_current_state"])
+            self.assertIsNotNone(rows[0].quarantine_reason)
+            self.assertIsNone(rows[1].quarantine_reason)
+            self.assertEqual(state.timestamp_basis, "receipt_clock_fallback")
+            self.assertEqual(state.fix_time.replace(tzinfo=timezone.utc), first_device_time + timedelta(seconds=20))
+            self.assertEqual(state.effective_time.replace(tzinfo=timezone.utc), second_receipt)
+
+            repair_result = repair_future_gps_states(
+                database_session,
+                now=second_receipt + timedelta(seconds=1),
+            )
+            database_session.commit()
+            database_session.refresh(state)
+            database_session.refresh(rows[1])
+            self.assertEqual(repair_result["repaired_states"], 0)
+            self.assertGreaterEqual(repair_result["quarantined_positions"], 1)
+            self.assertEqual(state.timestamp_basis, "receipt_clock_fallback")
+            self.assertIsNone(rows[1].quarantine_reason)
 
     def test_startup_repair_restores_newest_nonfuture_provider_state(self) -> None:
         with self.session_factory() as database_session:

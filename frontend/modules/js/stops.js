@@ -15,6 +15,18 @@ let allStops = [];
 
 let filteredStops = [];
 
+let stopStatistics = {
+
+    total_stops: 0,
+
+    total_routes: 0,
+
+    average_stops_per_route: 0,
+
+    mapped_stops: 0
+
+};
+
 let selectedRoute = "";
 
 let currentPage = 1;
@@ -88,13 +100,22 @@ async function refresh(root){
 
     try{
 
-        allStops = await StopsAPI.getStops();
+        const overview = await StopsAPI.getStopsOverview();
 
-        filteredStops = [...allStops];
+        allStops = Array.isArray(overview.stops)
+
+            ? overview.stops
+
+            : [];
+
+        stopStatistics = overview.statistics || stopStatistics;
 
         currentPage = 1;
 
-        renderCurrentPage(root);
+        // Reapply the current search after a refresh.  Otherwise a response
+        // that finishes while the administrator is typing can restore the
+        // unfiltered table beneath a populated search box.
+        applyFilters(root);
 
         updateStatistics(root);
 
@@ -209,15 +230,25 @@ function applyFilters(root){
 
     if(keyword){
 
-        filtered = filtered.filter(stop=>
+        filtered = filtered.filter(stop=> {
 
-            stop.stop_name
+            const searchableText = [
 
-                .toLowerCase()
+                stop.stop_code,
 
-                .includes(keyword)
+                stop.stop_name
 
-        );
+            ]
+
+                .filter(Boolean)
+
+                .join(" ")
+
+                .toLowerCase();
+
+            return searchableText.includes(keyword);
+
+        });
 
     }
 
@@ -522,11 +553,11 @@ function renderStatistics(){
 
                 <span class="stat-title">
 
-                    Imported
+                    Mapped Stops
 
                 </span>
 
-                <h2 id="imported-stops">
+                <h2 id="mapped-stops">
 
                     0
 
@@ -974,43 +1005,21 @@ function renderPagination(root){
 
 function updateStatistics(root){
 
-    const routes = new Set();
-
-    allStops.forEach(stop=>{
-
-        routes.add(
-
-            stop.route_name ?? stop.route_id
-
-        );
-
-    });
-
     root.querySelector("#total-stops").textContent =
 
-        allStops.length;
+        stopStatistics.total_stops ?? 0;
 
     root.querySelector("#total-routes").textContent =
 
-        routes.size;
+        stopStatistics.total_routes ?? 0;
 
     root.querySelector("#avg-stops").textContent =
 
-        routes.size
+        stopStatistics.average_stops_per_route ?? 0;
 
-            ? Math.round(
+    root.querySelector("#mapped-stops").textContent =
 
-                allStops.length /
-
-                routes.size
-
-            )
-
-            : 0;
-
-    root.querySelector("#imported-stops").textContent =
-
-        allStops.length;
+        stopStatistics.mapped_stops ?? 0;
 
 }
 /* ==========================================================================

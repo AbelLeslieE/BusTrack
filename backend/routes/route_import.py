@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import datetime, time
 from io import BytesIO
-import re
 from typing import Any
 
 import openpyxl
@@ -14,7 +13,10 @@ from sqlalchemy.orm import Session
 
 from backend.database import get_db
 from backend.models import Bus, Route, RouteStop, Stop
+from backend.routes.route_stops import remove_route_stop_records
 from backend.security import require_management
+from backend.services.generated_codes import lock_generated_code_writes, next_route_code
+from backend.services.stop_codes import lock_stop_code_writes, next_stop_code
 
 
 router = APIRouter(prefix="/api/routes", tags=["Route Import"])
@@ -114,16 +116,6 @@ def _parse_routes(rows: list[tuple[Any, ...]], header: list[str], header_row_ind
     return routes
 
 
-def _unique_code(db: Session, model: type[Route] | type[Stop], field: Any, prefix: str, source: str) -> str:
-    base = re.sub(r"[^A-Z0-9]+", "-", source.upper()).strip("-") or prefix
-    base = base[:16]
-    candidate, suffix = base, 2
-    while db.query(model).filter(field == candidate).first() is not None:
-        candidate = f"{base[:16 - len(str(suffix)) - 1]}-{suffix}"
-        suffix += 1
-    return candidate
-
-
 @router.post("/preview")
 async def preview_routes(file: UploadFile = File(...), _current_user=Depends(require_management)):
     rows, header, header_row_index = await _read_import_file(file)
@@ -152,6 +144,10 @@ async def import_routes(
     unmatched_buses: list[str] = []
 
     try:
+        # Use the same lock order as the complete Stops import. This keeps
+        # sequential ST/RT allocation safe across both import workflows.
+        lock_stop_code_writes(db)
+        lock_generated_code_writes(db, "route")
         for route_name, route_data in grouped_routes.items():
             bus_number = route_data["bus_number"]
             bus = db.query(Bus).filter(func.lower(Bus.bus_number) == bus_number.casefold()).first() if bus_number else None
@@ -161,7 +157,7 @@ async def import_routes(
             route = db.query(Route).filter(func.lower(Route.route_name) == route_name.casefold()).first()
             if route is None:
                 route = Route(
-                    route_code=_unique_code(db, Route, Route.route_code, "ROUTE", route_name),
+                    route_code=next_route_code(db),
                     route_name=route_name,
                     bus_id=bus.id if bus else None,
                     status="Active",
@@ -174,26 +170,58 @@ async def import_routes(
                     route.bus_id = bus.id
                 routes_updated += 1
 
-            db.query(RouteStop).filter(RouteStop.route_id == route.id).delete(synchronize_session=False)
-            db.flush()
-            for position, item in enumerate(route_data["stops"], start=1):
+            resolved_stops: list[tuple[Stop, dict[str, Any]]] = []
+            for item in route_data["stops"]:
                 stop = db.query(Stop).filter(func.lower(Stop.stop_name) == item["stop_name"].casefold()).first()
                 if stop is None:
                     stop = Stop(
-                        stop_code=_unique_code(db, Stop, Stop.stop_code, "STOP", item["stop_name"]),
+                        stop_code=next_stop_code(db),
                         stop_name=item["stop_name"],
                         status="Active",
                     )
                     db.add(stop)
                     db.flush()
                     stops_created += 1
-                db.add(RouteStop(
-                    route_id=route.id,
-                    stop_id=stop.id,
-                    sequence=position,
-                    scheduled_time=item["scheduled_time"],
-                    fare=item["fare"],
-                ))
+                resolved_stops.append((stop, item))
+
+            stop_ids = [stop.id for stop, _item in resolved_stops]
+            if len(stop_ids) != len(set(stop_ids)):
+                raise HTTPException(
+                    status_code=422,
+                    detail=f'Route "{route_name}" contains the same stop more than once.',
+                )
+
+            # Preserve route-stop IDs that are still present. Live trips and
+            # immutable stop events reference those IDs, so deleting and
+            # recreating every row would corrupt or reject an otherwise safe
+            # route import.
+            existing_route_stops = db.query(RouteStop).filter(
+                RouteStop.route_id == route.id
+            ).all()
+            existing_by_stop_id = {
+                route_stop.stop_id: route_stop
+                for route_stop in existing_route_stops
+            }
+            imported_stop_ids = set(stop_ids)
+            remove_route_stop_records(
+                db,
+                [
+                    route_stop
+                    for route_stop in existing_route_stops
+                    if route_stop.stop_id not in imported_stop_ids
+                ],
+            )
+
+            for position, (stop, item) in enumerate(resolved_stops, start=1):
+                route_stop = existing_by_stop_id.get(stop.id)
+                if route_stop is None:
+                    route_stop = RouteStop(route_id=route.id, stop_id=stop.id)
+                    db.add(route_stop)
+                route_stop.sequence = position
+                route_stop.scheduled_time = item["scheduled_time"]
+                route_stop.fare = item["fare"]
+                route_stop.distance_from_previous = None
+                route_stop.estimated_minutes = None
                 route_stops_created += 1
             route.total_stops = len(route_data["stops"])
         db.commit()

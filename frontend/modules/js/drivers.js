@@ -1095,13 +1095,43 @@ async function saveDriver(driverId) {
 
     catch (error) {
 
-        Modal.error({
+        const form = document.querySelector(".driver-form");
+        const message = error.message || "Unable to save this driver.";
 
-            title: "Unable to Save Driver",
+        if (!form) {
+            return;
+        }
 
-            subtitle: error.message
-
+        form.querySelectorAll(".modal-error").forEach((field) => {
+            field.classList.remove("modal-error");
+            field.removeAttribute("aria-invalid");
         });
+
+        const normalized = message.toLowerCase();
+        const fieldId = normalized.includes("license expiry")
+            ? "license_expiry"
+            : normalized.includes("license")
+                ? "license_number"
+                : normalized.includes("address")
+                    ? "address"
+                    : null;
+        let feedback = form.querySelector(".driver-save-error");
+
+        if (!feedback) {
+            feedback = document.createElement("p");
+            feedback.className = "modal-error-text driver-save-error";
+            feedback.setAttribute("role", "alert");
+            form.prepend(feedback);
+        }
+
+        feedback.textContent = `${message} Correct the highlighted field and try again. Your other entered details have been kept.`;
+        const field = fieldId ? form.querySelector(`#${fieldId}`) : null;
+
+        if (field) {
+            field.classList.add("modal-error");
+            field.setAttribute("aria-invalid", "true");
+            field.focus();
+        }
 
     }
 

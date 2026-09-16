@@ -1,0 +1,268 @@
+{"kind":"deck","id":"pr/2z05zw","name":"Deck"}
+{"kind":"layout","layoutId":"c86b923b-5816-4349-9140-bc833eaf31e8","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"e6dd910b-e492-425b-a7ab-4908d2e6407a","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/pu5z9j","slide":1,"title":"BusTrack","textShapes":5}
+{"kind":"shape","id":"sh/4bqpw7m5","slide":1,"bbox":[0,0,710,720]}
+{"kind":"shape","id":"sh/5czq5c3q","slide":1,"bbox":[64,78,76,8]}
+{"kind":"textbox","id":"sh/6d8ryh4b","slide":1,"text":"BusTrack","textPreview":"BusTrack","textChars":8,"textLines":1,"bbox":[64,125,610,100]}
+{"kind":"textbox","id":"sh/ryh87mlw","slide":1,"text":"Campus bus tracking and transport operations","textPreview":"Campus bus tracking and transport operations","textChars":44,"textLines":1,"bbox":[67,235,555,92]}
+{"kind":"textbox","id":"sh/szq90rm1","slide":1,"text":"A working platform for students, drivers, transport administrators and GPS technicians","textPreview":"A working platform for students, drivers, transport administrators and GPS technicians","textChars":86,"textLines":1,"bbox":[67,355,520,95]}
+{"kind":"textbox","id":"sh/t0zq9c3m","slide":1,"text":"ENTREPRENEURSHIP PRESENTATION","textPreview":"ENTREPRENEURSHIP PRESENTATION","textChars":29,"textLines":1,"bbox":[67,592,420,28]}
+{"kind":"textbox","id":"sh/e18r2h47","slide":1,"text":"From no tracking to a clear, managed campus journey","textPreview":"From no tracking to a clear, managed campus journey","textChars":51,"textLines":1,"bbox":[67,625,520,35]}
+{"kind":"image","id":"im/q5c7eh4v","slide":1,"name":"","alt":"BusTrack student live map showing a bus and route stops","bbox":[0,0,1280,720]}
+{"kind":"notes","id":"nt/pu5z9j","slide":1,"text":"Open with the present situation: the college does not currently use any bus tracking method. Students depend on estimates, calls or informal communication. BusTrack introduces a single system that serves students and the transport team."}
+{"kind":"slide","id":"sl/maqkfv","slide":2,"title":"02","textShapes":19}
+{"kind":"textbox","id":"sh/c7mps3yd","slide":2,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[64,28,64,24]}
+{"kind":"textbox","id":"sh/r6d8jyxs","slide":2,"text":"The current campus experience","textPreview":"The current campus experience","textChars":29,"textLines":1,"bbox":[64,60,1120,56]}
+{"kind":"shape","id":"sh/q5k7qtgn","slide":2,"bbox":[64,127,86,4]}
+{"kind":"textbox","id":"sh/p4bqh8f2","slide":2,"text":"There is no live bus tracking system today","textPreview":"There is no live bus tracking system today","textChars":42,"textLines":1,"bbox":[175,116,965,34]}
+{"kind":"textbox","id":"sh/432po3yh","slide":2,"text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[1190,676,30,18]}
+{"kind":"textbox","id":"sh/32t8fyxw","slide":2,"text":"0","textPreview":"0","textChars":1,"textLines":1,"bbox":[70,170,250,190]}
+{"kind":"textbox","id":"sh/21k7mtgb","slide":2,"text":"live tracking tools","textPreview":"live tracking tools","textChars":19,"textLines":1,"bbox":[86,355,290,45]}
+{"kind":"textbox","id":"sh/90fqtsf6","slide":2,"text":"Students must estimate where the bus is and when it will reach their stop.","textPreview":"Students must estimate where the bus is and when it will reach their stop.","textChars":74,"textLines":1,"bbox":[86,420,330,120]}
+{"kind":"shape","id":"sh/oz690nyl","slide":2,"bbox":[470,175,2,405]}
+{"kind":"textbox","id":"sh/it03ex0f","slide":2,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[520,180,58,38]}
+{"kind":"textbox","id":"sh/ju9kn21k","slide":2,"text":"Uncertain waiting","textPreview":"Uncertain waiting","textChars":17,"textLines":1,"bbox":[588,180,572,30]}
+{"kind":"textbox","id":"sh/kf2lg7i5","slide":2,"text":"Students may arrive too early or risk missing the bus.","textPreview":"Students may arrive too early or risk missing the bus.","textChars":54,"textLines":1,"bbox":[588,215,572,60]}
+{"kind":"textbox","id":"sh/5gb2pcjq","slide":2,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[520,295,58,38]}
+{"kind":"textbox","id":"sh/ap03ax03","slide":2,"text":"Repeated calls","textPreview":"Repeated calls","textChars":14,"textLines":1,"bbox":[588,295,572,30]}
+{"kind":"textbox","id":"sh/vq9kj21o","slide":2,"text":"Drivers and transport staff receive location questions during trips.","textPreview":"Drivers and transport staff receive location questions during trips.","textChars":68,"textLines":1,"bbox":[588,330,572,60]}
+{"kind":"textbox","id":"sh/wrilc7i9","slide":2,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[520,410,58,38]}
+{"kind":"textbox","id":"sh/xsr2lsju","slide":2,"text":"No journey record","textPreview":"No journey record","textChars":17,"textLines":1,"bbox":[588,410,572,30]}
+{"kind":"textbox","id":"sh/ulk3mh07","slide":2,"text":"The college cannot review exact stop arrivals or completed route legs.","textPreview":"The college cannot review exact stop arrivals or completed route legs.","textChars":70,"textLines":1,"bbox":[588,445,572,60]}
+{"kind":"textbox","id":"sh/fmt4vm1s","slide":2,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[520,525,58,38]}
+{"kind":"textbox","id":"sh/bq507ehk","slide":2,"text":"Limited visibility","textPreview":"Limited visibility","textChars":18,"textLines":1,"bbox":[588,525,572,30]}
+{"kind":"textbox","id":"sh/qpwze9gz","slide":2,"text":"Administrators cannot see the whole fleet from one place.","textPreview":"Administrators cannot see the whole fleet from one place.","textChars":57,"textLines":1,"bbox":[588,560,572,60]}
+{"kind":"notes","id":"nt/maqkfv","slide":2,"text":"This slide describes the college's actual starting point. Do not claim that WhatsApp tracking already exists. Explain that any current communication is informal and does not provide a shared operational view."}
+{"kind":"slide","id":"sl/yko7jo","slide":3,"title":"03","textShapes":17}
+{"kind":"textbox","id":"sh/10v6dwnq","slide":3,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[64,28,64,24]}
+{"kind":"textbox","id":"sh/exkn21of","slide":3,"text":"One system, four focused portals","textPreview":"One system, four focused portals","textChars":32,"textLines":1,"bbox":[64,60,1120,56]}
+{"kind":"shape","id":"sh/zydob650","slide":3,"bbox":[64,127,86,4]}
+{"kind":"textbox","id":"sh/cv250r69","slide":3,"text":"Each person sees the information needed for their role","textPreview":"Each person sees the information needed for their role","textChars":54,"textLines":1,"bbox":[175,116,965,34]}
+{"kind":"textbox","id":"sh/dwb69wnu","slide":3,"text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[1190,676,30,18]}
+{"kind":"textbox","id":"sh/qtknyho3","slide":3,"text":"STUDENT","textPreview":"STUDENT","textChars":7,"textLines":1,"bbox":[64,180,240,30]}
+{"kind":"textbox","id":"sh/ruto7m5o","slide":3,"text":"Live map and stop-by-stop progress","textPreview":"Live map and stop-by-stop progress","textChars":34,"textLines":1,"bbox":[64,230,250,90]}
+{"kind":"textbox","id":"sh/wr6pcb6d","slide":3,"text":"Map and Track views\nCurrent and next stop\nOutbound and return journey\nDigital bus pass","textPreview":"Map and Track views | Current and next stop | Outbound and return journey | Digital bus pass","textChars":86,"textLines":4,"bbox":[64,360,250,205]}
+{"kind":"shape","id":"sh/xsf6lgny","slide":3,"bbox":[334,188,2,410]}
+{"kind":"textbox","id":"sh/h4futk7e","slide":3,"text":"DRIVER","textPreview":"DRIVER","textChars":6,"textLines":1,"bbox":[356,180,240,30]}
+{"kind":"textbox","id":"sh/g3mt0f6t","slide":3,"text":"Tools for the assigned journey","textPreview":"Tools for the assigned journey","textChars":30,"textLines":1,"bbox":[356,230,250,90]}
+{"kind":"textbox","id":"sh/v2dcrap8","slide":3,"text":"Assigned bus and route\nTrip controls\nOperational alerts\nQR pass verification","textPreview":"Assigned bus and route | Trip controls | Operational alerts | QR pass verification","textChars":76,"textLines":4,"bbox":[356,360,250,205]}
+{"kind":"shape","id":"sh/u14by5on","slide":3,"bbox":[626,188,2,410]}
+{"kind":"textbox","id":"sh/t0vup072","slide":3,"text":"ADMIN","textPreview":"ADMIN","textChars":5,"textLines":1,"bbox":[648,180,240,30]}
+{"kind":"textbox","id":"sh/8zmtwv6h","slide":3,"text":"Complete transport management","textPreview":"Complete transport management","textChars":29,"textLines":1,"bbox":[648,230,250,90]}
+{"kind":"textbox","id":"sh/7ydcnapc","slide":3,"text":"Fleet and assignments\nRoutes and geofences\nTrip history\nDocuments and users","textPreview":"Fleet and assignments | Routes and geofences | Trip history | Documents and users","textChars":75,"textLines":4,"bbox":[648,360,250,205]}
+{"kind":"shape","id":"sh/6x4bu5or","slide":3,"bbox":[918,188,2,410]}
+{"kind":"textbox","id":"sh/dwzu147m","slide":3,"text":"TECHNICIAN","textPreview":"TECHNICIAN","textChars":10,"textLines":1,"bbox":[940,180,240,30]}
+{"kind":"textbox","id":"sh/cvqd8z61","slide":3,"text":"GPS integration and health","textPreview":"GPS integration and health","textChars":26,"textLines":1,"bbox":[940,230,250,90]}
+{"kind":"textbox","id":"sh/czyx43ex","slide":3,"text":"Provider filtering\nDelay and timestamp checks\nRaw response history\nSafe route recovery","textPreview":"Provider filtering | Delay and timestamp checks | Raw response history | Safe route recovery","textChars":86,"textLines":4,"bbox":[940,360,250,205]}
+{"kind":"textbox","id":"sh/x07ex8vi","slide":3,"text":"The same route state powers every portal","textPreview":"The same route state powers every portal","textChars":40,"textLines":1,"bbox":[64,625,1085,40]}
+{"kind":"notes","id":"nt/yko7jo","slide":3,"text":"Describe BusTrack as one transport platform rather than four separate applications. All portals read the same verified journey state, so the student, driver, administrator and technician see consistent information."}
+{"kind":"slide","id":"sl/gdqaeo","slide":4,"title":"04","textShapes":21}
+{"kind":"textbox","id":"sh/lg72d03i","slide":4,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[64,28,64,24]}
+{"kind":"textbox","id":"sh/ydw3i547","slide":4,"text":"How BusTrack works","textPreview":"How BusTrack works","textChars":18,"textLines":1,"bbox":[64,60,1120,56]}
+{"kind":"shape","id":"sh/je5kbals","slide":4,"bbox":[64,127,86,4]}
+{"kind":"textbox","id":"sh/8jylofm9","slide":4,"text":"Raw coordinates become route information that students can use","textPreview":"Raw coordinates become route information that students can use","textChars":62,"textLines":1,"bbox":[175,116,965,34]}
+{"kind":"textbox","id":"sh/tk72hk3u","slide":4,"text":"4","textPreview":"4","textChars":1,"textLines":1,"bbox":[1190,676,30,18]}
+{"kind":"shape","id":"sh/6hg3m543","slide":4,"bbox":[252,296,50,3]}
+{"kind":"shape","id":"sh/7ipkfalo","slide":4,"bbox":[58,210,195,180]}
+{"kind":"textbox","id":"sh/onu1cbm5","slide":4,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[76,228,48,26]}
+{"kind":"textbox","id":"sh/9o325g3a","slide":4,"text":"GPS update","textPreview":"GPS update","textChars":10,"textLines":1,"bbox":[76,272,160,42]}
+{"kind":"textbox","id":"sh/pgruh0ni","slide":4,"text":"Vehicle provider or driver phone","textPreview":"Vehicle provider or driver phone","textChars":32,"textLines":1,"bbox":[76,326,158,52]}
+{"kind":"shape","id":"sh/ofitov6x","slide":4,"bbox":[496,296,50,3]}
+{"kind":"shape","id":"sh/3e9sfq5c","slide":4,"bbox":[302,210,195,180]}
+{"kind":"textbox","id":"sh/2d0bmlor","slide":4,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[320,228,48,26]}
+{"kind":"textbox","id":"sh/d4bul0ne","slide":4,"text":"Validate","textPreview":"Validate","textChars":8,"textLines":1,"bbox":[320,272,160,42]}
+{"kind":"textbox","id":"sh/c32tsv6t","slide":4,"text":"Vehicle, timestamp and freshness","textPreview":"Vehicle, timestamp and freshness","textChars":32,"textLines":1,"bbox":[320,326,158,52]}
+{"kind":"shape","id":"sh/b2tcjq58","slide":4,"bbox":[740,296,50,3]}
+{"kind":"shape","id":"sh/q10bqlo3","slide":4,"bbox":[546,210,195,180]}
+{"kind":"textbox","id":"sh/l8bupknq","slide":4,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[564,228,48,26]}
+{"kind":"textbox","id":"sh/072twf65","slide":4,"text":"Route engine","textPreview":"Route engine","textChars":12,"textLines":1,"bbox":[564,272,160,42]}
+{"kind":"textbox","id":"sh/kbadsje1","slide":4,"text":"Compare with official stop geofences","textPreview":"Compare with official stop geofences","textChars":36,"textLines":1,"bbox":[564,326,158,52]}
+{"kind":"shape","id":"sh/lcjelovm","slide":4,"bbox":[984,296,50,3]}
+{"kind":"shape","id":"sh/y9svq9wb","slide":4,"bbox":[790,210,195,180]}
+{"kind":"textbox","id":"sh/ja1wjedw","slide":4,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[808,228,48,26]}
+{"kind":"textbox","id":"sh/8fudwjud","slide":4,"text":"Journey state","textPreview":"Journey state","textChars":13,"textLines":1,"bbox":[808,272,160,42]}
+{"kind":"textbox","id":"sh/tg3epovy","slide":4,"text":"Current stop, next stop and direction","textPreview":"Current stop, next stop and direction","textChars":37,"textLines":1,"bbox":[808,326,158,52]}
+{"kind":"shape","id":"sh/6dcvutc7","slide":4,"bbox":[1034,210,195,180]}
+{"kind":"textbox","id":"sh/7elwnyds","slide":4,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[1052,228,48,26]}
+{"kind":"textbox","id":"sh/ojqdkzet","slide":4,"text":"Portal update","textPreview":"Portal update","textChars":13,"textLines":1,"bbox":[1052,272,160,42]}
+{"kind":"textbox","id":"sh/9kzud4ve","slide":4,"text":"Student, driver, admin and technician","textPreview":"Student, driver, admin and technician","textChars":37,"textLines":1,"bbox":[1052,326,158,52]}
+{"kind":"shape","id":"sh/rypgj2xw","slide":4,"bbox":[170,465,940,120]}
+{"kind":"textbox","id":"sh/qxgzqxwr","slide":4,"text":"The map marker and route progress remain separate","textPreview":"The map marker and route progress remain separate","textChars":49,"textLines":1,"bbox":[205,490,870,40]}
+{"kind":"textbox","id":"sh/d07ylcf2","slide":4,"text":"BusTrack preserves the real last-known location while showing whether that location is fresh enough to change the route.","textPreview":"BusTrack preserves the real last-known location while showing whether that location is fresh enough to change the route.","textChars":120,"textLines":1,"bbox":[225,540,830,44]}
+{"kind":"notes","id":"nt/gdqaeo","slide":4,"text":"Explain the transformation: a GPS coordinate by itself is only a point. BusTrack validates it, compares it with the saved route, then produces stop progress and journey direction. The final portal refresh does not require the user to reload the page."}
+{"kind":"slide","id":"sl/dnt1im","slide":5,"title":"05","textShapes":14}
+{"kind":"textbox","id":"sh/r6dofux8","slide":5,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[64,28,64,24]}
+{"kind":"textbox","id":"sh/c7mp8zet","slide":5,"text":"Student live tracking","textPreview":"Student live tracking","textChars":21,"textLines":1,"bbox":[64,60,1120,56]}
+{"kind":"shape","id":"sh/d8v6hkfe","slide":5,"bbox":[64,127,86,4]}
+{"kind":"textbox","id":"sh/2hk725wr","slide":5,"text":"A clear answer to where the bus is and what happens next","textPreview":"A clear answer to where the bus is and what happens next","textChars":56,"textLines":1,"bbox":[175,116,965,34]}
+{"kind":"textbox","id":"sh/32tobaxw","slide":5,"text":"5","textPreview":"5","textChars":1,"textLines":1,"bbox":[1190,676,30,18]}
+{"kind":"textbox","id":"sh/432p4feh","slide":5,"text":"Students can see","textPreview":"Students can see","textChars":16,"textLines":1,"bbox":[64,180,360,38]}
+{"kind":"textbox","id":"sh/p4v6dkf2","slide":5,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[64,245,58,38]}
+{"kind":"textbox","id":"sh/mdo7e9wv","slide":5,"text":"Route progress","textPreview":"Route progress","textChars":14,"textLines":1,"bbox":[132,245,337,30]}
+{"kind":"textbox","id":"sh/nyx8nexg","slide":5,"text":"Approaching, reached, passed and upcoming stops.","textPreview":"Approaching, reached, passed and upcoming stops.","textChars":48,"textLines":1,"bbox":[132,280,337,60]}
+{"kind":"textbox","id":"sh/retcbytg","slide":5,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[64,365,58,38]}
+{"kind":"textbox","id":"sh/qdkvitsb","slide":5,"text":"Journey direction","textPreview":"Journey direction","textChars":17,"textLines":1,"bbox":[132,365,337,30]}
+{"kind":"textbox","id":"sh/dgvudobm","slide":5,"text":"Outbound and return routes appear in the correct order.","textPreview":"Outbound and return routes appear in the correct order.","textChars":55,"textLines":1,"bbox":[132,400,337,60]}
+{"kind":"textbox","id":"sh/cf2dkja1","slide":5,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[64,485,58,38]}
+{"kind":"textbox","id":"sh/zidcfyts","slide":5,"text":"Location confidence","textPreview":"Location confidence","textChars":19,"textLines":1,"bbox":[132,485,337,30]}
+{"kind":"textbox","id":"sh/eh4vmts7","slide":5,"text":"Last-update time and stale warnings prevent false certainty.","textPreview":"Last-update time and stale warnings prevent false certainty.","textChars":60,"textLines":1,"bbox":[132,520,337,60]}
+{"kind":"shape","id":"sh/14vuh8by","slide":5,"bbox":[502,167,716,461]}
+{"kind":"image","id":"im/rix0jq5w","slide":5,"name":"","geometry":"roundRect","alt":"BusTrack student route progress with stop statuses","bbox":[505,170,710,455]}
+{"kind":"notes","id":"nt/dnt1im","slide":5,"text":"Use the screenshot to show the student's Track view. Point to the current stop, next stop and the passed/upcoming labels. Explain that the Map view uses the same journey state."}
+{"kind":"slide","id":"sl/ly5ic7","slide":6,"title":"06","textShapes":14}
+{"kind":"textbox","id":"sh/zuxor2do","slide":6,"text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[64,28,64,24]}
+{"kind":"textbox","id":"sh/kv6pkne9","slide":6,"text":"Transport administration","textPreview":"Transport administration","textChars":24,"textLines":1,"bbox":[64,60,1120,56]}
+{"kind":"shape","id":"sh/lwf6tsvu","slide":6,"bbox":[64,127,86,4]}
+{"kind":"textbox","id":"sh/mx87mxwf","slide":6,"text":"One place to manage the fleet and review completed journeys","textPreview":"One place to manage the fleet and review completed journeys","textChars":59,"textLines":1,"bbox":[175,116,965,34]}
+{"kind":"textbox","id":"sh/7yhov2d0","slide":6,"text":"6","textPreview":"6","textChars":1,"textLines":1,"bbox":[1190,676,30,18]}
+{"kind":"shape","id":"sh/8zqpo7e5","slide":6,"bbox":[61,167,736,426]}
+{"kind":"textbox","id":"sh/u187qhwb","slide":6,"text":"Operational control","textPreview":"Operational control","textChars":19,"textLines":1,"bbox":[845,180,330,38]}
+{"kind":"textbox","id":"sh/v2hozmdw","slide":6,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[845,245,58,38]}
+{"kind":"textbox","id":"sh/7uhsv2ho","slide":6,"text":"Manage the network","textPreview":"Manage the network","textChars":18,"textLines":1,"bbox":[913,245,287,30]}
+{"kind":"textbox","id":"sh/mt8b2xg3","slide":6,"text":"Buses, routes, stops, drivers, students and assignments.","textPreview":"Buses, routes, stops, drivers, students and assignments.","textChars":56,"textLines":1,"bbox":[913,280,287,60]}
+{"kind":"textbox","id":"sh/9wjaxsze","slide":6,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[845,365,58,38]}
+{"kind":"textbox","id":"sh/8vat47y9","slide":6,"text":"Review evidence","textPreview":"Review evidence","textChars":15,"textLines":1,"bbox":[913,365,287,30]}
+{"kind":"textbox","id":"sh/z6hsrihc","slide":6,"text":"Stop arrival, departure, dwell time and journey direction.","textPreview":"Stop arrival, departure, dwell time and journey direction.","textChars":58,"textLines":1,"bbox":[913,400,287,60]}
+{"kind":"textbox","id":"sh/y58byd0r","slide":6,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[845,485,58,38]}
+{"kind":"textbox","id":"sh/lszatszi","slide":6,"text":"Act on issues","textPreview":"Act on issues","textChars":13,"textLines":1,"bbox":[913,485,287,30]}
+{"kind":"textbox","id":"sh/k7qt0nix","slide":6,"text":"Driver alerts, document reminders, users and active sessions.","textPreview":"Driver alerts, document reminders, users and active sessions.","textChars":61,"textLines":1,"bbox":[913,520,287,60]}
+{"kind":"image","id":"im/0b6dw761","slide":6,"name":"","geometry":"roundRect","alt":"BusTrack admin trip history and bus selection screen","bbox":[64,170,730,420]}
+{"kind":"notes","id":"nt/ly5ic7","slide":6,"text":"Show how the administrator selects a bus and reviews its trip history. Mention that stop records and driver feedback replace guesswork when someone reports a delay or missed stop."}
+{"kind":"slide","id":"sl/px1dl3","slide":7,"title":"07","textShapes":15}
+{"kind":"textbox","id":"sh/id0jut4z","slide":7,"text":"07","textPreview":"07","textChars":2,"textLines":1,"bbox":[64,28,64,24]}
+{"kind":"textbox","id":"sh/5gr2p83q","slide":7,"text":"Driver tools and secure bus passes","textPreview":"Driver tools and secure bus passes","textChars":34,"textLines":1,"bbox":[64,60,1120,56]}
+{"kind":"shape","id":"sh/4fi1w3m5","slide":7,"bbox":[64,127,86,4]}
+{"kind":"textbox","id":"sh/ri9krilw","slide":7,"text":"Journey controls and boarding verification on a mobile screen","textPreview":"Journey controls and boarding verification on a mobile screen","textChars":61,"textLines":1,"bbox":[175,116,965,34]}
+{"kind":"textbox","id":"sh/6h0jyd4b","slide":7,"text":"7","textPreview":"7","textChars":1,"textLines":1,"bbox":[1190,676,30,18]}
+{"kind":"textbox","id":"sh/tkb2ts3m","slide":7,"text":"Driver portal","textPreview":"Driver portal","textChars":13,"textLines":1,"bbox":[64,180,355,38]}
+{"kind":"textbox","id":"sh/sj210nm1","slide":7,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[64,245,58,38]}
+{"kind":"textbox","id":"sh/7mp0felc","slide":7,"text":"Assigned journey","textPreview":"Assigned journey","textChars":16,"textLines":1,"bbox":[132,245,342,30]}
+{"kind":"textbox","id":"sh/mlgjm94r","slide":7,"text":"The driver sees the assigned bus, route and live direction.","textPreview":"The driver sees the assigned bus, route and live direction.","textChars":59,"textLines":1,"bbox":[132,280,342,60]}
+{"kind":"textbox","id":"sh/gzupcvex","slide":7,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[64,365,58,38]}
+{"kind":"textbox","id":"sh/h036l0fi","slide":7,"text":"Operational alerts","textPreview":"Operational alerts","textChars":18,"textLines":1,"bbox":[132,365,342,30]}
+{"kind":"textbox","id":"sh/udsna5wr","slide":7,"text":"Traffic, delay, breakdown and emergency reports reach the administrator.","textPreview":"Traffic, delay, breakdown and emergency reports reach the administrator.","textChars":72,"textLines":1,"bbox":[132,400,342,60]}
+{"kind":"textbox","id":"sh/vylojaxc","slide":7,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[64,500,58,38]}
+{"kind":"textbox","id":"sh/43upgfet","slide":7,"text":"Live pass scan","textPreview":"Live pass scan","textChars":14,"textLines":1,"bbox":[132,500,342,30]}
+{"kind":"textbox","id":"sh/p436pkve","slide":7,"text":"Camera preview, short-lived QR and official-photo comparison.","textPreview":"Camera preview, short-lived QR and official-photo comparison.","textChars":61,"textLines":1,"bbox":[132,535,342,60]}
+{"kind":"shape","id":"sh/21c7e5w3","slide":7,"bbox":[517,167,701,436]}
+{"kind":"textbox","id":"sh/k7a54bep","slide":7,"text":"The driver confirms the server decision and the student's official photo before boarding.","textPreview":"The driver confirms the server decision and the student's official photo before boarding.","textChars":89,"textLines":1,"bbox":[535,620,670,42]}
+{"kind":"image","id":"im/4j6x4bux","slide":7,"name":"","geometry":"roundRect","alt":"BusTrack driver portal showing the bus pass camera preview","bbox":[520,170,695,430]}
+{"kind":"notes","id":"nt/px1dl3","slide":7,"text":"Explain that the live QR changes frequently, reducing screenshot reuse. The server checks the pass, active trip, route, bus and student status. The official photograph remains controlled by the transport office."}
+{"kind":"slide","id":"sl/33492d","slide":8,"title":"08","textShapes":14}
+{"kind":"textbox","id":"sh/j69ovm14","slide":8,"text":"08","textPreview":"08","textChars":2,"textLines":1,"bbox":[64,28,64,24]}
+{"kind":"textbox","id":"sh/k7i5or2p","slide":8,"text":"GPS reliability and provider health","textPreview":"GPS reliability and provider health","textChars":35,"textLines":1,"bbox":[64,60,1120,56]}
+{"kind":"shape","id":"sh/5sr6xwja","slide":8,"bbox":[64,127,86,4]}
+{"kind":"textbox","id":"sh/a1gnihkn","slide":8,"text":"Airotrack and Kingstrack work through the same route engine","textPreview":"Airotrack and Kingstrack work through the same route engine","textChars":59,"textLines":1,"bbox":[175,116,965,34]}
+{"kind":"textbox","id":"sh/v294rml8","slide":8,"text":"8","textPreview":"8","textChars":1,"textLines":1,"bbox":[1190,676,30,18]}
+{"kind":"shape","id":"sh/w3i5k72t","slide":8,"bbox":[61,172,741,420]}
+{"kind":"textbox","id":"sh/mxgnexkr","slide":8,"text":"Built for imperfect data","textPreview":"Built for imperfect data","textChars":24,"textLines":1,"bbox":[845,180,360,38]}
+{"kind":"textbox","id":"sh/nyp4n2lw","slide":8,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[845,245,58,38]}
+{"kind":"textbox","id":"sh/zel4bix0","slide":8,"text":"Provider separation","textPreview":"Provider separation","textChars":19,"textLines":1,"bbox":[913,245,287,30]}
+{"kind":"textbox","id":"sh/eds3idgf","slide":8,"text":"Each bus stays assigned to its detected GPS provider.","textPreview":"Each bus stays assigned to its detected GPS provider.","textChars":53,"textLines":1,"bbox":[913,280,287,60]}
+{"kind":"textbox","id":"sh/1g3mdsfq","slide":8,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[845,365,58,38]}
+{"kind":"textbox","id":"sh/0fulknyl","slide":8,"text":"Visible delay","textPreview":"Visible delay","textChars":13,"textLines":1,"bbox":[913,365,287,30]}
+{"kind":"textbox","id":"sh/nil4fixw","slide":8,"text":"Contact time, device time and update gaps appear separately.","textPreview":"Contact time, device time and update gaps appear separately.","textChars":60,"textLines":1,"bbox":[913,400,287,60]}
+{"kind":"textbox","id":"sh/mhc3mxgb","slide":8,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[845,485,58,38]}
+{"kind":"textbox","id":"sh/9k3mhsf2","slide":8,"text":"Failure isolation","textPreview":"Failure isolation","textChars":17,"textLines":1,"bbox":[913,485,287,30]}
+{"kind":"textbox","id":"sh/ojulonyh","slide":8,"text":"A problem with one provider does not stop the other.","textPreview":"A problem with one provider does not stop the other.","textChars":52,"textLines":1,"bbox":[913,520,287,60]}
+{"kind":"image","id":"im/476x8z2p","slide":8,"name":"","geometry":"roundRect","alt":"BusTrack Provider Health screen with per-bus timing information","bbox":[64,175,735,414]}
+{"kind":"notes","id":"nt/33492d","slide":8,"text":"BusTrack supports the college's mixed GPS fleet. A bus is matched by registration number and retained under its detected provider. Technicians can filter Airotrack and Kingstrack, then inspect the raw response when troubleshooting."}
+{"kind":"slide","id":"sl/bnhpx2","slide":9,"title":"09","textShapes":18}
+{"kind":"textbox","id":"sh/gnap8vmt","slide":9,"text":"09","textPreview":"09","textChars":2,"textLines":1,"bbox":[64,28,64,24]}
+{"kind":"textbox","id":"sh/vm18fql8","slide":9,"text":"Protection from incorrect GPS data","textPreview":"Protection from incorrect GPS data","textChars":34,"textLines":1,"bbox":[64,60,1120,56]}
+{"kind":"shape","id":"sh/uls76l43","slide":9,"bbox":[64,127,86,4]}
+{"kind":"textbox","id":"sh/5c3ql03q","slide":9,"text":"Delayed or misdated packets remain visible without taking control of the journey","textPreview":"Delayed or misdated packets remain visible without taking control of the journey","textChars":80,"textLines":1,"bbox":[175,116,965,34]}
+{"kind":"textbox","id":"sh/4bupcv25","slide":9,"text":"9","textPreview":"9","textChars":1,"textLines":1,"bbox":[1190,676,30,18]}
+{"kind":"textbox","id":"sh/3ql8jqlk","slide":9,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[64,185,50,30]}
+{"kind":"shape","id":"sh/ipc7al4z","slide":9,"bbox":[64,232,235,5]}
+{"kind":"textbox","id":"sh/lgjq9w36","slide":9,"text":"RECEIVE","textPreview":"RECEIVE","textChars":7,"textLines":1,"bbox":[64,265,235,35]}
+{"kind":"textbox","id":"sh/kfqp0bml","slide":9,"text":"Keep the original coordinate and device timestamp","textPreview":"Keep the original coordinate and device timestamp","textChars":49,"textLines":1,"bbox":[64,320,235,115]}
+{"kind":"textbox","id":"sh/yt0falgn","slide":9,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[356,185,50,30]}
+{"kind":"shape","id":"sh/ju9g3qx8","slide":9,"bbox":[356,232,235,5]}
+{"kind":"textbox","id":"sh/kfixcvyt","slide":9,"text":"CHECK","textPreview":"CHECK","textChars":5,"textLines":1,"bbox":[356,265,235,35]}
+{"kind":"textbox","id":"sh/lgby5gfe","slide":9,"text":"Compare device time, receipt time and accepted state","textPreview":"Compare device time, receipt time and accepted state","textChars":52,"textLines":1,"bbox":[356,320,235,115]}
+{"kind":"textbox","id":"sh/6hkfelgz","slide":9,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[648,185,50,30]}
+{"kind":"shape","id":"sh/7itg7qxk","slide":9,"bbox":[648,232,235,5]}
+{"kind":"textbox","id":"sh/8j2xgvyp","slide":9,"text":"DECIDE","textPreview":"DECIDE","textChars":6,"textLines":1,"bbox":[648,265,235,35]}
+{"kind":"textbox","id":"sh/tkby90fa","slide":9,"text":"Accept a fresh observation or quarantine an unsafe one","textPreview":"Accept a fresh observation or quarantine an unsafe one","textChars":54,"textLines":1,"bbox":[648,320,235,115]}
+{"kind":"textbox","id":"sh/ulkzi5gv","slide":9,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[940,185,50,30]}
+{"kind":"shape","id":"sh/vmtgbaxg","slide":9,"bbox":[940,232,235,5]}
+{"kind":"textbox","id":"sh/rqdwzado","slide":9,"text":"UPDATE","textPreview":"UPDATE","textChars":6,"textLines":1,"bbox":[940,265,235,35]}
+{"kind":"textbox","id":"sh/qp4fq5c3","slide":9,"text":"Advance the route only from valid ordered data","textPreview":"Advance the route only from valid ordered data","textChars":46,"textLines":1,"bbox":[940,320,235,115]}
+{"kind":"shape","id":"sh/dcve1kve","slide":9,"bbox":[64,470,1120,2]}
+{"kind":"textbox","id":"sh/srmxsfu9","slide":9,"text":"Additional safeguards","textPreview":"Additional safeguards","textChars":21,"textLines":1,"bbox":[64,505,300,34]}
+{"kind":"textbox","id":"sh/3mtwvqdc","slide":9,"text":"Older observations cannot move the route backward. A route reset waits for a fresh arrival at its selected first stop. The real bus marker stays at its last-known coordinate.","textPreview":"Older observations cannot move the route backward. A route reset waits for a fresh arrival at its selected first stop. The real bus marke...","textChars":174,"textLines":1,"bbox":[390,500,790,95]}
+{"kind":"notes","id":"nt/bnhpx2","slide":9,"text":"This is a key differentiator. Explain that BusTrack does not simply trust the newest response received from a provider. It considers the GPS device time and the already accepted state before changing the journey."}
+{"kind":"slide","id":"sl/xj01fh","slide":10,"title":"10","textShapes":5}
+{"kind":"textbox","id":"sh/3ml8ril8","slide":10,"text":"10","textPreview":"10","textChars":2,"textLines":1,"bbox":[64,28,64,24]}
+{"kind":"textbox","id":"sh/onu90nmd","slide":10,"text":"Three approaches to campus tracking","textPreview":"Three approaches to campus tracking","textChars":35,"textLines":1,"bbox":[64,60,1120,56]}
+{"kind":"shape","id":"sh/p8nqts3y","slide":10,"bbox":[64,127,86,4]}
+{"kind":"textbox","id":"sh/q9wr2x4j","slide":10,"text":"The college currently operates without a tracking system","textPreview":"The college currently operates without a tracking system","textChars":56,"textLines":1,"bbox":[175,116,965,34]}
+{"kind":"textbox","id":"sh/ba5svil4","slide":10,"text":"10","textPreview":"10","textChars":2,"textLines":1,"bbox":[1190,676,30,18]}
+{"kind":"textbox","id":"sh/dcnaxs3a","slide":10,"text":"WhatsApp remains useful for communication. BusTrack manages the structured transport journey.","textPreview":"WhatsApp remains useful for communication. BusTrack manages the structured transport journey.","textChars":93,"textLines":1,"bbox":[64,635,1110,35]}
+{"kind":"table","id":"tb/ts7u10ji","slide":10,"name":"","rows":7,"cols":4,"preview":"Capability | Current situation | Possible WhatsApp workaround | BusTrack","bbox":[62,175,1155,440]}
+{"kind":"notes","id":"nt/xj01fh","slide":10,"text":"The WhatsApp column describes a possible informal workaround, not the college's current process. Position WhatsApp as a communication tool. BusTrack adds route meaning, reliability controls, history and role-based operations."}
+{"kind":"slide","id":"sl/ciieho","slide":11,"title":"11","textShapes":18}
+{"kind":"textbox","id":"sh/j2hsnid0","slide":11,"text":"11","textPreview":"11","textChars":2,"textLines":1,"bbox":[64,28,64,24]}
+{"kind":"textbox","id":"sh/k3q9gnel","slide":11,"text":"Why a college would adopt BusTrack","textPreview":"Why a college would adopt BusTrack","textChars":34,"textLines":1,"bbox":[64,60,1120,56]}
+{"kind":"shape","id":"sh/54zapsv6","slide":11,"bbox":[64,127,86,4]}
+{"kind":"textbox","id":"sh/adoratwj","slide":11,"text":"The benefit extends beyond showing a bus marker","textPreview":"The benefit extends beyond showing a bus marker","textChars":47,"textLines":1,"bbox":[175,116,965,34]}
+{"kind":"textbox","id":"sh/vex8jyd4","slide":11,"text":"11","textPreview":"11","textChars":2,"textLines":1,"bbox":[1190,676,30,18]}
+{"kind":"textbox","id":"sh/wf69c3ep","slide":11,"text":"STUDENTS","textPreview":"STUDENTS","textChars":8,"textLines":1,"bbox":[64,180,210,26]}
+{"kind":"textbox","id":"sh/xgzql8va","slide":11,"text":"Less uncertainty","textPreview":"Less uncertainty","textChars":16,"textLines":1,"bbox":[305,175,325,38]}
+{"kind":"textbox","id":"sh/e9srmxwn","slide":11,"text":"See route progress before leaving for the stop.","textPreview":"See route progress before leaving for the stop.","textChars":47,"textLines":1,"bbox":[680,177,500,56]}
+{"kind":"shape","id":"sh/fa1sv2d8","slide":11,"bbox":[64,260,1120,2]}
+{"kind":"textbox","id":"sh/v6l4vuho","slide":11,"text":"DRIVERS","textPreview":"DRIVERS","textChars":7,"textLines":1,"bbox":[64,292,210,26]}
+{"kind":"textbox","id":"sh/u5c3mpgj","slide":11,"text":"Fewer location calls","textPreview":"Fewer location calls","textChars":20,"textLines":1,"bbox":[305,287,325,38]}
+{"kind":"textbox","id":"sh/h83mx4zu","slide":11,"text":"Use a focused journey screen and send structured alerts.","textPreview":"Use a focused journey screen and send structured alerts.","textChars":56,"textLines":1,"bbox":[680,289,500,56]}
+{"kind":"shape","id":"sh/g7ulozy9","slide":11,"bbox":[64,372,1120,2]}
+{"kind":"textbox","id":"sh/3u54zuh0","slide":11,"text":"TRANSPORT OFFICE","textPreview":"TRANSPORT OFFICE","textChars":16,"textLines":1,"bbox":[64,404,210,26]}
+{"kind":"textbox","id":"sh/i9c3q9gf","slide":11,"text":"Clear operating record","textPreview":"Clear operating record","textChars":22,"textLines":1,"bbox":[305,399,325,38]}
+{"kind":"textbox","id":"sh/5wnm14z6","slide":11,"text":"Review routes, assignments, stop times and incidents.","textPreview":"Review routes, assignments, stop times and incidents.","textChars":53,"textLines":1,"bbox":[680,401,500,56]}
+{"kind":"shape","id":"sh/4velszyl","slide":11,"bbox":[64,484,1120,2]}
+{"kind":"textbox","id":"sh/ry543ehw","slide":11,"text":"COLLEGE","textPreview":"COLLEGE","textChars":7,"textLines":1,"bbox":[64,516,210,26]}
+{"kind":"textbox","id":"sh/qxw3u9gb","slide":11,"text":"A platform that can expand","textPreview":"A platform that can expand","textChars":26,"textLines":1,"bbox":[305,511,325,38]}
+{"kind":"textbox","id":"sh/m50fix4v","slide":11,"text":"Start with one route and grow across the fleet.","textPreview":"Start with one route and grow across the fleet.","textChars":47,"textLines":1,"bbox":[680,513,500,56]}
+{"kind":"shape","id":"sh/n69gb25g","slide":11,"bbox":[64,596,1120,2]}
+{"kind":"textbox","id":"sh/o72xk7m1","slide":11,"text":"Measure the result","textPreview":"Measure the result","textChars":18,"textLines":1,"bbox":[64,635,230,28]}
+{"kind":"textbox","id":"sh/98bydcnm","slide":11,"text":"Track location freshness, student usage, driver calls, missed-bus complaints and completed journeys during the pilot.","textPreview":"Track location freshness, student usage, driver calls, missed-bus complaints and completed journeys during the pilot.","textChars":117,"textLines":1,"bbox":[315,630,865,44]}
+{"kind":"notes","id":"nt/ciieho","slide":11,"text":"Avoid claiming measured reductions before a pilot. Explain that the institution can create a baseline, run BusTrack on one route, and then compare usage, freshness and transport complaints."}
+{"kind":"slide","id":"sl/3g7804","slide":12,"title":"12","textShapes":15}
+{"kind":"textbox","id":"sh/tw3uxs72","slide":12,"text":"12","textPreview":"12","textChars":2,"textLines":1,"bbox":[64,28,64,24]}
+{"kind":"textbox","id":"sh/6tsb2dob","slide":12,"text":"A practical campus rollout","textPreview":"A practical campus rollout","textChars":26,"textLines":1,"bbox":[64,60,1120,56]}
+{"kind":"shape","id":"sh/7u1cvipw","slide":12,"bbox":[64,127,86,4]}
+{"kind":"textbox","id":"sh/krat0n65","slide":12,"text":"Begin with one route, verify it and expand with evidence","textPreview":"Begin with one route, verify it and expand with evidence","textChars":56,"textLines":1,"bbox":[175,116,965,34]}
+{"kind":"textbox","id":"sh/lsjut87q","slide":12,"text":"12","textPreview":"12","textChars":2,"textLines":1,"bbox":[1190,676,30,18]}
+{"kind":"textbox","id":"sh/ypsbydof","slide":12,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[75,190,90,42]}
+{"kind":"shape","id":"sh/jq1cripk","slide":12,"bbox":[75,245,320,5]}
+{"kind":"textbox","id":"sh/4nedc76p","slide":12,"text":"Prepare","textPreview":"Prepare","textChars":7,"textLines":1,"bbox":[75,285,320,48]}
+{"kind":"textbox","id":"sh/ponu5cnu","slide":12,"text":"Confirm the bus, driver, route, stop coordinates and GPS registration.","textPreview":"Confirm the bus, driver, route, stop coordinates and GPS registration.","textChars":70,"textLines":1,"bbox":[75,350,320,105]}
+{"kind":"textbox","id":"sh/dkzapsze","slide":12,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[470,190,90,42]}
+{"kind":"shape","id":"sh/cjqtwny9","slide":12,"bbox":[470,245,320,5]}
+{"kind":"textbox","id":"sh/rihsn2ho","slide":12,"text":"Pilot","textPreview":"Pilot","textChars":5,"textLines":1,"bbox":[470,285,320,48]}
+{"kind":"textbox","id":"sh/qh8buxg3","slide":12,"text":"Enroll one route's students and test outbound and return journeys.","textPreview":"Enroll one route's students and test outbound and return journeys.","textChars":66,"textLines":1,"bbox":[470,350,320,105]}
+{"kind":"textbox","id":"sh/pgzalszi","slide":12,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[865,190,90,42]}
+{"kind":"shape","id":"sh/4vqtsnyx","slide":12,"bbox":[865,245,320,5]}
+{"kind":"textbox","id":"sh/3uhsjihc","slide":12,"text":"Expand","textPreview":"Expand","textChars":6,"textLines":1,"bbox":[865,285,320,48]}
+{"kind":"textbox","id":"sh/2t8bqdgr","slide":12,"text":"Add buses route by route and train the transport office and drivers.","textPreview":"Add buses route by route and train the transport office and drivers.","textChars":68,"textLines":1,"bbox":[865,350,320,105]}
+{"kind":"shape","id":"sh/9c3uxczm","slide":12,"bbox":[75,520,1110,90]}
+{"kind":"textbox","id":"sh/orat47y1","slide":12,"text":"Pilot review","textPreview":"Pilot review","textChars":12,"textLines":1,"bbox":[105,546,190,30]}
+{"kind":"textbox","id":"sh/8vid0v6d","slide":12,"text":"Validate stop detection, location freshness, portal usability and operational response before a full-fleet launch.","textPreview":"Validate stop detection, location freshness, portal usability and operational response before a full-fleet launch.","textChars":114,"textLines":1,"bbox":[315,540,830,48]}
+{"kind":"notes","id":"nt/3g7804","slide":12,"text":"Recommend a limited first deployment. The route must be physically tested in both directions, including the terminal reversal. The pilot also gives the college real evidence for the final entrepreneurship case."}
+{"kind":"slide","id":"sl/b3ny3x","slide":13,"title":"Start with one route","textShapes":12}
+{"kind":"shape","id":"sh/tsbexwny","slide":13,"bbox":[64,82,88,7]}
+{"kind":"textbox","id":"sh/6pkv2147","slide":13,"text":"Start with one route","textPreview":"Start with one route","textChars":20,"textLines":1,"bbox":[64,125,810,88]}
+{"kind":"textbox","id":"sh/7qtwv65s","slide":13,"text":"Give students a clear journey and give the college a transport system it can manage.","textPreview":"Give students a clear journey and give the college a transport system it can manage.","textChars":84,"textLines":1,"bbox":[67,235,780,90]}
+{"kind":"shape","id":"sh/gvmd8bm9","slide":13,"bbox":[64,375,1120,2]}
+{"kind":"textbox","id":"sh/hwve1gnu","slide":13,"text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[64,420,42,38]}
+{"kind":"textbox","id":"sh/utkv6143","slide":13,"text":"Select the pilot bus and route","textPreview":"Select the pilot bus and route","textChars":30,"textLines":1,"bbox":[64,472,245,72]}
+{"kind":"textbox","id":"sh/fudwz65o","slide":13,"text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[354,420,42,38]}
+{"kind":"textbox","id":"sh/4jmdcvml","slide":13,"text":"Verify every stop in both directions","textPreview":"Verify every stop in both directions","textChars":36,"textLines":1,"bbox":[354,472,245,72]}
+{"kind":"textbox","id":"sh/pkve5gnq","slide":13,"text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[644,420,42,38]}
+{"kind":"textbox","id":"sh/5ozq1obm","slide":13,"text":"Enroll the driver and pilot students","textPreview":"Enroll the driver and pilot students","textChars":36,"textLines":1,"bbox":[644,472,245,72]}
+{"kind":"textbox","id":"sh/knq9sja1","slide":13,"text":"4","textPreview":"4","textChars":1,"textLines":1,"bbox":[934,420,42,38]}
+{"kind":"textbox","id":"sh/jmh8zetg","slide":13,"text":"Measure the result and expand","textPreview":"Measure the result and expand","textChars":29,"textLines":1,"bbox":[934,472,245,72]}
+{"kind":"textbox","id":"sh/il8rq9sv","slide":13,"text":"BUSTRACK","textPreview":"BUSTRACK","textChars":8,"textLines":1,"bbox":[64,632,180,28]}
+{"kind":"textbox","id":"sh/tcja5obi","slide":13,"text":"Campus transport, made visible","textPreview":"Campus transport, made visible","textChars":30,"textLines":1,"bbox":[870,630,345,30]}
+{"kind":"notes","id":"nt/b3ny3x","slide":13,"text":"Close by asking for a one-route campus pilot. The purpose of the pilot is to demonstrate reliability, collect usage evidence and confirm that BusTrack fits the college's daily transport process."}

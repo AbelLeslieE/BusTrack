@@ -1,8 +1,4 @@
-/** Live Tracking module placeholder. TODO: Generate this module's HTML and behavior here. */
-/**
- * Admin Live Tracking
- * Phase 1 - UI
- */
+/** Admin fleet map shell backed by the shared live-tracking service. */
 import {
 
     initializeFleetMap,

@@ -54,7 +54,11 @@ function renderBusInformation(bus){
                     label:"Bus Number",
                     value:bus.bus_number || "",
                     placeholder:"BUS-001",
-                    required:true
+                    required:true,
+                    readOnly:true,
+                    hint: bus.id
+                        ? "Permanent system number"
+                        : "Next available number; confirmed when saved"
                 })}
 
                 ${createInput({
@@ -201,7 +205,9 @@ function createInput({
     type = "text",
     value = "",
     placeholder = "",
-    required = false
+    required = false,
+    readOnly = false,
+    hint = ""
 
 }){
 
@@ -223,7 +229,10 @@ function createInput({
                 type="${type}"
                 value="${value}"
                 placeholder="${placeholder}"
+                ${readOnly ? "readonly" : ""}
             >
+
+            ${hint ? `<small class="modal-field-hint">${hint}</small>` : ""}
 
         </div>
 

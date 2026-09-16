@@ -2,7 +2,7 @@ import { logoutSession } from "/static/common/auth.js";
 
 /**
  * Shared SPA sidebar navigation.
- * TODO: Add permission-aware navigation when user roles are implemented.
+ * The router selects this navigation only for an authenticated Admin session.
  */
 
 const primaryItems = [

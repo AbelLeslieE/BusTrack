@@ -9,7 +9,7 @@
    CONFIGURATION
 ========================================================== */
 
-import { animateVehicleMarker, snapVehicleMarkerToRoad } from "/static/common/vehicleMotion.js?v=road-safe-6";
+import { animateVehicleMarker, snapVehicleMarkerToRoad } from "/static/common/vehicleMotion.js?v=road-safe-7";
 import { createVehicleMarkerIcon } from "/static/common/vehicleMarker.js";
 import { Modal } from "/static/common/modal.js";
 
@@ -22,6 +22,22 @@ const API = {
         "/api/students/me/tracking"
 
 };
+
+// Five seconds keeps the student map responsive while cutting the previous
+// two-second request rate by 60%. A small per-browser jitter prevents hundreds
+// of students who signed in together from hitting the API on the same tick.
+const STUDENT_TRACKING_REFRESH_MS = 5_000;
+const STUDENT_TRACKING_JITTER_MS = 1_000;
+const ROAD_ROUTE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+function routeCacheKey(definition) {
+    let hash = 2166136261;
+    for (const character of String(definition || "")) {
+        hash ^= character.charCodeAt(0);
+        hash = Math.imul(hash, 16777619);
+    }
+    return `bus_tracker_road_route_${(hash >>> 0).toString(16)}`;
+}
 
 
 /* ==========================================================
@@ -44,7 +60,7 @@ const state = {
 
     busMarker: null,
 
-    busMotion: { heading: null, frame: null, followMap: true },
+    busMotion: { heading: null, frame: null, followMap: true, routePath: [] },
 
     busTargetLocation: null,
 
@@ -78,6 +94,12 @@ const state = {
 
     refreshTimer: null,
 
+    eventSource: null,
+
+    streamRetryTimer: null,
+
+    pendingStreamData: null,
+
     refreshInProgress: false,
 
     refreshRequestId: 0,
@@ -105,21 +127,6 @@ async function fetchAuthenticated(
     url
 ) {
 
-    const token =
-        localStorage.getItem(
-            "bus_tracker_access_token"
-        );
-
-
-    if (!token) {
-
-        throw new Error(
-            "Authentication session not found."
-        );
-
-    }
-
-
     const response =
         await fetch(
             url,
@@ -129,15 +136,8 @@ async function fetchAuthenticated(
 
                 cache: "no-store",
 
-                headers: {
-
-                    "Authorization":
-                        `Bearer ${token}`,
-
-                    "Accept":
-                        "application/json"
-
-                }
+                credentials: "same-origin",
+                headers: { "Accept": "application/json" }
 
             }
         );
@@ -1365,15 +1365,12 @@ function routeDefinitionKey(data) {
    LOAD STUDENT TRACKING DATA
 ========================================================== */
 
-async function loadStudentTracking() {
+async function loadStudentTracking(streamData = null) {
 
     const requestId = ++state.refreshRequestId;
     const lifecycleId = state.lifecycleId;
 
-    const data =
-        await fetchAuthenticated(
-            API.TRACKING
-        );
+    const data = streamData || await fetchAuthenticated(API.TRACKING);
 
     // A late response from a previous refresh or page instance must never
     // replace the newest bus position.
@@ -1539,7 +1536,7 @@ function showTerminalArrivalNotice() {
    REFRESH TRACKING
 ========================================================== */
 
-async function refreshTracking() {
+async function refreshTracking(streamData = null) {
 
     /*
      * Prevent overlapping refresh requests.
@@ -1549,6 +1546,8 @@ async function refreshTracking() {
      * another one.
      */
     if (state.refreshInProgress) {
+
+        if (streamData) state.pendingStreamData = streamData;
 
         console.log(
             "BusTrack: Tracking refresh already in progress."
@@ -1572,7 +1571,7 @@ async function refreshTracking() {
          * ======================================================
          */
 
-        const data = await loadStudentTracking();
+        const data = await loadStudentTracking(streamData);
 
         if (!data) return;
 
@@ -1656,6 +1655,14 @@ async function refreshTracking() {
 
         state.refreshInProgress =
             false;
+
+        if (state.pendingStreamData) {
+
+            const pending = state.pendingStreamData;
+            state.pendingStreamData = null;
+            queueMicrotask(() => void refreshTracking(pending));
+
+        }
 
     }
 
@@ -1914,6 +1921,7 @@ function resetRoadRouteForDirection() {
 
     state.routeLine = null;
     state.roadRoute = [];
+    state.busMotion.routePath = [];
     state.roadRouteDistance = 0;
     state.roadRouteDuration = 0;
     state.roadRouteLoaded = false;
@@ -2005,24 +2013,40 @@ async function loadRoadRoute() {
         `https://router.project-osrm.org/route/v1/driving/${coordinates}` +
         `?overview=full&geometries=geojson`;
 
+    const cacheKey = routeCacheKey(state.routeDefinitionKey || coordinates);
+
 
     try {
 
-        const response =
-            await fetch(url);
-
-
-        if (!response.ok) {
-
-            throw new Error(
-                `OSRM request failed: HTTP ${response.status}`
-            );
-
+        let data = null;
+        try {
+            const cached = JSON.parse(localStorage.getItem(cacheKey) || "null");
+            if (
+                cached?.definition === state.routeDefinitionKey
+                && Date.now() - Number(cached.savedAt || 0) < ROAD_ROUTE_CACHE_TTL_MS
+                && Array.isArray(cached.data?.routes?.[0]?.geometry?.coordinates)
+            ) data = cached.data;
+        } catch {
+            // Optional cache unavailable; fetch the geometry normally.
         }
 
-
-        const data =
-            await response.json();
+        if (!data) {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`OSRM request failed: HTTP ${response.status}`);
+            }
+            data = await response.json();
+            try {
+                localStorage.setItem(cacheKey, JSON.stringify({
+                    definition: state.routeDefinitionKey,
+                    savedAt: Date.now(),
+                    data,
+                }));
+            } catch {
+                // Tracking continues if private browsing or storage quotas
+                // prevent this optional browser cache.
+            }
+        }
 
         // A direction change may have happened while OSRM was responding.
         // Never draw the old journey over the newly reversed route.
@@ -2142,6 +2166,7 @@ async function loadRoadRoute() {
 
         state.roadRoute =
             roadCoordinates;
+        state.busMotion.routePath = roadCoordinates;
 
 
         /*
@@ -2174,6 +2199,8 @@ async function loadRoadRoute() {
                     roadCoordinates.length
             }
         );
+
+        void calculateNextStopETA();
 
     }
 
@@ -2555,6 +2582,40 @@ function updateBusPosition() {
    CALCULATE ETA TO NEXT STOP
 ========================================================== */
 
+function distanceAlongLoadedRoute(origin, destination) {
+    const route = state.roadRoute;
+    if (!Array.isArray(route) || route.length < 2) return null;
+    const nearestIndex = location => route.reduce((best, point, index) => {
+        const distance = calculateDistance(
+            location.latitude,
+            location.longitude,
+            Number(point[0]),
+            Number(point[1])
+        );
+        return distance < best.distance ? { index, distance } : best;
+    }, { index: 0, distance: Infinity });
+    const start = nearestIndex(origin);
+    const end = nearestIndex(destination);
+    if (end.index < start.index) {
+        return calculateDistance(
+            origin.latitude,
+            origin.longitude,
+            destination.latitude,
+            destination.longitude
+        ) * 1000;
+    }
+    let kilometers = start.distance + end.distance;
+    for (let index = start.index + 1; index <= end.index; index += 1) {
+        kilometers += calculateDistance(
+            Number(route[index - 1][0]),
+            Number(route[index - 1][1]),
+            Number(route[index][0]),
+            Number(route[index][1])
+        );
+    }
+    return kilometers * 1000;
+}
+
 async function calculateNextStopETA() {
     if (state.liveTrip?.reset_waiting_for_start) {
         state.etaRequestId++;
@@ -2648,9 +2709,15 @@ async function calculateNextStopETA() {
 
     }
 
-    // Routing is comparatively expensive and does not need to run for every
-    // two-second GPS poll. Reuse the result until the bus has moved 25 m, the
-    // destination changes, or ten seconds pass.
+    if (!state.roadRouteLoaded || state.roadRoute.length < 2) {
+        state.etaLoading = true;
+        updateETAInterface("loading");
+        return;
+    }
+
+    // Reuse the ETA until the bus has moved 50 m, the destination changes, or
+    // 30 seconds pass. Distance comes from the already loaded route geometry,
+    // so hundreds of students never repeat the same external OSRM request.
     const now = Date.now();
     const origin = {
         latitude: Number(trip.latitude),
@@ -2667,8 +2734,8 @@ async function calculateNextStopETA() {
     const destinationId = nextStop.id ?? nextStop.stop_id ?? nextStop.sequence;
     if (
         state.etaDestinationId === destinationId &&
-        movedKilometers < 0.025 &&
-        now - state.etaLastCalculatedAt < 10_000
+        movedKilometers < 0.05 &&
+        now - state.etaLastCalculatedAt < 30_000
     ) {
         updateETAInterface();
         return;
@@ -2679,192 +2746,23 @@ async function calculateNextStopETA() {
     state.etaLastCalculatedAt = now;
 
 
-    /*
-     * Each refresh gets a unique request ID.
-     *
-     * This prevents an older OSRM response from
-     * overwriting a newer GPS position.
-     */
-
-    const requestId =
-        ++state.etaRequestId;
-
-
-    state.etaLoading =
-        true;
-
-
-    updateETAInterface(
-        "loading"
-    );
-
-
-    /*
-     * OSRM expects:
-     *
-     * longitude,latitude
-     *
-     * Current bus -> next stop.
-     *
-     * This gives us the actual road distance.
-     */
-
-    const coordinates =
-        `${Number(trip.longitude)},${Number(trip.latitude)}` +
-        `;${Number(nextStop.longitude)},${Number(nextStop.latitude)}`;
-
-
-    const url =
-        `https://router.project-osrm.org/route/v1/driving/${coordinates}` +
-        `?overview=false`;
-
-
-    try {
-
-        const response =
-            await fetch(
-                url
-            );
-
-
-        if (!response.ok) {
-
-            throw new Error(
-                `ETA routing failed: HTTP ${response.status}`
-            );
-
-        }
-
-
-        const data =
-            await response.json();
-
-
-        if (
-            requestId !==
-            state.etaRequestId
-        ) {
-
-            return;
-
-        }
-
-
-        if (
-            data.code !== "Ok" ||
-            !data.routes ||
-            !data.routes.length
-        ) {
-
-            throw new Error(
-                data.message ||
-                "No road route found."
-            );
-
-        }
-
-
-        /*
-         * OSRM distance is returned in metres.
-         */
-
-        const distanceMeters =
-            Number(
-                data.routes[0].distance
-            );
-
-
-        if (
-            !Number.isFinite(
-                distanceMeters
-            )
-        ) {
-
-            throw new Error(
-                "Invalid route distance."
-            );
-
-        }
-
-
-        /*
-         * ETA formula:
-         *
-         * distance / speed
-         *
-         * distance = metres
-         * speed    = km/h
-         *
-         * Convert speed to metres/second:
-         *
-         * km/h × 1000 / 3600
-         */
-
-        const speedMetersPerSecond =
-            speed *
-            1000 /
-            3600;
-
-
-        const etaSeconds =
-            distanceMeters /
-            speedMetersPerSecond;
-
-
-        const etaMinutes =
-            etaSeconds /
-            60;
-
-
-        state.etaDistanceMeters =
-            distanceMeters;
-
-
-        state.etaMinutes =
-            etaMinutes;
-
-
-        state.etaLoading =
-            false;
-
-
-        updateETAInterface();
-
+    const distanceMeters = distanceAlongLoadedRoute(origin, {
+        latitude: Number(nextStop.latitude),
+        longitude: Number(nextStop.longitude),
+    });
+    if (!Number.isFinite(distanceMeters)) {
+        state.etaDistanceMeters = null;
+        state.etaMinutes = null;
+        state.etaLoading = false;
+        updateETAInterface("error");
+        return;
     }
 
-    catch (error) {
-
-        console.error(
-            "BusTrack: ETA calculation failed.",
-            error
-        );
-
-
-        if (
-            requestId !==
-            state.etaRequestId
-        ) {
-
-            return;
-
-        }
-
-
-        state.etaDistanceMeters =
-            null;
-
-        state.etaMinutes =
-            null;
-
-        state.etaLoading =
-            false;
-
-
-        updateETAInterface(
-            "error"
-        );
-
-    }
+    const speedMetersPerSecond = speed * 1000 / 3600;
+    state.etaDistanceMeters = distanceMeters;
+    state.etaMinutes = (distanceMeters / speedMetersPerSecond) / 60;
+    state.etaLoading = false;
+    updateETAInterface();
 
 }
 /* ==========================================================
@@ -3044,71 +2942,98 @@ function setTrackingView(
    AUTOMATIC LIVE TRACKING REFRESH
 ========================================================== */
 
-function startTrackingRefresh() {
+function startTrackingPollingFallback() {
 
-    /*
-     * Always stop any previous timer first.
-     *
-     * This prevents multiple polling loops from running
-     * at the same time.
-     */
-    stopTrackingRefresh();
+    if (state.refreshTimer || document.hidden) return;
+    state.refreshTimer = window.setInterval(
+        () => {
+            if (document.hidden) return;
+            console.log("BusTrack: Polling fallback tracking refresh...");
+            void refreshTracking();
+        },
+        STUDENT_TRACKING_REFRESH_MS
+            + Math.floor(Math.random() * STUDENT_TRACKING_JITTER_MS)
+    );
 
-    if (state.visibilityHandler) {
+}
 
-        document.removeEventListener(
-            "visibilitychange",
-            state.visibilityHandler
-        );
 
+function closeTrackingStream() {
+
+    if (state.eventSource) state.eventSource.close();
+    state.eventSource = null;
+
+}
+
+
+function connectTrackingStream() {
+
+    if (document.hidden || typeof window.EventSource !== "function") return false;
+    closeTrackingStream();
+    if (state.streamRetryTimer) {
+        window.clearTimeout(state.streamRetryTimer);
+        state.streamRetryTimer = null;
     }
 
+    const lifecycleId = state.lifecycleId;
+    const source = new window.EventSource(`${API.TRACKING}/stream`, { withCredentials: true });
+    state.eventSource = source;
 
-    /*
-     * Fetch the latest tracking data immediately.
-     *
-     * The student should not have to wait for the first
-     * 20-second moving-GPS interval.
-     */
-    refreshTracking();
+    source.onopen = () => {
+        if (source !== state.eventSource || lifecycleId !== state.lifecycleId) return;
+        if (state.refreshTimer) window.clearInterval(state.refreshTimer);
+        state.refreshTimer = null;
+    };
+
+    source.onmessage = event => {
+        if (source !== state.eventSource || lifecycleId !== state.lifecycleId || document.hidden) return;
+        try {
+            void refreshTracking(JSON.parse(event.data));
+        } catch (error) {
+            console.error("BusTrack: Invalid live tracking event.", error);
+        }
+    };
+
+    source.onerror = () => {
+        if (source !== state.eventSource || lifecycleId !== state.lifecycleId) return;
+        closeTrackingStream();
+        startTrackingPollingFallback();
+        if (!document.hidden) {
+            state.streamRetryTimer = window.setTimeout(() => {
+                state.streamRetryTimer = null;
+                connectTrackingStream();
+            }, 30_000);
+        }
+    };
+
+    return true;
+
+}
 
 
-    /*
-     * Read the saved position every two seconds. Vehicle hardware still
-     * publishes every 20 seconds while moving and every two minutes while parked.
-     *
-     * MVD provider → BusGPSState/LiveTrip → this student-specific endpoint
-     * (the admin portal is never an intermediary).
-     */
-    state.refreshTimer =
-        window.setInterval(
-            () => {
+function startTrackingRefresh() {
 
-                console.log(
-                    "BusTrack: Automatic tracking refresh..."
-                );
+    // The normal GET remains active as a compatibility fallback. Once the
+    // stream opens, changed server snapshots replace repeated HTTP polling.
+    stopTrackingRefresh();
+    startTrackingPollingFallback();
+    connectTrackingStream();
 
-                refreshTracking();
+    state.visibilityHandler = () => {
+        if (document.hidden) {
+            closeTrackingStream();
+            if (state.refreshTimer) window.clearInterval(state.refreshTimer);
+            state.refreshTimer = null;
+            if (state.streamRetryTimer) window.clearTimeout(state.streamRetryTimer);
+            state.streamRetryTimer = null;
+            return;
+        }
+        void refreshTracking();
+        startTrackingPollingFallback();
+        connectTrackingStream();
+    };
 
-            },
-            2_000
-        );
-
-    state.visibilityHandler =
-        () => {
-
-            if (document.visibilityState === "visible") {
-
-                void refreshTracking();
-
-            }
-
-        };
-
-    document.addEventListener(
-        "visibilitychange",
-        state.visibilityHandler
-    );
+    document.addEventListener("visibilitychange", state.visibilityHandler);
 
 }
 
@@ -3132,6 +3057,17 @@ function stopTrackingRefresh() {
             null;
 
     }
+
+    closeTrackingStream();
+
+    if (state.streamRetryTimer) {
+
+        window.clearTimeout(state.streamRetryTimer);
+        state.streamRetryTimer = null;
+
+    }
+
+    state.pendingStreamData = null;
 
     if (state.visibilityHandler) {
 
@@ -3178,7 +3114,7 @@ function cleanupTracking() {
 
     }
 
-    state.busMotion = { heading: null, frame: null, followMap: true };
+    state.busMotion = { heading: null, frame: null, followMap: true, routePath: [] };
     state.busTargetLocation = null;
 
     state.stopMarkers = [];
@@ -3188,6 +3124,8 @@ function cleanupTracking() {
 
     state.roadRoute =
         [];
+
+    state.busMotion.routePath = [];
 
     state.roadRouteDistance =
         0;
@@ -4735,6 +4673,8 @@ export function render() {
 
     state.roadRoute =
         [];
+
+    state.busMotion.routePath = [];
 
     state.roadRouteLoaded =
         false;

@@ -220,8 +220,10 @@ class AdminBootstrapInput(BaseModel):
 
 class BusCreate(BaseModel):
 
-    bus_number: str = Field(
-        min_length=1,
+    # Assigned by the server. Accepted only so older clients can submit the
+    # preview they displayed without controlling the persisted identifier.
+    bus_number: str | None = Field(
+        default=None,
         max_length=20,
     )
 
@@ -263,8 +265,10 @@ class BusCreate(BaseModel):
     )
 class BusUpdate(BaseModel):
 
-    bus_number: str = Field(
-        min_length=1,
+    # Existing generated numbers are immutable; update routes ignore this
+    # compatibility field.
+    bus_number: str | None = Field(
+        default=None,
         max_length=20,
     )
 
@@ -342,7 +346,9 @@ class DriverUpdate(BaseModel):
     through the Assignment module.
     """
 
-    driver_code: str
+    # Existing generated codes are immutable and retained only for clients
+    # that still include the read-only field in edit payloads.
+    driver_code: str | None = None
 
     license_number: str
 
@@ -406,8 +412,9 @@ class RouteCreate(BaseModel):
     Assignments are created only through the Assignment module.
     """
 
-    route_code: str = Field(
-        min_length=1,
+    # Assigned by the server; a submitted preview never controls persistence.
+    route_code: str | None = Field(
+        default=None,
         max_length=20,
     )
 
@@ -428,8 +435,9 @@ class RouteUpdate(BaseModel):
     Bus and driver assignment are intentionally excluded.
     """
 
-    route_code: str = Field(
-        min_length=1,
+    # Existing generated route codes are immutable.
+    route_code: str | None = Field(
+        default=None,
         max_length=20,
     )
 
@@ -479,19 +487,19 @@ class StopCreate(BaseModel):
     Stops are reusable across multiple routes.
     """
 
-    stop_code: str = Field(
-        min_length=1,
-        max_length=20,
-    )
+    # Codes are assigned by the server.  Keep this compatibility field so an
+    # older client can still send its preview without changing the generated
+    # value that is ultimately persisted.
+    stop_code: str | None = None
 
     stop_name: str = Field(
         min_length=1,
         max_length=150,
     )
 
-    latitude: float | None = None
+    latitude: float | None = Field(default=None, ge=-90, le=90)
 
-    longitude: float | None = None
+    longitude: float | None = Field(default=None, ge=-180, le=180)
 
     radius: int = Field(
         default=50,
@@ -499,7 +507,7 @@ class StopCreate(BaseModel):
         le=500,
     )
 
-    status: str = "Active"
+    status: str = Field(default="Active", min_length=1, max_length=20)
 
 
 class StopUpdate(BaseModel):
@@ -507,17 +515,19 @@ class StopUpdate(BaseModel):
     Update a master stop.
     """
 
-    stop_code: str
+    # Existing generated codes are immutable.  This remains accepted only for
+    # compatibility with older edit forms and is ignored by the update route.
+    stop_code: str | None = None
 
-    stop_name: str
+    stop_name: str = Field(min_length=1, max_length=150)
 
-    latitude: float | None = None
+    latitude: float | None = Field(default=None, ge=-90, le=90)
 
-    longitude: float | None = None
+    longitude: float | None = Field(default=None, ge=-180, le=180)
 
-    radius: int
+    radius: int = Field(default=50, ge=10, le=500)
 
-    status: str
+    status: str = Field(default="Active", min_length=1, max_length=20)
 
 
 class StopResponse(BaseModel):
@@ -552,9 +562,9 @@ class RouteStopCreate(BaseModel):
     Add an existing stop to a route.
     """
 
-    stop_id: int
+    stop_id: int = Field(gt=0)
 
-    scheduled_time: str | None = None
+    scheduled_time: str | None = Field(default=None, max_length=10)
 
     fare: float | None = Field(
         default=None,
@@ -572,15 +582,15 @@ class RouteStopCreate(BaseModel):
     )
 class RouteStopUpdate(BaseModel):
 
-    sequence: int
+    sequence: int = Field(ge=1)
 
-    scheduled_time: str | None = None
+    scheduled_time: str | None = Field(default=None, max_length=10)
 
-    fare: float | None = None
+    fare: float | None = Field(default=None, ge=0)
 
-    distance_from_previous: float | None = None
+    distance_from_previous: float | None = Field(default=None, ge=0)
 
-    estimated_minutes: int | None = None
+    estimated_minutes: int | None = Field(default=None, ge=0)
 
 
 class RouteStopResponse(BaseModel):

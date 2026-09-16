@@ -1,7 +1,5 @@
 # Bus Tracker
 
-> Project documentation placeholder. TODO: Keep this document aligned with approved architecture decisions.
-
 ## Overview
 
 Bus Tracker is a FastAPI and vanilla-JavaScript fleet-management application for school transport operations. It includes authenticated management, route/bus/driver assignments, student transport assignments, and live trip tracking.
@@ -13,7 +11,8 @@ Bus Tracker is a FastAPI and vanilla-JavaScript fleet-management application for
 - **ORM:** SQLAlchemy
 - **Authentication:** JWT with Passlib and python-jose
 - **Frontend:** HTML5, CSS3, and Vanilla JavaScript ES Modules
-- **Maps and charts:** Leaflet.js and Chart.js (to be integrated when modules are implemented)
+- **Maps and routing:** Leaflet.js, OpenStreetMap, OSRM, and Nominatim
+- **Bus-pass scanning:** Short-lived Ed25519 QR credentials with a vendored browser scanner
 
 ## Installation
 
@@ -49,7 +48,7 @@ Before signing in for the first time, create an administrator without placing a 
 python database/init_database.py --username your-admin-name
 ```
 
-The setup command securely prompts for a 12–72 character password and stores only its bcrypt hash with a unique salt. The login page receives a short-lived JWT in an HttpOnly, SameSite session cookie; the JSON bearer token remains available temporarily for legacy clients. The dashboard verifies the session before it loads, and logout clears the browser cookie.
+The setup command securely prompts for a 12–72 character password and stores only its bcrypt hash with a unique salt. The login page receives a short-lived JWT in an HttpOnly, SameSite session cookie. The browser does not persist the JSON bearer token; that response field remains available only for non-browser API compatibility. The dashboard verifies the server session before it loads, and logout revokes the session and clears the browser cookie.
 
 To rotate an existing administrator password (including an older development account), run:
 
@@ -70,7 +69,7 @@ If the first administrator password is lost, set `BOOTSTRAP_ADMIN_RESET_PASSWORD
 ## Security baseline
 
 - Management and identity APIs require server-side JWT authentication and role checks.
-- Browser sessions use an HttpOnly, SameSite cookie with a dedicated logout endpoint; bearer headers remain supported during the frontend migration.
+- Browser sessions use an HttpOnly, SameSite cookie with a dedicated logout endpoint; bearer headers remain supported for non-browser API clients.
 - Driver trip actions are restricted to the authenticated driver's own profile and trip.
 - Student APIs are restricted to the authenticated student or management staff.
 - Request-size limits, per-client API/login/upload rate limits, security headers, HSTS in production, and an enforced browser Content Security Policy are applied by `backend/security.py`.
@@ -172,11 +171,28 @@ winning once the service is awake again.
 
 ## Folder guide
 
-- `backend/` contains the minimal API entry point, future data/auth placeholders, API route placeholders, shared utilities, and backend assets.
-- `frontend/` contains SPA entry documents, common layout and client utilities, and isolated two-file feature modules. Module HTML will be generated in each module's JavaScript file.
-- `database/` holds the development SQLite database file and the future initialization script.
+- `backend/` contains the FastAPI application, SQLAlchemy models, authenticated API routes, GPS adapters, security middleware, and background services.
+- `frontend/` contains the role-aware SPA, common layout/client utilities, maps, tracking views, management forms, and bus-pass scanner.
+- `database/` holds the ignored development SQLite database and the administrator/bootstrap utilities.
+- `tests/` contains Python integration/regression tests and dependency-free Node tests for browser modules.
+- `docs/` contains deployment, GPS handoff, bus-document, bus-pass, and database-cutover guidance.
 - `requirements.txt` lists backend dependencies.
 
 ## SPA approach
 
-`frontend/common/router.js` is the single routing seam. It dynamically imports ES-module feature files and safely shows a generic placeholder until each module supplies its own generated HTML. Shared layout components belong in `frontend/common/`; each feature module intentionally contains only one `.js` and one `.css` file.
+`frontend/common/router.js` is the single hash-routing seam. After the server verifies the session, it selects the allowed Admin, Driver, User, or Technician module map and dynamically imports the requested ES module. Shared layout and security utilities live in `frontend/common/`; feature behavior and styles live in `frontend/modules/`.
+
+## Tests
+
+The Python regression suite uses the standard-library test runner, so no
+separate `pytest` installation is required after installing `requirements.txt`:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py"
+```
+
+The browser-module tests run directly with Node.js:
+
+```powershell
+Get-ChildItem tests\*.mjs | ForEach-Object { node $_.FullName }
+```

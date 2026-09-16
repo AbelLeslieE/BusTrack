@@ -61,7 +61,7 @@ export async function addRouteStop(routeId, stopData) {
 
 export async function updateRouteStop(routeStopId, stopData) {
 
-    const response = await fetch(`${BASE_URL}/${routeStopId}`, {
+    const response = await fetch(`${BASE_URL}/${routeStopId}/sequence`, {
 
         method: "PUT",
 

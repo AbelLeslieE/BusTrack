@@ -224,6 +224,73 @@ class KingstrackIntegrationTest(unittest.TestCase):
             self.assertEqual(positions["total"], 1)
             self.assertEqual(positions["positions"][0]["protocol"], "kingstrack")
 
+    def test_wrong_device_date_recovers_and_persists_without_accepting_replays(self) -> None:
+        receipt = datetime.now(timezone.utc).replace(microsecond=0)
+        first_receipt = receipt - timedelta(minutes=2)
+        first_device_time = first_receipt - timedelta(days=2)
+
+        with self.sessions() as db:
+            student_user, bus, stops = self._route_fixture(db)
+            bus_id = bus.id
+            student_user_id = student_user.id
+            # Seed a newer raw clock epoch that has since gone stale. The
+            # replacement Kingstrack clock starts one day behind that value.
+            stale_receipt = first_receipt - timedelta(days=1)
+            with patch("backend.services.kingstrack._utc_now", return_value=stale_receipt):
+                _store_position(
+                    db,
+                    bus,
+                    self.record(
+                        bus.registration_number,
+                        "KING-OFFSET-IMEI",
+                        stops[0].latitude,
+                        stops[0].longitude,
+                        stale_receipt,
+                    ),
+                )
+            with patch("backend.services.kingstrack._utc_now", return_value=first_receipt):
+                first = _store_position(db, bus, self.record(bus.registration_number, "KING-OFFSET-IMEI", stops[0].latitude, stops[0].longitude, first_device_time))
+            with patch("backend.services.kingstrack._utc_now", return_value=receipt):
+                second = _store_position(db, bus, self.record(bus.registration_number, "KING-OFFSET-IMEI", stops[1].latitude, stops[1].longitude, first_device_time + timedelta(minutes=2)))
+            db.commit()
+
+            state = db.query(BusGPSState).filter_by(bus_id=bus_id).one()
+            tracking = get_student_live_tracking(student_user, db)
+            self.assertFalse(first["applied"])
+            self.assertTrue(first["quarantined"])
+            self.assertTrue(second["applied"])
+            self.assertEqual(state.timestamp_basis, "receipt_clock_fallback")
+            self.assertEqual(state.effective_time.replace(tzinfo=timezone.utc), receipt)
+            self.assertEqual(state.fix_time.replace(tzinfo=timezone.utc), first_device_time + timedelta(minutes=2))
+            self.assertTrue(tracking["trip"]["telemetry"]["is_fresh"])
+            self.assertEqual(
+                [item["tracking_status"] for item in tracking["stops"]],
+                ["completed", "reached", "pending"],
+            )
+
+        # Reopen the database to prove the clock mode survives a restart.
+        with self.sessions() as db:
+            bus = db.get(Bus, bus_id)
+            next_receipt = receipt + timedelta(minutes=2)
+            next_device_time = first_device_time + timedelta(minutes=4)
+            with patch("backend.services.kingstrack._utc_now", return_value=next_receipt):
+                third = _store_position(db, bus, self.record(bus.registration_number, "KING-OFFSET-IMEI", 10.02, 76.02, next_device_time))
+            db.commit()
+            state = db.query(BusGPSState).filter_by(bus_id=bus_id).one()
+            tracking = get_student_live_tracking(db.get(User, student_user_id), db)
+            self.assertTrue(third["applied"])
+            self.assertEqual(state.timestamp_basis, "receipt_clock_fallback")
+            self.assertEqual(state.effective_time.replace(tzinfo=timezone.utc), next_receipt)
+            self.assertEqual(tracking["trip"]["route_direction"], "reverse")
+            self.assertEqual(tracking["stops"][0]["tracking_status"], "terminal_completed")
+
+            with patch("backend.services.kingstrack._utc_now", return_value=next_receipt + timedelta(seconds=1)):
+                replay = _store_position(db, bus, self.record(bus.registration_number, "KING-OFFSET-IMEI", 11.0, 76.2, next_device_time))
+            db.commit()
+            state = db.query(BusGPSState).filter_by(bus_id=bus_id).one()
+            self.assertFalse(replay["applied"])
+            self.assertEqual(state.latitude, 10.02)
+
     def test_one_provider_failure_does_not_suppress_the_other(self) -> None:
         with self.sessions() as db, patch.dict(
             os.environ,

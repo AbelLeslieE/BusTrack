@@ -210,9 +210,24 @@ async function createBus(busData) {
 
     }
 
+    const createdBus = await response.json();
+
     await loadBuses();
 
-    return true;
+    return createdBus;
+
+}
+
+
+async function getNextBusNumber() {
+
+    const response = await fetch(`${API.BUSES}next-number`, { cache: "no-store" });
+
+    if (!response.ok) {
+        throw new Error("Unable to preview the next bus number.");
+    }
+
+    return await response.json();
 
 }
 
@@ -1084,6 +1099,14 @@ ${skipped}`
 
         addButton.addEventListener("click", async () => {
 
+            let busNumber = "";
+
+            try {
+                busNumber = (await getNextBusNumber()).bus_number || "";
+            } catch (error) {
+                console.warn(error);
+            }
+
             Modal.form({
 
                 eyebrow: "Fleet Management",
@@ -1094,7 +1117,7 @@ ${skipped}`
 
                 size: "lg",
 
-                content: await createBusForm({}),
+                content: await createBusForm({ bus_number: busNumber }),
                 submitText: "Save Bus",
 
                 onSubmit: async () => {
@@ -1660,7 +1683,7 @@ async function saveBus(root) {
 
         const bus = getBusFormData();
 
-        await createBus(bus);
+        const createdBus = await createBus(bus);
 
         Modal.close();
 
@@ -1670,7 +1693,7 @@ async function saveBus(root) {
 
         showNotification(
 
-            "Bus added successfully.",
+            `${createdBus.bus_number} was assigned automatically and the bus was added successfully.`,
 
             "success"
 

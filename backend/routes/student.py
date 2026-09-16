@@ -7,13 +7,20 @@ The currently authenticated user is obtained from the JWT.
 The browser never supplies a student ID for these endpoints.
 """
 
+import asyncio
+from copy import deepcopy
 from datetime import date, datetime, timezone
+import json
+import os
+import time
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from backend.database import get_db
+from backend.database import SessionLocal, get_db
 from backend.services.trip_reset import reset_metadata
 from backend.security import require_management, require_user
 from backend.models import (
@@ -26,6 +33,7 @@ from backend.models import (
     Stop,
     BusPass,
     PassIdentity,
+    UserSession,
 )
 
 from backend.routes.models_tracking import (
@@ -40,14 +48,23 @@ from backend.services.tracking_engine import (
 )
 from backend.services.trip_direction import ordered_route_stops
 from backend.services.vehicle_gps import GPS_OFFLINE_GRACE_SECONDS
-from backend.services.gps_timestamp import future_timestamp_seconds
+from backend.services.gps_timestamp import effective_state_time, future_timestamp_seconds
 from backend.schemas import StudentAssignmentUpdate
+from backend.roles import ROLE_USER, canonical_role
+from backend.auth import SESSION_COOKIE_NAME
+from backend.utils.jwt_handler import get_token_identity
 
 
 router = APIRouter(
     prefix="/api/students",
     tags=["Students"],
 )
+
+STUDENT_STREAM_REFRESH_SECONDS = 5.0
+STUDENT_STREAM_CACHE_SECONDS = 4.5
+STUDENT_STREAM_MAX_SECONDS = 50 * 60
+_student_stream_cache: dict[tuple[str, int, int], tuple[float, dict]] = {}
+_student_stream_locks: dict[tuple[str, int, int], asyncio.Lock] = {}
 
 
 def _student_directory_item(student: Student, db: Session) -> dict:
@@ -597,13 +614,14 @@ def get_student_live_tracking(
         .first()
     )
     provider_is_fresh = False
+    provider_timestamp = None
     if provider_state is not None:
-        received_at = provider_state.fix_time or provider_state.received_at
-        if received_at.tzinfo is None:
-            received_at = received_at.replace(tzinfo=timezone.utc)
+        provider_timestamp = effective_state_time(provider_state)
         provider_is_fresh = (
-            datetime.now(timezone.utc) - received_at
-        ).total_seconds() <= GPS_OFFLINE_GRACE_SECONDS
+            provider_timestamp is not None
+            and (datetime.now(timezone.utc) - provider_timestamp).total_seconds()
+            <= GPS_OFFLINE_GRACE_SECONDS
+        )
 
     provider_has_position = (
         provider_state is not None
@@ -615,11 +633,6 @@ def get_student_live_tracking(
     # Freshness alone is insufficient: an older-but-fresh provider heartbeat
     # must not move the map backwards after a later trip update has already
     # advanced the stop timeline.
-    provider_timestamp = (
-        (provider_state.fix_time or provider_state.received_at)
-        if provider_state is not None
-        else None
-    )
     trip_timestamp = trip.last_location_update if trip is not None else None
     if provider_timestamp is not None and provider_timestamp.tzinfo is None:
         provider_timestamp = provider_timestamp.replace(tzinfo=timezone.utc)
@@ -655,7 +668,7 @@ def get_student_live_tracking(
     # Raw vendor diagnostics (device identity, IP, protocol, odometer, power,
     # and the original payload) remain private to management/technicians.
     location_timestamp = (
-        (provider_state.fix_time or provider_state.received_at) if use_provider_position
+        provider_timestamp if use_provider_position
         else trip.last_location_update if trip is not None else None
     )
     location_age_seconds = None
@@ -1096,10 +1109,10 @@ def get_student_live_tracking(
                 provider_state.accuracy if use_provider_position else trip.current_accuracy if trip is not None else None,
 
             "last_location_update":
-                (provider_state.fix_time or provider_state.received_at) if use_provider_position else trip.last_location_update if trip is not None else None,
+                provider_timestamp if use_provider_position else trip.last_location_update if trip is not None else None,
 
             "started_at":
-                trip.started_at if trip is not None else (provider_state.fix_time or provider_state.received_at),
+                trip.started_at if trip is not None else provider_timestamp,
 
             "location_source":
                 tracking_source,
@@ -1279,3 +1292,291 @@ def get_student_live_tracking(
             stops,
 
     }
+
+
+def _student_stream_key(payload: dict, user_id: int) -> tuple[str, int, int]:
+    """Share a snapshot across students on one bus/route without mixing identities."""
+
+    route_id = int(payload.get("route", {}).get("id") or 0)
+    bus_id = int(payload.get("bus", {}).get("id") or 0)
+    return ("route", route_id, bus_id) if route_id and bus_id else ("student", user_id, 0)
+
+
+def _load_student_stream_payload(user_id: int) -> dict:
+    """Build one authoritative snapshot using a short-lived database session."""
+
+    with SessionLocal() as database_session:
+        user = database_session.get(User, user_id)
+        if (
+            user is None
+            or user.status != "Active"
+            or canonical_role(user.role) != ROLE_USER
+        ):
+            raise LookupError("Student session is no longer active.")
+        return get_student_live_tracking(user, database_session)
+
+
+def _load_student_stream_identity(
+    user_id: int,
+) -> tuple[tuple[str, int, int], dict, dict | None]:
+    """Load only the per-student fields needed around a shared route snapshot."""
+
+    with SessionLocal() as database_session:
+        user = database_session.get(User, user_id)
+        if (
+            user is None
+            or user.status != "Active"
+            or canonical_role(user.role) != ROLE_USER
+        ):
+            raise LookupError("Student session is no longer active.")
+        student = (
+            database_session.query(Student)
+            .filter(Student.user_id == user_id)
+            .first()
+        )
+        if student is None:
+            raise LookupError("Student profile is no longer available.")
+        route = student.route or (
+            database_session.query(Route).filter(Route.bus_id == student.bus_id).first()
+            if student.bus_id else None
+        )
+        bus = (
+            database_session.get(Bus, route.bus_id)
+            if route is not None and route.bus_id
+            else student.bus if route is None else None
+        )
+        key = (
+            ("route", int(route.id), int(bus.id))
+            if route is not None and bus is not None
+            else ("student", user_id, 0)
+        )
+        assigned_stop = (
+            {
+                "id": student.stop.id,
+                "stop_code": student.stop.stop_code,
+                "stop_name": student.stop.stop_name,
+                "latitude": student.stop.latitude,
+                "longitude": student.stop.longitude,
+                "radius": student.stop.radius,
+            }
+            if student.stop
+            else None
+        )
+        return (
+            key,
+            {"id": student.id, "student_code": student.student_code},
+            assigned_stop,
+        )
+
+
+def _student_stream_session_active(
+    user_id: int,
+    token_auth_version: int,
+    session_id: str | None,
+) -> bool:
+    """Revalidate a long-lived stream without retaining a database connection."""
+
+    with SessionLocal() as database_session:
+        user = database_session.get(User, user_id)
+        if (
+            user is None
+            or user.status != "Active"
+            or user.auth_version != token_auth_version
+            or canonical_role(user.role) != ROLE_USER
+        ):
+            return False
+        if not session_id:
+            return True
+        session = (
+            database_session.query(UserSession)
+            .filter(
+                UserSession.session_id == session_id,
+                UserSession.user_id == user_id,
+            )
+            .first()
+        )
+        if session is None or session.revoked_at is not None or session.expires_at is None:
+            return False
+        expires_at = session.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        return expires_at > datetime.now(timezone.utc)
+
+
+async def _cached_student_stream_payload(
+    key: tuple[str, int, int],
+    user_id: int,
+    *,
+    force: bool = False,
+) -> dict:
+    """Single-flight full tracking calculations per route and bus."""
+
+    now = time.monotonic()
+    cached = _student_stream_cache.get(key)
+    if not force and cached is not None and now - cached[0] < STUDENT_STREAM_CACHE_SECONDS:
+        return cached[1]
+
+    lock = _student_stream_locks.setdefault(key, asyncio.Lock())
+    async with lock:
+        now = time.monotonic()
+        cached = _student_stream_cache.get(key)
+        if not force and cached is not None and now - cached[0] < STUDENT_STREAM_CACHE_SECONDS:
+            return cached[1]
+        payload = await asyncio.to_thread(_load_student_stream_payload, user_id)
+        resolved_key = _student_stream_key(payload, user_id)
+        _student_stream_cache[resolved_key] = (time.monotonic(), payload)
+        if len(_student_stream_cache) > 1_000:
+            oldest_key = min(_student_stream_cache, key=lambda item: _student_stream_cache[item][0])
+            _student_stream_cache.pop(oldest_key, None)
+            _student_stream_locks.pop(oldest_key, None)
+        return payload
+
+
+def _student_stream_signature(payload: dict) -> tuple:
+    """Identify UI-visible changes while updating a stationary age label periodically."""
+
+    trip = payload.get("trip") or {}
+    telemetry = payload.get("telemetry") or trip.get("telemetry") or {}
+    stop_states = tuple(
+        (item.get("id"), item.get("sequence"), item.get("tracking_status"))
+        for item in payload.get("stops") or []
+    )
+    return (
+        payload.get("tracking_available"),
+        payload.get("reason"),
+        (payload.get("bus") or {}).get("id"),
+        (payload.get("route") or {}).get("id"),
+        trip.get("id"),
+        trip.get("status"),
+        trip.get("latitude"),
+        trip.get("longitude"),
+        trip.get("speed"),
+        trip.get("last_location_update"),
+        trip.get("route_direction"),
+        trip.get("stop_status"),
+        trip.get("current_route_stop_id"),
+        trip.get("terminal_reached_at"),
+        trip.get("reset_version"),
+        telemetry.get("is_fresh"),
+        stop_states,
+    )
+
+
+def _personalize_student_stream_payload(
+    payload: dict,
+    *,
+    student: dict,
+    assigned_stop: dict | None,
+) -> dict:
+    result = deepcopy(payload)
+    result["student"] = deepcopy(student)
+    result["assigned_stop"] = deepcopy(assigned_stop)
+    return result
+
+
+@router.get("/me/tracking/stream")
+async def stream_student_live_tracking(
+    request: Request,
+    current_user: Annotated[User, Depends(require_user, scope="function")],
+):
+    """Push changed tracking snapshots while retaining normal GET as a fallback."""
+
+    if os.getenv("STUDENT_LIVE_STREAM_ENABLED", "true").strip().casefold() in {
+        "false", "0", "no", "off"
+    }:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Student live streaming is temporarily disabled.",
+        )
+    user_id = current_user.id
+    authorization = request.headers.get("authorization", "")
+    bearer_token = authorization[7:].strip() if authorization.lower().startswith("bearer ") else ""
+    token = request.cookies.get(SESSION_COOKIE_NAME, "") or bearer_token
+    try:
+        _, token_auth_version, session_id = get_token_identity(token)
+    except Exception as error:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate streaming credentials.",
+        ) from error
+    initial_key, initial_student, initial_assigned_stop = await asyncio.to_thread(
+        _load_student_stream_identity,
+        user_id,
+    )
+    # Concurrent students on the same route now join one single-flight full
+    # calculation instead of duplicating it during a login-time traffic spike.
+    await _cached_student_stream_payload(initial_key, user_id)
+
+    async def events():
+        key = initial_key
+        student = initial_student
+        assigned_stop = initial_assigned_stop
+        last_signature = None
+        last_identity_refresh = time.monotonic()
+        last_session_check = time.monotonic()
+        last_keepalive = time.monotonic()
+        started_at = time.monotonic()
+        identity_refresh_seconds = 4 * 60 + (user_id % 120)
+        yield "retry: 5000\n\n"
+
+        while time.monotonic() - started_at < STUDENT_STREAM_MAX_SECONDS:
+            if await request.is_disconnected():
+                return
+            if time.monotonic() - last_session_check >= 60:
+                session_active = await asyncio.to_thread(
+                    _student_stream_session_active,
+                    user_id,
+                    token_auth_version,
+                    session_id,
+                )
+                if not session_active:
+                    return
+                last_session_check = time.monotonic()
+            refresh_identity = (
+                time.monotonic() - last_identity_refresh >= identity_refresh_seconds
+            )
+            if refresh_identity:
+                try:
+                    key, student, assigned_stop = await asyncio.to_thread(
+                        _load_student_stream_identity,
+                        user_id,
+                    )
+                except Exception:
+                    return
+                last_identity_refresh = time.monotonic()
+            try:
+                payload = await _cached_student_stream_payload(
+                    key,
+                    user_id,
+                )
+            except Exception:
+                return
+
+            signature = _student_stream_signature(payload)
+            if signature != last_signature:
+                personalized = _personalize_student_stream_payload(
+                    payload,
+                    student=student,
+                    assigned_stop=assigned_stop,
+                )
+                encoded = json.dumps(
+                    jsonable_encoder(personalized),
+                    separators=(",", ":"),
+                )
+                yield f"data: {encoded}\n\n"
+                last_signature = signature
+                last_keepalive = time.monotonic()
+            elif time.monotonic() - last_keepalive >= 15:
+                yield ": keep-alive\n\n"
+                last_keepalive = time.monotonic()
+
+            await asyncio.sleep(STUDENT_STREAM_REFRESH_SECONDS)
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "X-Accel-Buffering": "no",
+        },
+    )

@@ -7,6 +7,7 @@ complete original object for audit and future provider-specific UI details.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
@@ -14,13 +15,17 @@ import math
 import os
 import re
 import secrets
+import time
 from typing import Any, Literal
 
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request, Response, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import StreamingResponse
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from backend.database import get_db
+from backend.database import SessionLocal, get_db
+from backend.auth import SESSION_COOKIE_NAME, is_user_session_active
 from backend.services.trip_reset import lock_tracking_bus, reset_metadata
 from backend.audit import record_audit_event
 from backend.models import APIRequestLog, AuditEvent, Bus, Driver, Route, User
@@ -44,6 +49,8 @@ from backend.schemas_gps_provider import (
     GPSTranslationConfigUpdate,
 )
 from backend.security import require_driver, require_gps_technician
+from backend.roles import ROLE_DRIVER
+from backend.utils.jwt_handler import get_token_identity
 from backend.services.vehicle_gps import (
     GPS_OFFLINE_GRACE_SECONDS,
     vehicle_gps_expected_interval_seconds,
@@ -54,9 +61,14 @@ from backend.services.telemetry_retention import trim_active_trip_location_histo
 from backend.services.telemetry_retention import provider_history_retention_minutes
 from backend.services.provider_health import record_provider_success
 from backend.services.gps_timestamp import (
+    DEVICE_TIME_BASIS,
     allowed_future_skew_seconds,
-    future_timestamp_quarantine_reason,
+    device_timestamp_quarantine_reason,
+    effective_state_time,
     future_timestamp_seconds,
+    latest_clock_observation,
+    observation_is_newer,
+    select_effective_observation_time,
 )
 from backend.models import RouteStop
 
@@ -244,13 +256,20 @@ def _find_device_mapping(db: Session, external_ids: list[str]) -> GPSDeviceMappi
 
 def _serialize_state(state: BusGPSState, bus: Bus, *, include_raw: bool = False) -> dict[str, Any]:
     now = _utc_now()
+    timestamp_basis = getattr(state, "timestamp_basis", "device")
     expected_interval_seconds = vehicle_gps_expected_interval_seconds(state.ignition)
-    position_time = state.fix_time or state.received_at
-    if position_time.tzinfo is None:
-        position_time = position_time.replace(tzinfo=timezone.utc)
+    position_time = effective_state_time(state)
     clock_ahead_seconds = future_timestamp_seconds(position_time, now)
-    age_seconds = max(0, int((now - position_time).total_seconds()))
-    fresh = clock_ahead_seconds is None and age_seconds <= GPS_OFFLINE_GRACE_SECONDS
+    age_seconds = (
+        max(0, int((now - position_time).total_seconds()))
+        if position_time is not None
+        else None
+    )
+    fresh = (
+        age_seconds is not None
+        and clock_ahead_seconds is None
+        and age_seconds <= GPS_OFFLINE_GRACE_SECONDS
+    )
     result = {
         "bus_id": bus.id,
         "bus_number": bus.bus_number,
@@ -264,6 +283,9 @@ def _serialize_state(state: BusGPSState, bus: Bus, *, include_raw: bool = False)
         "accuracy": state.accuracy,
         "fix_time": state.fix_time,
         "received_at": state.received_at,
+        "effective_time": position_time,
+        "timestamp_basis": timestamp_basis,
+        "clock_fallback_active": timestamp_basis == "receipt_clock_fallback",
         "status": state.status,
         "ignition": state.ignition,
         "motion": state.motion,
@@ -324,7 +346,7 @@ def _serialize_provider_health(
     expected_interval = vehicle_gps_expected_interval_seconds(
         state.ignition if state is not None else None
     )
-    source_time = (state.fix_time or state.received_at) if state else None
+    source_time = effective_state_time(state) if state else None
     provider_contact_at = latest_position.received_at if latest_position else None
     if health and health.last_success_at:
         saved_success = _normalized_datetime(health.last_success_at)
@@ -333,6 +355,7 @@ def _serialize_provider_health(
             provider_contact_at = health.last_success_at
 
     source_age = _age_seconds(source_time, now)
+    raw_device_age = _age_seconds(state.fix_time, now) if state else None
     contact_age = _age_seconds(provider_contact_at, now)
     latest_delivery_delay = None
     previous_position = None
@@ -341,9 +364,11 @@ def _serialize_provider_health(
     if current_position and current_position.fix_time:
         received = _normalized_datetime(current_position.received_at)
         fixed = _normalized_datetime(current_position.fix_time)
-        latest_delivery_delay = max(0, int((received - fixed).total_seconds()))
+        latest_delivery_delay = abs(int((received - fixed).total_seconds()))
         previous_position = db.query(ProviderGPSPosition).filter(
             ProviderGPSPosition.bus_id == bus.id,
+            ProviderGPSPosition.protocol == current_position.protocol,
+            ProviderGPSPosition.external_device_id == current_position.external_device_id,
             ProviderGPSPosition.fix_time.is_not(None),
             ProviderGPSPosition.fix_time < current_position.fix_time,
             ProviderGPSPosition.quarantine_reason.is_(None),
@@ -416,7 +441,12 @@ def _serialize_provider_health(
         "last_provider_error": health.last_error if health else None,
         "consecutive_errors": health.consecutive_errors if health else 0,
         "provider_contact_age_seconds": contact_age,
-        "latest_device_time": source_time,
+        "latest_device_time": state.fix_time if state else None,
+        "latest_tracking_time": source_time,
+        "timestamp_basis": state.timestamp_basis if state else None,
+        "clock_fallback_active": bool(
+            state and state.timestamp_basis == "receipt_clock_fallback"
+        ),
         "latest_accepted_received_at": (
             current_position.received_at if current_position else None
         ),
@@ -424,6 +454,7 @@ def _serialize_provider_health(
             previous_position.fix_time if previous_position else None
         ),
         "device_data_age_seconds": source_age,
+        "raw_device_age_seconds": raw_device_age,
         "latest_delivery_delay_seconds": latest_delivery_delay,
         "device_update_gap_seconds": device_update_gap,
         "device_update_delay_seconds": device_update_delay,
@@ -470,6 +501,9 @@ def _serialize_provider_position(
         "accuracy": item.accuracy,
         "fix_time": item.fix_time,
         "received_at": item.received_at,
+        "effective_time": item.effective_time,
+        "timestamp_basis": item.timestamp_basis,
+        "clock_fallback_active": item.timestamp_basis == "receipt_clock_fallback",
         "delivery_delay_seconds": delivery_delay,
         "device_clock_ahead_seconds": future_timestamp_seconds(
             item.fix_time,
@@ -609,7 +643,8 @@ def _position_from_current_state(state: BusGPSState) -> dict[str, Any]:
         "longitude": state.longitude,
         "speed_kmh": state.speed_kmh,
         "accuracy": state.accuracy,
-        "fix_time": state.fix_time or state.received_at,
+        "fix_time": effective_state_time(state),
+        "raw_fix_time": state.fix_time,
         "has_device_timestamp": state.fix_time is not None,
         "valid": state.valid,
         "ignition": state.ignition,
@@ -631,7 +666,7 @@ def _update_active_trip_from_vehicle(db: Session, position: dict[str, Any], bus_
     position_timestamp = position.get("fix_time") or received_at
 
     # Provider history is intentionally retained even when a packet is old,
-    # but the current trip snapshot is a strict device-time state machine.
+    # but the current trip snapshot is a strict trusted-time state machine.
     # A packet at the same recorded time is not a newer GPS observation,
     # regardless of whether its coordinates happen to match.  Letting it run
     # progression again would allow a replayed morning packet to mutate the
@@ -694,9 +729,9 @@ def _update_active_trip_from_vehicle(db: Session, position: dict[str, Any], bus_
     trip.current_longitude = position["longitude"]
     trip.current_speed = position["speed_kmh"]
     trip.current_accuracy = position["accuracy"]
-    # Freshness must reflect when the GPS device fixed this position, not when
-    # a polling job happened to receive it. This keeps old coordinates visibly
-    # last-known instead of making them appear live again.
+    # Use the validated tracking time. This is normally device time; after a
+    # stable broken-clock sequence is proven it is the separately persisted
+    # receipt clock. The original device timestamp remains in provider history.
     trip.last_location_update = position_timestamp
     trip.current_location_source = "vehicle_gps"
     return trip.id
@@ -1059,17 +1094,35 @@ def ingest_positions(
         bus = lock_tracking_bus(db, bus.id)
 
         now = _utc_now()
-        quarantine_reason = future_timestamp_quarantine_reason(
+        state = db.query(BusGPSState).filter(BusGPSState.bus_id == bus.id).first()
+        external_device_id = position["external_ids"][0]
+        previous_observation = latest_clock_observation(
+            db,
+            bus_id=bus.id,
+            protocol=position["protocol"],
+            external_device_id=external_device_id,
+        )
+        effective_time, timestamp_basis = select_effective_observation_time(
             position["fix_time"],
             now,
+            state,
+            previous_observation,
         )
-        external_device_id = position["external_ids"][0]
+        clock_warning = device_timestamp_quarantine_reason(position["fix_time"], now)
+        quarantine_reason = (
+            clock_warning
+            if clock_warning and timestamp_basis == DEVICE_TIME_BASIS
+            else None
+        )
+        if quarantine_reason is not None:
+            effective_time = None
         raw_json = json.dumps(position["raw"], separators=(",", ":"), default=str)
         history = ProviderGPSPosition(
             bus_id=bus.id, device_mapping_id=mapping_id, external_device_id=external_device_id,
             latitude=position["latitude"], longitude=position["longitude"], speed_kmh=position["speed_kmh"],
             course=position["course"], altitude=position["altitude"], accuracy=position["accuracy"],
             fix_time=position["fix_time"], received_at=now, status=position["status"], ignition=position["ignition"],
+            effective_time=effective_time, timestamp_basis=timestamp_basis,
             motion=position["motion"], valid=position["valid"], protocol=position["protocol"],
             quarantine_reason=quarantine_reason, raw_payload=raw_json,
         )
@@ -1093,24 +1146,19 @@ def ingest_positions(
                 "provider_position_id": history.id,
             })
             continue
-        state = db.query(BusGPSState).filter(BusGPSState.bus_id == bus.id).first()
-        state_time = None
-        if state is not None:
-            stored_time = state.fix_time or state.received_at
-            state_time = (
-                stored_time.replace(tzinfo=timezone.utc)
-                if stored_time.tzinfo is None
-                else stored_time.astimezone(timezone.utc)
-            )
         # A missing device timestamp must not discard a heartbeat. Use its
         # authenticated server receipt time. Visible state is updated only by
         # a strictly newer device/receipt time; equality is a replay, not a
         # new GPS observation.
-        position_time = position["fix_time"] or now
         should_apply = (
-            state is None
-            or state_time is None
-            or position_time > state_time
+            effective_time is not None
+            and observation_is_newer(
+                state,
+                fix_time=position["fix_time"],
+                effective_time=effective_time,
+                timestamp_basis=timestamp_basis,
+                received_at=now,
+            )
         )
         active_trip_id = None
         if should_apply:
@@ -1121,7 +1169,9 @@ def ingest_positions(
             state.latitude, state.longitude, state.speed_kmh = position["latitude"], position["longitude"], position["speed_kmh"]
             state.course, state.altitude, state.accuracy, state.fix_time = position["course"], position["altitude"], position["accuracy"], position["fix_time"]
             state.received_at, state.status, state.ignition, state.motion = now, position["status"], position["ignition"], position["motion"]
+            state.effective_time, state.timestamp_basis = effective_time, timestamp_basis
             state.valid, state.protocol, state.raw_payload = position["valid"], position["protocol"], raw_json
+            db.flush()
         record_provider_success(
             db,
             bus.id,
@@ -1564,3 +1614,85 @@ def get_driver_tracking_source(current_user: User = Depends(require_driver), db:
             **reset_metadata(active_trip),
             "route_direction": active_trip.route_direction if active_trip else None,
             "active_trip_id": active_trip.id if active_trip else None}
+
+
+def _load_driver_tracking_source(user_id: int) -> dict:
+    """Build a driver source snapshot without retaining a stream-long DB session."""
+
+    with SessionLocal() as database_session:
+        user = database_session.get(User, user_id)
+        if user is None or user.status != "Active":
+            raise LookupError("Driver session is no longer active.")
+        return get_driver_tracking_source(user, database_session)
+
+
+@router.get("/driver/source/stream")
+def stream_driver_tracking_source(
+    request: Request,
+    current_user: User = Depends(require_driver, scope="function"),
+):
+    """Push source changes and leave the existing GET endpoint as fallback."""
+
+    if os.getenv("DRIVER_SOURCE_STREAM_ENABLED", "true").strip().casefold() in {
+        "false", "0", "no", "off"
+    }:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Driver source streaming is temporarily disabled.",
+        )
+    user_id = current_user.id
+    authorization = request.headers.get("authorization", "")
+    bearer_token = authorization[7:].strip() if authorization.lower().startswith("bearer ") else ""
+    token = request.cookies.get(SESSION_COOKIE_NAME, "") or bearer_token
+    try:
+        _, token_auth_version, session_id = get_token_identity(token)
+    except Exception as error:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate streaming credentials.",
+        ) from error
+    initial_payload = _load_driver_tracking_source(user_id)
+
+    async def events():
+        payload = initial_payload
+        previous = None
+        started_at = time.monotonic()
+        last_keepalive = time.monotonic()
+        last_session_check = time.monotonic()
+        yield "retry: 5000\n\n"
+        while time.monotonic() - started_at < 50 * 60:
+            if await request.is_disconnected():
+                return
+            if time.monotonic() - last_session_check >= 60:
+                session_active = await asyncio.to_thread(
+                    is_user_session_active,
+                    user_id,
+                    token_auth_version,
+                    session_id,
+                    expected_role=ROLE_DRIVER,
+                )
+                if not session_active:
+                    return
+                last_session_check = time.monotonic()
+            encoded = json.dumps(jsonable_encoder(payload), separators=(",", ":"))
+            if encoded != previous:
+                yield f"data: {encoded}\n\n"
+                previous = encoded
+                last_keepalive = time.monotonic()
+            elif time.monotonic() - last_keepalive >= 15:
+                yield ": keep-alive\n\n"
+                last_keepalive = time.monotonic()
+            await asyncio.sleep(5)
+            try:
+                payload = await asyncio.to_thread(_load_driver_tracking_source, user_id)
+            except Exception:
+                return
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "X-Accel-Buffering": "no",
+        },
+    )

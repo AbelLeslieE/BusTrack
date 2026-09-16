@@ -1,7 +1,4 @@
-"""Database models required by the authentication foundation.
-
-TODO: Add fleet, route, student, and tracking models through versioned migrations.
-"""
+"""SQLAlchemy models for identity, fleet, routes, students, and operations."""
 
 from datetime import date, datetime, timezone, time
 

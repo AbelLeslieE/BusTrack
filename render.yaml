@@ -25,6 +25,27 @@ services:
         value: HS256
 
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: 480
+
+      - key: BACKGROUND_JOBS_ENABLED
+        value: true
+
+      - key: STATIC_ASSET_CACHE_SECONDS
+        value: 3600
+
+      - key: STUDENT_LIVE_STREAM_ENABLED
+        value: true
+
+      - key: DRIVER_SOURCE_STREAM_ENABLED
+        value: true
+
+      - key: ADMIN_LIVE_STREAM_ENABLED
+        value: true
+
+      - key: REQUEST_AUDIT_SUCCESS_GET_SAMPLE_RATE
+        value: 0.01
+
+      - key: REQUEST_AUDIT_RETENTION_DAYS
         value: 30
 
       - key: AIROTRACK_POLL_INTERVAL_SECONDS

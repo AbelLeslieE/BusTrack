@@ -17,6 +17,9 @@ const state = {
 
 let page = null;
 let refreshTimer = null;
+let visibilityRefreshHandler = null;
+const PROVIDER_HEALTH_REFRESH_MS = 60_000;
+const PROVIDER_HEALTH_JITTER_MS = 5_000;
 
 function formatDate(value) {
     if (!value) return "Never";
@@ -101,9 +104,9 @@ function healthCard(item) {
         <header><div><p>${escapeHtml(item.bus_number)}</p><strong>${escapeHtml(item.registration_number || "No registration")}</strong></div><div class="provider-card-badges"><span class="provider-source-pill ${escapeHtml(item.protocol || "unknown")}">${escapeHtml(providerLabel(item.protocol))}</span><span class="provider-health-pill ${escapeHtml(item.health_status)}">${escapeHtml(statusLabel(item.health_status))}</span></div></header>
         <dl>
             <div><dt>Latest provider contact</dt><dd>${escapeHtml(formatDate(item.last_provider_success_at))}<small>${escapeHtml(formatAge(item.provider_contact_age_seconds))} ago · valid or quarantined response</small></dd></div>
-            <div><dt>Accepted by BusTrack</dt><dd>${escapeHtml(formatDate(item.latest_accepted_received_at))}<small>Receipt time for the accepted fix below</small></dd></div>
-            <div><dt>Latest accepted GPS time</dt><dd>${escapeHtml(formatDate(item.latest_device_time))}<small>${escapeHtml(formatAge(item.device_data_age_seconds))} old</small></dd></div>
-            <div><dt>Delivery delay</dt><dd>${escapeHtml(formatAge(item.latest_delivery_delay_seconds))}<small>BusTrack receipt time minus this device time</small></dd></div>
+            <div><dt>Tracking time</dt><dd>${escapeHtml(formatDate(item.latest_tracking_time))}<small>${item.clock_fallback_active ? "Trusted BusTrack receipt time" : "Accepted device time"}</small></dd></div>
+            <div><dt>Device timestamp</dt><dd>${escapeHtml(formatDate(item.latest_device_time))}<small>${escapeHtml(formatAge(item.raw_device_age_seconds))} old · original provider value</small></dd></div>
+            <div><dt>Device / receipt difference</dt><dd>${escapeHtml(formatAge(item.latest_delivery_delay_seconds))}<small>Diagnostic only; it does not control the route</small></dd></div>
             <div><dt>GPS update gap</dt><dd>${escapeHtml(formatAge(item.device_update_gap_seconds))}<small>${escapeHtml(updateGapDetail(item))}</small></dd></div>
             <div><dt>Ignition / expected</dt><dd>${escapeHtml(ignitionLabel(item.ignition))}</dd></div>
             <div><dt>Latest coordinates</dt><dd><code>${escapeHtml(coordinates)}</code></dd></div>
@@ -111,6 +114,7 @@ function healthCard(item) {
         </dl>
         ${directionControl}
         ${item.reset_waiting_for_start ? `<p class="tech-muted">${escapeHtml(item.reset_message)}</p>` : ""}
+        ${item.clock_fallback_active ? `<p class="provider-clock-copy">Device clock correction is active. BusTrack keeps the original timestamp for diagnosis and safely orders new fixes by receipt time.</p>` : ""}
         ${item.timestamp_warning ? `<p class="provider-error-copy">${escapeHtml(item.timestamp_warning)} The packet was quarantined and did not update live tracking.</p>` : ""}
         ${item.last_provider_error ? `<p class="provider-error-copy">${escapeHtml(item.last_provider_error)}</p>` : ""}
     </article>`;
@@ -121,10 +125,10 @@ function positionRow(item) {
         <td><strong>${escapeHtml(item.bus_number)}</strong><small>${escapeHtml(item.registration_number || "—")}</small></td>
         <td><span class="provider-source-pill ${escapeHtml(item.protocol || "unknown")}">${escapeHtml(providerLabel(item.protocol))}</span></td>
         <td>${escapeHtml(formatDate(item.received_at))}</td>
-        <td>${escapeHtml(formatDate(item.fix_time))}<small>${item.quarantined ? `Clock ahead: ${escapeHtml(formatAge(item.device_clock_ahead_seconds))}` : `Delivery lag: ${escapeHtml(formatAge(item.delivery_delay_seconds))}`}</small></td>
+        <td>${escapeHtml(formatDate(item.fix_time))}<small>${item.quarantined ? item.device_clock_ahead_seconds !== null && item.device_clock_ahead_seconds !== undefined ? `Clock ahead: ${escapeHtml(formatAge(item.device_clock_ahead_seconds))}` : "Clock mismatch · waiting for confirmation" : item.clock_fallback_active ? `Clock corrected · tracking time ${escapeHtml(formatDate(item.effective_time))}` : `Delivery lag: ${escapeHtml(formatAge(item.delivery_delay_seconds))}`}</small></td>
         <td><code>${escapeHtml(coordinate(item.latitude))}</code><small><code>${escapeHtml(coordinate(item.longitude))}</code></small></td>
         <td>${escapeHtml(item.speed_kmh === null ? "—" : `${Number(item.speed_kmh).toFixed(1)} km/h`)}<small>${escapeHtml(ignitionLabel(item.ignition))}</small></td>
-        <td><span class="provider-applied ${item.applied_to_current_state ? "yes" : "no"}">${item.quarantined ? "QUARANTINED" : item.applied_to_current_state ? "CURRENT" : "HISTORY"}</span><small>${escapeHtml(item.quarantine_reason || item.protocol || "Unknown protocol")}</small></td>
+        <td><span class="provider-applied ${item.applied_to_current_state ? "yes" : "no"}">${item.quarantined ? "QUARANTINED" : item.applied_to_current_state ? "CURRENT" : "HISTORY"}</span><small>${escapeHtml(item.quarantine_reason || (item.clock_fallback_active ? "Safe receipt-clock fallback" : item.protocol) || "Unknown protocol")}</small></td>
         <td><button class="tech-button secondary provider-raw-button" type="button" data-provider-position="${item.id}">Raw data</button></td>
     </tr>`;
 }
@@ -157,7 +161,7 @@ function renderPage() {
             ${summaryCard("Errors", (counts.error || 0) + (counts.clock_error || 0), "provider or device clock problem", "error")}
             ${summaryCard("No data", counts.no_data || 0, "waiting for first coordinate")}
         </section>
-        <section class="tech-panel provider-filter-panel"><div class="provider-filter-controls"><div><label for="provider-source-filter">Filter by provider</label><select id="provider-source-filter"><option value="" ${state.selectedProvider === "" ? "selected" : ""}>All providers</option><option value="airotrack" ${state.selectedProvider === "airotrack" ? "selected" : ""}>Airotrack</option><option value="kingstrack" ${state.selectedProvider === "kingstrack" ? "selected" : ""}>Kingstrack</option></select></div><div><label for="provider-bus-filter">Filter by exact bus</label><select id="provider-bus-filter"><option value="">All buses</option>${busOptions}</select></div></div><p>Auto-refreshes every ${escapeHtml(String(state.health?.poll_interval_seconds || 20))} seconds. Raw history is retained for ${escapeHtml(formatAge((state.health?.history_retention_minutes || 0) * 60))}.</p></section>
+        <section class="tech-panel provider-filter-panel"><div class="provider-filter-controls"><div><label for="provider-source-filter">Filter by provider</label><select id="provider-source-filter"><option value="" ${state.selectedProvider === "" ? "selected" : ""}>All providers</option><option value="airotrack" ${state.selectedProvider === "airotrack" ? "selected" : ""}>Airotrack</option><option value="kingstrack" ${state.selectedProvider === "kingstrack" ? "selected" : ""}>Kingstrack</option></select></div><div><label for="provider-bus-filter">Filter by exact bus</label><select id="provider-bus-filter"><option value="">All buses</option>${busOptions}</select></div></div><p>This visible page refreshes about once a minute. Provider updates are expected every ${escapeHtml(String(state.health?.poll_interval_seconds || 20))} seconds. Raw history is retained for ${escapeHtml(formatAge((state.health?.history_retention_minutes || 0) * 60))}.</p></section>
         <section class="provider-health-grid">${healthCards}</section>
         <section class="tech-panel"><div class="tech-panel-heading"><div><p class="tech-eyebrow">COORDINATE FEED</p><h2>${state.selectedBusId ? "Selected bus provider data" : state.selectedProvider ? `${providerLabel(state.selectedProvider)} data` : "All provider data"}</h2><p>Rows are ordered by BusTrack receipt time. “Current” is the newest device timestamp used by the tracker; replays remain visible as history but cannot move the route backward.</p></div><span class="tech-muted">Newest 100 retained responses</span></div><div class="tech-table-wrap"><table class="provider-position-table"><thead><tr><th>Bus</th><th>Provider</th><th>Received by BusTrack</th><th>Device timestamp</th><th>Coordinates</th><th>Movement</th><th>Tracker use</th><th></th></tr></thead><tbody>${positionRows}</tbody></table></div></section>
     </section>`;
@@ -354,12 +358,22 @@ export function render() {
     page.cleanup = destroy;
     renderPage();
     queueMicrotask(() => void refreshData());
-    refreshTimer = window.setInterval(() => void refreshData(), 20000);
+    refreshTimer = window.setInterval(() => {
+        if (!document.hidden) void refreshData();
+    }, PROVIDER_HEALTH_REFRESH_MS + Math.floor(Math.random() * PROVIDER_HEALTH_JITTER_MS));
+    visibilityRefreshHandler = () => {
+        if (document.visibilityState === "visible") void refreshData();
+    };
+    document.addEventListener("visibilitychange", visibilityRefreshHandler);
     return page;
 }
 
 export function destroy() {
     if (refreshTimer !== null) window.clearInterval(refreshTimer);
     refreshTimer = null;
+    if (visibilityRefreshHandler) {
+        document.removeEventListener("visibilitychange", visibilityRefreshHandler);
+        visibilityRefreshHandler = null;
+    }
     page = null;
 }

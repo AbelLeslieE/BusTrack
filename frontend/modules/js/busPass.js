@@ -134,6 +134,7 @@ export function render() {
     let controller;
     let expires = 0;
     let generation = 0;
+    let refreshFailureCount = 0;
     const clearQR = message => {
         expires = 0;
         const box = page.querySelector(".live-pass-qr");
@@ -141,6 +142,7 @@ export function render() {
     };
     const load = async () => {
         if (disposed || busy || document.hidden) return;
+        let nextRefreshDelay = 60_000;
         busy = true;
         const current = ++generation;
         const started = performance.now();
@@ -167,15 +169,19 @@ export function render() {
                 expires = performance.now() + Math.max(0, (token.expiresAt - token.serverTime) * 1000 - (performance.now() - started));
                 const box = page.querySelector(".live-pass-qr");
                 box.innerHTML = `<img src="${escapeHtml(token.qrImage)}" alt="Short-lived bus pass QR"><p class="qr-countdown"></p><small>Show this live screen. Screenshots expire quickly.</small>`;
+                nextRefreshDelay = 19_000;
             }
+            refreshFailureCount = 0;
         } catch (error) {
             if (disposed || current !== generation) return;
+            refreshFailureCount += 1;
+            nextRefreshDelay = Math.min(5_000 * (2 ** Math.min(refreshFailureCount - 1, 4)), 60_000);
             if (page.querySelector(".live-pass-qr")) clearQR(error.name === "AbortError" ? "Connection required. QR refresh timed out." : error.message);
             else page.innerHTML = `<section class="portal-card">${errorState(error)}</section>`;
         } finally {
             clearTimeout(timeout);
             if (current === generation) busy = false;
-            if (!disposed && current === generation) timer = setTimeout(load, expires ? 19000 : 5000);
+            if (!disposed && current === generation) timer = setTimeout(load, nextRefreshDelay);
         }
     };
     const countdown = setInterval(() => {

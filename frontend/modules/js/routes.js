@@ -253,6 +253,18 @@ async function loadStops() {
     }
 
 }
+
+async function getNextRouteCode() {
+
+    const response = await fetch(`${API.ROUTES}/next-code`, { cache: "no-store" });
+
+    if (!response.ok) {
+        throw new Error("Unable to preview the next route code.");
+    }
+
+    return await response.json();
+
+}
 /**
  * Create a new route.
  */
@@ -1088,11 +1100,19 @@ function bindToolbarEvents(root) {
 
     if (addButton) {
 
-        addButton.addEventListener("click", () => {
+        addButton.addEventListener("click", async () => {
 
             // A cancelled edit must not turn the next Add action into an
             // accidental update of the previously selected route.
             state.selectedRoute = null;
+
+            let routeCode = "";
+
+            try {
+                routeCode = (await getNextRouteCode()).route_code || "";
+            } catch (error) {
+                console.warn(error);
+            }
 
             Modal.form({
 
@@ -1106,7 +1126,7 @@ function bindToolbarEvents(root) {
 
                 content: createRouteForm(
 
-                    {},
+                    { route_code: routeCode },
 
                     state.buses,
 
@@ -1733,11 +1753,25 @@ function showRouteFormError(form, message) {
 
     }
 
-    const codeInput = form.querySelector("#route_code");
+    form.querySelectorAll(".modal-error").forEach((field) => {
+        field.classList.remove("modal-error");
+        field.removeAttribute("aria-invalid");
+    });
+
+    const normalized = message.toLowerCase();
+    const fieldId = normalized.includes("route name") || normalized.includes("name")
+        ? "route_name"
+        : normalized.includes("departure")
+            ? "departure_time"
+            : normalized.includes("arrival")
+                ? "arrival_time"
+                : null;
+    const codeInput = fieldId ? form.querySelector(`#${fieldId}`) : null;
 
     if (codeInput) {
 
         codeInput.classList.add("modal-error");
+        codeInput.setAttribute("aria-invalid", "true");
 
         codeInput.focus();
 
@@ -1780,13 +1814,11 @@ async function saveRoute(root) {
 
     if (
 
-        !routeData.route_code ||
-
         !routeData.route_name
 
     ) {
 
-        const message = "Enter both a route code and route name before saving.";
+        const message = "Enter a route name before saving.";
         showRouteFormError(form, message);
         showOperationFeedback({ type: "warning", title: "Route needs more details", message });
 

@@ -3,6 +3,7 @@ import { escapeHtml } from "/static/common/security.js";
 const API_URL = "/api/notifications";
 const state = { items: [], filter: "all", view: null, loading: false };
 let actionMessageTimer = null;
+const NOTIFICATIONS_REFRESH_MS = 60_000;
 
 function showActionMessage(message, tone = "success") {
     const target = state.view?.querySelector("#notificationActionMessage");
@@ -150,7 +151,16 @@ export function render() {
         });
     });
     loadNotifications();
-    const refreshTimer = window.setInterval(loadNotifications, 15000);
-    view.cleanup = () => window.clearInterval(refreshTimer);
+    const refreshTimer = window.setInterval(() => {
+        if (!document.hidden) void loadNotifications();
+    }, NOTIFICATIONS_REFRESH_MS);
+    const visibilityHandler = () => {
+        if (document.visibilityState === "visible") void loadNotifications();
+    };
+    document.addEventListener("visibilitychange", visibilityHandler);
+    view.cleanup = () => {
+        window.clearInterval(refreshTimer);
+        document.removeEventListener("visibilitychange", visibilityHandler);
+    };
     return view;
 }
