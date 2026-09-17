@@ -260,7 +260,7 @@
 
     align-items:center;
 
-    gap:16px;
+    gap:14px;
 
     margin-bottom:34px;
 
@@ -272,9 +272,11 @@
 
 .brand-mark{
 
-    width:62px;
+    width:76px;
 
-    height:62px;
+    height:76px;
+
+    flex:0 0 76px;
 
     display:flex;
 
@@ -285,17 +287,7 @@
     box-shadow:
         0 0 30px rgba(79,209,255,.25);
 
-    background:
-
-        linear-gradient(
-
-            135deg,
-
-            var(--primary),
-
-            var(--purple)
-
-        );
+    background:transparent;
 
     font-size:22px;
 
@@ -818,9 +810,11 @@
 
     .sidebar-mobile-header .brand-mark{
 
-        width:52px;
+        width:64px;
 
-        height:52px;
+        height:64px;
+
+        flex-basis:64px;
 
         flex-shrink:0;
 

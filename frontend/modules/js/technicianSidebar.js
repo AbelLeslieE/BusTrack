@@ -16,7 +16,7 @@ export function createTechnicianSidebar(activeRoute, onNavigate) {
     sidebar.className = "sidebar glass-panel";
     sidebar.innerHTML = `
         <div class="sidebar-mobile-header">
-            <a class="brand" href="#technicianDashboard"><span class="brand-mark"><img src="/static/assets/images/logo.png?v=20260917" alt="" aria-hidden="true"></span><div class="brand-text"><span class="brand-title">BusTrack</span><span class="brand-subtitle">Technician Portal</span></div></a>
+            <a class="brand" href="#technicianDashboard"><span class="brand-mark"><img src="/static/assets/images/logo.png?v=20260917b" alt="" aria-hidden="true"></span><div class="brand-text"><span class="brand-title">BusTrack</span><span class="brand-subtitle">Technician Portal</span></div></a>
             <button type="button" class="sidebar-close" aria-label="Close navigation"><span aria-hidden="true">×</span></button>
         </div>
         <nav class="sidebar-nav"><p class="nav-label">Integration</p>${workspaceItems.map(item => navItem(item, activeRoute)).join("")}</nav>
