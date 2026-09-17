@@ -287,9 +287,15 @@
     box-shadow:
         0 0 30px rgba(79,209,255,.25);
 
-    background:transparent;
+    /*
+     * Keep the logo in CSS as well as the current sidebar markup. This makes
+     * an older cached sidebar module (which rendered a bus emoji) display the
+     * current brand asset as soon as the stylesheet refreshes.
+     */
+    background:
+        transparent url("/static/assets/images/logo.png?v=20260917c") center / contain no-repeat;
 
-    font-size:22px;
+    font-size:0;
 
     font-weight:800;
 
