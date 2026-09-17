@@ -303,9 +303,25 @@
 
     color:white;
 
+    overflow:hidden;
+
+    border-radius:16px;
+
     box-shadow:
 
         0 0 25px rgba(79,209,255,.25);
+
+}
+
+.brand-mark img{
+
+    display:block;
+
+    width:100%;
+
+    height:100%;
+
+    object-fit:cover;
 
 }
 

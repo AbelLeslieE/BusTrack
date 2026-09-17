@@ -329,6 +329,14 @@ body::before{
 
     width:68px;
 
+    height:68px;
+
+    border-radius:18px;
+
+    object-fit:cover;
+
+    box-shadow:0 10px 28px rgba(18,112,255,.28);
+
 }
 
 .login-logo h1{

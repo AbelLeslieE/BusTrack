@@ -50,7 +50,7 @@ export function createDriverSidebar(activeRoute, onNavigate) {
         <div class="sidebar-mobile-header">
             <a class="brand" href="#driverDashboard">
 
-                <span class="brand-mark">🚌</span>
+                <span class="brand-mark"><img src="/static/assets/images/logo.png?v=20260917" alt="" aria-hidden="true"></span>
 
                 <div class="brand-text">
 

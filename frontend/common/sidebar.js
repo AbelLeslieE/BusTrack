@@ -60,7 +60,7 @@ export function createSidebar(activeRoute, onNavigate) {
                 href="#dashboard">
 
                 <span class="brand-mark">
-                    🚌
+                    <img src="/static/assets/images/logo.png?v=20260917" alt="" aria-hidden="true">
                 </span>
 
                 <div class="brand-text">
