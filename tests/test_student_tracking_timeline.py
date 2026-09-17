@@ -16,7 +16,7 @@ import backend.routes.models_tracking  # noqa: F401
 from backend.database import Base
 from backend.models import Bus, Driver, Route, RouteStop, Stop, Student, User
 from backend.routes.gps import update_route_stop_progression
-from backend.routes.models_tracking import LiveTrip
+from backend.routes.models_tracking import LiveTrip, TripStopEvent
 from backend.routes.student import get_student_live_tracking
 from backend.routes.trip_history import bus_history
 
@@ -66,6 +66,9 @@ class StudentTrackingTimelineTest(unittest.TestCase):
         self.update_number = 0
 
     def tearDown(self) -> None:
+        for table in reversed(Base.metadata.sorted_tables):
+            self.db.execute(table.delete())
+        self.db.commit()
         self.db.close()
 
     def _gps_update(self, latitude: float, longitude: float) -> dict:
@@ -172,6 +175,30 @@ class StudentTrackingTimelineTest(unittest.TestCase):
         self.assertEqual(len(history["stop_visits"]), 7)
         self.assertEqual(history["trip_legs"][0]["status"], "Running")
         self.assertEqual(history["trip_legs"][0]["direction"], "forward")
+
+    def test_skipped_stop_advances_student_position_and_timeline(self) -> None:
+        start = self._gps_update(10.000, 76.000)
+        self.assertEqual(self._states(start), ["reached", "pending", "pending", "pending"])
+
+        # The next accepted fix is already at Stop 3. Stop 2 must not freeze
+        # the current/next-stop state or prevent the student marker updating.
+        at_stop_three = self._gps_update(10.020, 76.020)
+
+        self.assertEqual(
+            (at_stop_three["trip"]["latitude"], at_stop_three["trip"]["longitude"]),
+            (10.020, 76.020),
+        )
+        self.assertEqual(at_stop_three["trip"]["current_stop"]["stop_code"], "TIME-3")
+        self.assertEqual(at_stop_three["trip"]["next_stop"]["stop_code"], "TIME-END")
+        self.assertEqual(
+            self._states(at_stop_three),
+            ["completed", "skipped", "reached", "pending"],
+        )
+        skipped_events = self.db.query(TripStopEvent).filter(
+            TripStopEvent.trip_id == self.trip.id,
+            TripStopEvent.event_type == "Skipped",
+        ).all()
+        self.assertEqual([event.stop_code_snapshot for event in skipped_events], ["TIME-2"])
 
 
 if __name__ == "__main__":

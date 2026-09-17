@@ -121,3 +121,59 @@ test('clock fallback distinguishes trusted tracking time from raw device time', 
     assert.match(page.innerHTML, /Device clock correction is active/);
     assert.match(page.innerHTML, /Safe receipt-clock fallback/);
 });
+
+
+test('coordinate feed requests and renders one bounded server-side page', async () => {
+    const requests = [];
+    const {context, page} = portal(async path => {
+        requests.push(path);
+        if (path.includes('/positions')) {
+            return {
+                positions: Array.from({length: 10}, (_, index) => ({
+                    id: 21 + index,
+                    bus_number: `BUS-${21 + index}`,
+                    protocol: 'airotrack',
+                })),
+                total: 31,
+                limit: 10,
+                offset: 20,
+                has_more: true,
+            };
+        }
+        return {counts: {}, buses: [], poll_interval_seconds: 20, history_retention_minutes: 1440};
+    });
+    vm.runInContext('state.loading = false; state.positionPage = 3;', context);
+
+    await vm.runInContext('refreshData()', context);
+
+    assert.ok(requests.some(path => path.includes('limit=10') && path.includes('offset=20')));
+    assert.match(page.innerHTML, /Showing <strong>21–30<\/strong> of <strong>31<\/strong> responses/);
+    assert.match(page.innerHTML, /data-provider-page="3" aria-current="page"/);
+    assert.match(page.innerHTML, /data-provider-page="4"/);
+});
+
+
+test('coordinate feed recovers when retention removes the requested page', async () => {
+    const offsets = [];
+    const {context, page} = portal(async path => {
+        if (path.includes('/positions')) {
+            const offset = Number(new URL(`https://example.test${path}`).searchParams.get('offset'));
+            offsets.push(offset);
+            return {
+                positions: offset === 10 ? [{id: 11, bus_number: 'BUS-011', protocol: 'kingstrack'}] : [],
+                total: 11,
+                limit: 10,
+                offset,
+                has_more: false,
+            };
+        }
+        return {counts: {}, buses: [], poll_interval_seconds: 20, history_retention_minutes: 1440};
+    });
+    vm.runInContext('state.loading = false; state.positionPage = 9;', context);
+
+    await vm.runInContext('refreshData()', context);
+
+    assert.deepEqual(offsets, [80, 10]);
+    assert.equal(vm.runInContext('state.positionPage', context), 2);
+    assert.match(page.innerHTML, /Showing <strong>11–11<\/strong> of <strong>11<\/strong> responses/);
+});

@@ -217,6 +217,7 @@ const technicianModules = {
     }
 };
 let shell;
+let navigationVersion = 0;
 
 const profile =
     JSON.parse(
@@ -541,6 +542,7 @@ return {
 }
 
 export async function loadModule(requestedRoute) {
+  const thisNavigation = ++navigationVersion;
   // Bus document alerts retain their target in the hash query string.
   if (typeof requestedRoute === "string" && requestedRoute.startsWith("buses?")) {
       requestedRoute = "buses";
@@ -648,6 +650,10 @@ export async function loadModule(requestedRoute) {
 
   try {
     const module = await modules[route].load();
+    // A newer hash change may have started while this dynamic import was in
+    // flight. Never render an older module over the current page; doing so can
+    // orphan its polling timers, EventSource, map, or geolocation watcher.
+    if (thisNavigation !== navigationVersion) return;
     console.log("Imported module:", module);
   console.log("Module keys:", Object.keys(module));
   console.log("Render:", module.render);
@@ -665,6 +671,7 @@ export async function loadModule(requestedRoute) {
     // Removing this class is harmless on desktop, where it has no visual role.
     shell.appShell.classList.remove("sidebar-open");
   } catch (error) {
+    if (thisNavigation !== navigationVersion) return;
     console.error("========== MODULE ERROR ==========");
     console.error(error);
     throw error;

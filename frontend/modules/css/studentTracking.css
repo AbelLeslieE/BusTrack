@@ -3029,6 +3029,30 @@ span {
 
 
 /* ==========================================================
+   SKIPPED STOP
+========================================================== */
+
+.student-route-stop-skipped
+.student-route-stop-marker {
+    border-color: rgba(255, 184, 77, 0.55);
+    background: rgba(255, 160, 45, 0.14);
+    color: #ffc36c;
+}
+
+.student-route-stop-skipped
+.student-route-stop-content {
+    opacity: 0.74;
+}
+
+.student-route-stop-skipped
+.student-route-stop-status {
+    border-color: rgba(255, 184, 77, 0.18);
+    background: rgba(255, 160, 45, 0.07);
+    color: #ffc36c;
+}
+
+
+/* ==========================================================
    APPROACHING STOP
 ========================================================== */
 

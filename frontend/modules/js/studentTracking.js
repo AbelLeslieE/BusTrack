@@ -3299,6 +3299,20 @@ function renderTrackTimeline() {
                 }
 
 
+                else if (serverStatus === "skipped") {
+
+                    stateClass =
+                        "skipped";
+
+                    statusText =
+                        "Skipped";
+
+                    icon =
+                        "fa-forward-step";
+
+                }
+
+
                 else if (
                     serverStatus === "completed" ||
                     (!serverStatus && isPassed)

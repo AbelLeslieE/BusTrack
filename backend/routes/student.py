@@ -40,6 +40,7 @@ from backend.routes.models_tracking import (
     LiveTrip,
     LiveLocation,
     BusGPSState,
+    TripStopEvent,
 )
 
 from backend.services.tracking_engine import (
@@ -956,13 +957,46 @@ def get_student_live_tracking(
         and current_stop.stop is not None
         and current_stop.stop.id == trip.terminal_stop_id
     )
+    skipped_route_stop_ids: set[int] = set()
+    if trip is not None:
+        # A route can use the same stops again on its return leg. Only skipped
+        # events after the most recent completed leg belong to the currently
+        # displayed direction.
+        current_leg_started_at = (
+            db.query(TripStopEvent.occurred_at)
+            .filter(
+                TripStopEvent.trip_id == trip.id,
+                TripStopEvent.event_type == "Leg completed",
+            )
+            .order_by(TripStopEvent.occurred_at.desc())
+            .limit(1)
+            .scalar()
+        )
+        skipped_query = db.query(TripStopEvent.route_stop_id).filter(
+            TripStopEvent.trip_id == trip.id,
+            TripStopEvent.event_type == "Skipped",
+        )
+        if current_leg_started_at is not None:
+            skipped_query = skipped_query.filter(
+                TripStopEvent.occurred_at > current_leg_started_at,
+            )
+        skipped_route_stop_ids = {
+            route_stop_id
+            for (route_stop_id,) in skipped_query.all()
+            if route_stop_id is not None
+        }
     current_index = route_progress["current_index"]
     for stop_data in stops:
         display_index = int(stop_data["sequence"]) - 1
         if current_index < 0:
             stop_data["tracking_status"] = "pending"
         elif display_index < current_index:
-            stop_data["tracking_status"] = "completed"
+            route_stop = route_stops[display_index]
+            stop_data["tracking_status"] = (
+                "skipped"
+                if route_stop.id in skipped_route_stop_ids
+                else "completed"
+            )
         elif display_index == current_index:
             if terminal_reached:
                 stop_data["tracking_status"] = "terminal_completed"

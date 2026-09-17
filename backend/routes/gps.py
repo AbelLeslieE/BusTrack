@@ -534,6 +534,26 @@ def update_route_stop_progression(
             target_index, target_route_stop, target_distance = stops_ahead_inside_radius[0]
             target_stop = target_route_stop.stop
 
+            # Preserve which intermediate stops were genuinely bypassed. The
+            # student timeline can then distinguish a served stop from a stop
+            # that the bus skipped while still advancing immediately to the
+            # later geofence.
+            for skipped_route_stop in route_stops[current_index + 1:target_index]:
+                skipped_stop = skipped_route_stop.stop
+                if skipped_stop is None:
+                    continue
+                skipped_distance = calculate_stop_distance(
+                    latitude,
+                    longitude,
+                    skipped_stop,
+                )
+                record_stop_event(
+                    "Skipped",
+                    skipped_route_stop,
+                    skipped_stop,
+                    skipped_distance,
+                )
+
             departed_stop = None
             if trip.current_stop_status == "Arrived":
                 trip.current_stop_departed_at = current_timestamp

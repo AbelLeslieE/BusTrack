@@ -7,6 +7,10 @@ const state = {
     positions: [],
     selectedBusId: "",
     selectedProvider: "",
+    positionPage: 1,
+    positionPageSize: 10,
+    positionTotal: 0,
+    positionHasMore: false,
     loading: true,
     refreshing: false,
     changingDirectionBusId: null,
@@ -20,6 +24,7 @@ let refreshTimer = null;
 let visibilityRefreshHandler = null;
 const PROVIDER_HEALTH_REFRESH_MS = 60_000;
 const PROVIDER_HEALTH_JITTER_MS = 5_000;
+const PROVIDER_POSITION_PAGE_SIZES = [10, 25, 50];
 
 function formatDate(value) {
     if (!value) return "Never";
@@ -133,6 +138,54 @@ function positionRow(item) {
     </tr>`;
 }
 
+function positionPageCount() {
+    return Math.max(1, Math.ceil(state.positionTotal / state.positionPageSize));
+}
+
+function positionPageNumbers() {
+    const pageCount = positionPageCount();
+    const candidates = new Set([
+        1,
+        pageCount,
+        state.positionPage - 1,
+        state.positionPage,
+        state.positionPage + 1,
+    ]);
+    return [...candidates]
+        .filter(value => value >= 1 && value <= pageCount)
+        .sort((left, right) => left - right);
+}
+
+function renderPositionPagination() {
+    const pageCount = positionPageCount();
+    const firstRow = state.positionTotal
+        ? ((state.positionPage - 1) * state.positionPageSize) + 1
+        : 0;
+    const lastRow = state.positions.length
+        ? Math.min(state.positionTotal, firstRow + state.positions.length - 1)
+        : 0;
+    const pages = positionPageNumbers();
+    let previousPage = 0;
+    const pageButtons = pages.map(pageNumber => {
+        const gap = previousPage && pageNumber - previousPage > 1
+            ? `<span class="provider-pagination-gap" aria-hidden="true">…</span>`
+            : "";
+        previousPage = pageNumber;
+        return `${gap}<button class="provider-page-button ${pageNumber === state.positionPage ? "is-active" : ""}" type="button" data-provider-page="${pageNumber}" ${pageNumber === state.positionPage ? 'aria-current="page"' : ""}>${pageNumber}</button>`;
+    }).join("");
+
+    return `<div class="provider-pagination" aria-label="Coordinate feed pagination">
+        <p>Showing <strong>${firstRow}–${lastRow}</strong> of <strong>${state.positionTotal}</strong> responses</p>
+        <div class="provider-pagination-controls">
+            <label for="provider-page-size">Rows per page</label>
+            <select id="provider-page-size">${PROVIDER_POSITION_PAGE_SIZES.map(size => `<option value="${size}" ${size === state.positionPageSize ? "selected" : ""}>${size}</option>`).join("")}</select>
+            <button class="provider-page-button provider-page-direction" type="button" data-provider-page="${state.positionPage - 1}" ${state.positionPage <= 1 ? "disabled" : ""} aria-label="Previous coordinate page">←</button>
+            <div class="provider-page-numbers">${pageButtons}</div>
+            <button class="provider-page-button provider-page-direction" type="button" data-provider-page="${state.positionPage + 1}" ${state.positionPage >= pageCount || !state.positionHasMore ? "disabled" : ""} aria-label="Next coordinate page">→</button>
+        </div>
+    </div>`;
+}
+
 function renderPage() {
     if (!page) return;
     if (state.loading && !state.health) {
@@ -163,7 +216,7 @@ function renderPage() {
         </section>
         <section class="tech-panel provider-filter-panel"><div class="provider-filter-controls"><div><label for="provider-source-filter">Filter by provider</label><select id="provider-source-filter"><option value="" ${state.selectedProvider === "" ? "selected" : ""}>All providers</option><option value="airotrack" ${state.selectedProvider === "airotrack" ? "selected" : ""}>Airotrack</option><option value="kingstrack" ${state.selectedProvider === "kingstrack" ? "selected" : ""}>Kingstrack</option></select></div><div><label for="provider-bus-filter">Filter by exact bus</label><select id="provider-bus-filter"><option value="">All buses</option>${busOptions}</select></div></div><p>This visible page refreshes about once a minute. Provider updates are expected every ${escapeHtml(String(state.health?.poll_interval_seconds || 20))} seconds. Raw history is retained for ${escapeHtml(formatAge((state.health?.history_retention_minutes || 0) * 60))}.</p></section>
         <section class="provider-health-grid">${healthCards}</section>
-        <section class="tech-panel"><div class="tech-panel-heading"><div><p class="tech-eyebrow">COORDINATE FEED</p><h2>${state.selectedBusId ? "Selected bus provider data" : state.selectedProvider ? `${providerLabel(state.selectedProvider)} data` : "All provider data"}</h2><p>Rows are ordered by BusTrack receipt time. “Current” is the newest device timestamp used by the tracker; replays remain visible as history but cannot move the route backward.</p></div><span class="tech-muted">Newest 100 retained responses</span></div><div class="tech-table-wrap"><table class="provider-position-table"><thead><tr><th>Bus</th><th>Provider</th><th>Received by BusTrack</th><th>Device timestamp</th><th>Coordinates</th><th>Movement</th><th>Tracker use</th><th></th></tr></thead><tbody>${positionRows}</tbody></table></div></section>
+        <section class="tech-panel"><div class="tech-panel-heading"><div><p class="tech-eyebrow">COORDINATE FEED</p><h2>${state.selectedBusId ? "Selected bus provider data" : state.selectedProvider ? `${providerLabel(state.selectedProvider)} data` : "All provider data"}</h2><p>Rows are ordered by BusTrack receipt time. “Current” is the newest device timestamp used by the tracker; replays remain visible as history but cannot move the route backward.</p></div><span class="tech-muted">${state.positionTotal} retained response${state.positionTotal === 1 ? "" : "s"}</span></div><div class="tech-table-wrap"><table class="provider-position-table"><thead><tr><th>Bus</th><th>Provider</th><th>Received by BusTrack</th><th>Device timestamp</th><th>Coordinates</th><th>Movement</th><th>Tracker use</th><th></th></tr></thead><tbody>${positionRows}</tbody></table></div>${renderPositionPagination()}</section>
     </section>`;
     bindEvents();
 }
@@ -174,12 +227,29 @@ function bindEvents() {
     });
     page?.querySelector("#provider-bus-filter")?.addEventListener("change", event => {
         state.selectedBusId = event.target.value;
-        void refreshData();
+        state.positionPage = 1;
+        void refreshData({ force: true });
     });
     page?.querySelector("#provider-source-filter")?.addEventListener("change", event => {
         state.selectedProvider = event.target.value;
         state.selectedBusId = "";
-        void refreshData();
+        state.positionPage = 1;
+        void refreshData({ force: true });
+    });
+    page?.querySelector("#provider-page-size")?.addEventListener("change", event => {
+        const pageSize = Number(event.target.value);
+        if (!PROVIDER_POSITION_PAGE_SIZES.includes(pageSize)) return;
+        state.positionPageSize = pageSize;
+        state.positionPage = 1;
+        void refreshData({ force: true });
+    });
+    page?.querySelectorAll("[data-provider-page]").forEach(button => {
+        button.addEventListener("click", () => {
+            const nextPage = Number(button.dataset.providerPage);
+            if (!Number.isInteger(nextPage) || nextPage < 1 || nextPage > positionPageCount() || nextPage === state.positionPage) return;
+            state.positionPage = nextPage;
+            void refreshData({ force: true });
+        });
     });
     page?.querySelector("#provider-pull-now")?.addEventListener("click", () => void pullProviderNow());
     page?.querySelectorAll("[data-provider-position]").forEach(button => {
@@ -302,7 +372,10 @@ async function refreshData({ preserveError = false, force = false } = {}) {
     state.refreshing = true;
     if (!preserveError) state.lastRefreshError = "";
     try {
-        const parameters = new URLSearchParams({limit: "100"});
+        const parameters = new URLSearchParams({
+            limit: String(state.positionPageSize),
+            offset: String((state.positionPage - 1) * state.positionPageSize),
+        });
         if (state.selectedBusId) parameters.set("bus_id", state.selectedBusId);
         if (state.selectedProvider) parameters.set("provider", state.selectedProvider);
         const healthParameters = new URLSearchParams();
@@ -310,13 +383,23 @@ async function refreshData({ preserveError = false, force = false } = {}) {
         if (state.selectedProvider) healthParameters.set("provider", state.selectedProvider);
         const healthQuery = healthParameters.toString();
         const healthSuffix = healthQuery ? `?${healthQuery}` : "";
-        const [health, feed] = await Promise.all([
+        let [health, feed] = await Promise.all([
             request(`/integrations/gps/provider-health${healthSuffix}`),
             request(`/integrations/gps/provider-health/positions?${parameters}`),
         ]);
         if (requestId !== state.refreshRequestId) return;
+        const total = Math.max(0, Number(feed.total) || 0);
+        const lastPage = Math.max(1, Math.ceil(total / state.positionPageSize));
+        if (state.positionPage > lastPage) {
+            state.positionPage = lastPage;
+            parameters.set("offset", String((lastPage - 1) * state.positionPageSize));
+            feed = await request(`/integrations/gps/provider-health/positions?${parameters}`);
+            if (requestId !== state.refreshRequestId) return;
+        }
         state.health = health;
-        state.positions = feed.positions;
+        state.positions = Array.isArray(feed.positions) ? feed.positions : [];
+        state.positionTotal = Math.max(0, Number(feed.total) || 0);
+        state.positionHasMore = Boolean(feed.has_more);
     } catch (error) {
         if (requestId === state.refreshRequestId) state.lastRefreshError = `Unable to refresh provider health: ${error.message}`;
     } finally {
