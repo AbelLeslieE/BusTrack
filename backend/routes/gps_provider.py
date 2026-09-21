@@ -32,12 +32,15 @@ from backend.models import APIRequestLog, AuditEvent, Bus, Driver, Route, User
 from backend.routes.models_tracking import (
     BusGPSState,
     GPSDeviceMapping,
+    GPSDataResetBoundary,
+    GPSDataResetOperation,
     GPSIngestToken,
     GPSProviderTranslationConfig,
     GPSProviderHealthState,
     LiveLocation,
     LiveTrip,
     ProviderGPSPosition,
+    TripStopEvent,
 )
 from backend.schemas_gps_provider import (
     GPSDeviceMappingCreate,
@@ -45,6 +48,7 @@ from backend.schemas_gps_provider import (
     GPSIngestTokenCreate,
     GPSIngestTokenUpdate,
     GPSProviderTripDirectionUpdate,
+    GPSProviderFleetReset,
     GPSProviderTripReset,
     GPSTranslationConfigUpdate,
 )
@@ -69,6 +73,11 @@ from backend.services.gps_timestamp import (
     latest_clock_observation,
     observation_is_newer,
     select_effective_observation_time,
+)
+from backend.services.gps_data_reset import (
+    advance_reset_boundary,
+    clear_reset_boundary,
+    observation_crosses_reset_boundary,
 )
 from backend.models import RouteStop
 
@@ -1096,6 +1105,28 @@ def ingest_positions(
         now = _utc_now()
         state = db.query(BusGPSState).filter(BusGPSState.bus_id == bus.id).first()
         external_device_id = position["external_ids"][0]
+        if not observation_crosses_reset_boundary(
+            db,
+            bus_id=bus.id,
+            fix_time=position["fix_time"],
+            received_at=now,
+        ):
+            record_provider_success(
+                db,
+                bus.id,
+                protocol=position["protocol"] or "provider_webhook",
+                attempted_at=now,
+                source_time=None,
+            )
+            ignored.append({
+                "index": index,
+                "bus_id": bus.id,
+                "bus_number": bus.bus_number,
+                "external_device_ids": position["external_ids"],
+                "reason": "Waiting for a GPS fix newer than the fleet reset.",
+                "reset_pending": True,
+            })
+            continue
         previous_observation = latest_clock_observation(
             db,
             bus_id=bus.id,
@@ -1128,6 +1159,7 @@ def ingest_positions(
         )
         db.add(history)
         db.flush()
+        advance_reset_boundary(db, bus_id=bus.id, fix_time=position["fix_time"])
         if quarantine_reason is not None:
             record_provider_success(
                 db,
@@ -1172,6 +1204,7 @@ def ingest_positions(
             state.effective_time, state.timestamp_basis = effective_time, timestamp_basis
             state.valid, state.protocol, state.raw_payload = position["valid"], position["protocol"], raw_json
             db.flush()
+            clear_reset_boundary(db, bus_id=bus.id)
         record_provider_success(
             db,
             bus.id,
@@ -1396,6 +1429,230 @@ def _reset_target(db: Session, bus_id: int):
                         for item in stops):
         raise HTTPException(status_code=409, detail="The route needs stops with valid coordinates before it can be reset.")
     return bus, trip, route, stops
+
+
+@router.post("/provider-health/reset-all")
+def reset_all_provider_tracking(
+    payload: GPSProviderFleetReset,
+    request: Request,
+    db: Session = Depends(get_db),
+    technician: User = Depends(require_gps_technician),
+):
+    """Delete retained coordinates and restart every active route outbound.
+
+    Fleet configuration and immutable trip/stop history are deliberately
+    preserved.  A small non-coordinate watermark remains per bus until a
+    genuinely newer provider fix arrives, preventing the first background
+    poll from restoring the exact packet that was just deleted.
+    """
+
+    request_id = str(payload.request_id)
+    existing_operation = db.get(GPSDataResetOperation, request_id)
+    if existing_operation is not None:
+        result = json.loads(existing_operation.result_json)
+        result["already_applied"] = True
+        return result
+
+    bus_ids = [item[0] for item in db.query(Bus.id).order_by(Bus.id).all()]
+    if bus_ids and db.get_bind().dialect.name == "sqlite":
+        lock_tracking_bus(db, bus_ids[0])
+    buses = (
+        db.query(Bus)
+        .filter(Bus.id.in_(bus_ids))
+        .order_by(Bus.id)
+        .populate_existing()
+        .with_for_update()
+        .all()
+        if bus_ids
+        else []
+    )
+    reset_at = _utc_now()
+
+    states = {
+        item.bus_id: item
+        for item in db.query(BusGPSState).filter(BusGPSState.bus_id.in_(bus_ids)).all()
+    } if bus_ids else {}
+    prior_boundaries = {
+        item.bus_id: item
+        for item in db.query(GPSDataResetBoundary).filter(GPSDataResetBoundary.bus_id.in_(bus_ids)).all()
+    } if bus_ids else {}
+    previous_fix_times: dict[int, datetime | None] = {}
+    for bus in buses:
+        state = states.get(bus.id)
+        previous_fix_time = state.fix_time if state is not None else None
+        if previous_fix_time is None:
+            latest = db.query(ProviderGPSPosition).filter(
+                ProviderGPSPosition.bus_id == bus.id,
+                ProviderGPSPosition.fix_time.is_not(None),
+            ).order_by(
+                ProviderGPSPosition.fix_time.desc(),
+                ProviderGPSPosition.received_at.desc(),
+                ProviderGPSPosition.id.desc(),
+            ).first()
+            previous_fix_time = latest.fix_time if latest is not None else None
+        if previous_fix_time is None and bus.id in prior_boundaries:
+            previous_fix_time = prior_boundaries[bus.id].previous_fix_time
+        previous_fix_times[bus.id] = previous_fix_time
+
+    all_trips = db.query(LiveTrip).order_by(LiveTrip.id).all()
+    trips_by_bus: dict[int, list[LiveTrip]] = {}
+    for trip in all_trips:
+        trip.current_latitude = None
+        trip.current_longitude = None
+        trip.current_speed = None
+        trip.current_accuracy = None
+        trip.last_location_update = None
+        trip.current_location_source = None
+        trips_by_bus.setdefault(trip.bus_id, []).append(trip)
+
+    reset_trip_count = 0
+    created_trip_count = 0
+    stopped_obsolete_count = 0
+    routes_without_stops: list[dict[str, Any]] = []
+    for bus in buses:
+        route = db.query(Route).filter(
+            Route.bus_id == bus.id,
+            Route.status == "Active",
+        ).order_by(Route.id).first()
+        running = [
+            trip for trip in trips_by_bus.get(bus.id, [])
+            if trip.status == "Running" and trip.ended_at is None
+        ]
+        canonical = next(
+            (trip for trip in reversed(running) if route is not None and trip.route_id == route.id),
+            None,
+        )
+        for trip in running:
+            if trip is canonical:
+                continue
+            trip.status = "Stopped"
+            trip.ended_at = reset_at
+            trip.end_reason = "Superseded by technician fleet GPS reset."
+            stopped_obsolete_count += 1
+        if route is None:
+            continue
+
+        route_stops = db.query(RouteStop).filter(
+            RouteStop.route_id == route.id,
+        ).order_by(RouteStop.sequence).all()
+        if not route_stops:
+            routes_without_stops.append({"bus_id": bus.id, "route_id": route.id})
+            continue
+        if canonical is None:
+            driver_id = route.driver_id
+            if driver_id is None:
+                driver_id = db.query(Driver.id).filter(Driver.bus_id == bus.id).scalar()
+            if driver_id is not None and db.get(Driver, driver_id) is None:
+                driver_id = None
+            canonical = LiveTrip(
+                driver_id=driver_id,
+                bus_id=bus.id,
+                route_id=route.id,
+                status="Running",
+                started_at=reset_at,
+            )
+            db.add(canonical)
+            trips_by_bus.setdefault(bus.id, []).append(canonical)
+            created_trip_count += 1
+
+        first = route_stops[0]
+        canonical.route_direction = "forward"
+        canonical.current_route_stop_id = first.id
+        canonical.current_stop_status = "Approaching"
+        canonical.current_stop_arrived_at = None
+        canonical.current_stop_departed_at = None
+        canonical.terminal_reached_at = None
+        canonical.terminal_stop_id = None
+        canonical.route_reset_at = reset_at
+        canonical.reset_waiting_for_start = True
+        canonical.reset_version = (canonical.reset_version or 0) + 1
+        canonical.reset_request_id = request_id
+        canonical.current_latitude = None
+        canonical.current_longitude = None
+        canonical.current_speed = None
+        canonical.current_accuracy = None
+        canonical.last_location_update = None
+        canonical.current_location_source = None
+        reset_trip_count += 1
+
+    provider_positions = db.query(ProviderGPSPosition).all()
+    provider_health_states = db.query(GPSProviderHealthState).all()
+    live_locations = db.query(LiveLocation).all()
+    provider_position_count = len(provider_positions)
+    bus_state_count = len(states)
+    provider_health_count = len(provider_health_states)
+    live_location_count = len(live_locations)
+
+    for state in states.values():
+        db.delete(state)
+    db.flush()
+    for item in provider_positions:
+        db.delete(item)
+    for item in provider_health_states:
+        db.delete(item)
+    for item in live_locations:
+        db.delete(item)
+    db.query(TripStopEvent).update(
+        {
+            TripStopEvent.latitude: None,
+            TripStopEvent.longitude: None,
+            TripStopEvent.distance_meters: None,
+        },
+        synchronize_session=False,
+    )
+    for item in prior_boundaries.values():
+        db.delete(item)
+    db.flush()
+    for bus in buses:
+        db.add(GPSDataResetBoundary(
+            bus_id=bus.id,
+            reset_at=reset_at,
+            previous_fix_time=previous_fix_times.get(bus.id),
+            request_id=request_id,
+        ))
+
+    result = {
+        "already_applied": False,
+        "request_id": request_id,
+        "reset_at": reset_at.isoformat(),
+        "buses_waiting_for_new_gps": len(buses),
+        "active_routes_reset_outbound": reset_trip_count,
+        "tracking_sessions_created": created_trip_count,
+        "obsolete_sessions_stopped": stopped_obsolete_count,
+        "routes_without_stops": routes_without_stops,
+        "deleted": {
+            "provider_positions": provider_position_count,
+            "bus_gps_states": bus_state_count,
+            "provider_health_states": provider_health_count,
+            "live_locations": live_location_count,
+        },
+        "message": "Stored GPS data was cleared. Active routes are outbound at their first stop and waiting for a new GPS fix.",
+    }
+    db.add(GPSDataResetOperation(
+        request_id=request_id,
+        reset_at=reset_at,
+        result_json=json.dumps(result, separators=(",", ":")),
+    ))
+    record_audit_event(
+        db,
+        category="tracking",
+        action="fleet_gps_data_reset",
+        actor=technician,
+        subject_type="gps_fleet",
+        subject_label="All fleet GPS tracking data",
+        details={
+            "request_id": request_id,
+            "buses": len(buses),
+            "active_routes_reset_outbound": reset_trip_count,
+            "tracking_sessions_created": created_trip_count,
+            "obsolete_sessions_stopped": stopped_obsolete_count,
+            "routes_without_stops": routes_without_stops,
+            "deleted": result["deleted"],
+        },
+        request=request,
+    )
+    db.commit()
+    return result
 
 
 @router.get("/provider-health/buses/{bus_id}/reset-options")

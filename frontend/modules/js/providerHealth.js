@@ -13,6 +13,7 @@ const state = {
     positionHasMore: false,
     loading: true,
     refreshing: false,
+    resettingAll: false,
     changingDirectionBusId: null,
     resettingBusId: null,
     refreshRequestId: 0,
@@ -205,7 +206,7 @@ function renderPage() {
         : `<tr><td colspan="8" class="tech-empty">No provider coordinates are retained for this filter yet.</td></tr>`;
 
     page.innerHTML = `<section class="tech-page provider-health-page">
-        <header class="tech-hero provider-health-hero"><div><p class="tech-eyebrow">GPS PROVIDER OBSERVABILITY</p><h1>Provider Health</h1><p>Compare Airotrack and Kingstrack responses, device timestamps, BusTrack receipt times, and route usage.</p></div><button class="tech-button primary" id="provider-pull-now" type="button" ${state.refreshing ? "disabled" : ""}>${state.refreshing ? "Fetching…" : "↻ Fetch providers now"}</button></header>
+        <header class="tech-hero provider-health-hero"><div><p class="tech-eyebrow">GPS PROVIDER OBSERVABILITY</p><h1>Provider Health</h1><p>Compare Airotrack and Kingstrack responses, device timestamps, BusTrack receipt times, and route usage.</p></div><div class="provider-health-actions"><button class="tech-button danger" id="provider-reset-all" type="button" ${state.refreshing || state.resettingAll ? "disabled" : ""}>${state.resettingAll ? "Resetting…" : "Reset all tracking"}</button><button class="tech-button primary" id="provider-pull-now" type="button" ${state.refreshing || state.resettingAll ? "disabled" : ""}>${state.refreshing ? "Fetching…" : "↻ Fetch providers now"}</button></div></header>
         ${state.lastRefreshError ? `<p class="provider-page-error">${escapeHtml(state.lastRefreshError)}</p>` : ""}
         <section class="tech-stat-grid provider-stat-grid">
             ${summaryCard("Healthy", counts.healthy || 0, "fresh provider coordinates", "healthy")}
@@ -252,6 +253,7 @@ function bindEvents() {
         });
     });
     page?.querySelector("#provider-pull-now")?.addEventListener("click", () => void pullProviderNow());
+    page?.querySelector("#provider-reset-all")?.addEventListener("click", openResetAllDialog);
     page?.querySelectorAll("[data-provider-position]").forEach(button => {
         button.addEventListener("click", () => showRawPosition(Number(button.dataset.providerPosition)));
     });
@@ -260,6 +262,67 @@ function bindEvents() {
             Number(button.dataset.providerDirectionBus),
             button.dataset.providerNextDirection,
         ));
+    });
+}
+
+function openResetAllDialog() {
+    if (state.resettingAll) return;
+    const requestId = crypto.randomUUID();
+    let submitting = false;
+    Modal.form({
+        eyebrow: "DESTRUCTIVE GPS RESET",
+        title: "Reset all fleet tracking?",
+        subtitle: "This clears retained coordinates for every bus and cannot be undone.",
+        size: "sm",
+        submitText: "Reset all tracking",
+        style: "danger",
+        content: `<div class="provider-reset-all-warning">
+                <p><strong>This will:</strong></p>
+                <ul><li>delete stored provider coordinates and current GPS state;</li><li>delete live coordinate history;</li><li>set every active route to outbound at its first stop; and</li><li>wait for a genuinely newer GPS fix before tracking resumes.</li></ul>
+                <p>Routes, stops, assignments, users, provider tokens, device mappings, and trip/stop audit history will be preserved.</p>
+            </div>
+            <label for="provider-reset-all-confirm">Type <strong>RESET</strong> to continue</label>
+            <input id="provider-reset-all-confirm" autocomplete="off" spellcheck="false" placeholder="RESET">
+            <p id="provider-reset-all-error" class="provider-reset-all-error" role="alert"></p>`,
+        onOpen: () => document.getElementById("provider-reset-all-confirm")?.focus(),
+        onSubmit: async () => {
+            if (submitting) return;
+            const confirmation = document.getElementById("provider-reset-all-confirm");
+            const errorBox = document.getElementById("provider-reset-all-error");
+            if (confirmation?.value.trim().toUpperCase() !== "RESET") {
+                if (errorBox) errorBox.textContent = "Type RESET exactly before continuing.";
+                confirmation?.focus();
+                return;
+            }
+            submitting = true;
+            state.resettingAll = true;
+            if (confirmation) confirmation.disabled = true;
+            renderPage();
+            try {
+                const result = await request("/integrations/gps/provider-health/reset-all", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        confirmation: "RESET_ALL_GPS_DATA",
+                        request_id: requestId,
+                    }),
+                });
+                Modal.close();
+                state.positionPage = 1;
+                await refreshData({force: true});
+                Modal.success({
+                    title: "Fleet tracking reset",
+                    subtitle: `${result.active_routes_reset_outbound} active route${result.active_routes_reset_outbound === 1 ? " is" : "s are"} outbound and waiting for new GPS data.`,
+                });
+            } catch (error) {
+                if (errorBox) errorBox.textContent = error.message;
+                else Modal.error({title: "Unable to reset fleet tracking", subtitle: error.message});
+            } finally {
+                submitting = false;
+                state.resettingAll = false;
+                if (confirmation) confirmation.disabled = false;
+                renderPage();
+            }
+        },
     });
 }
 

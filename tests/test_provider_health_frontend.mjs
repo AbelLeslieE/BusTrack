@@ -4,7 +4,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 
 
-function portal(request) {
+function portal(request, overrides = {}) {
     const source = fs
         .readFileSync(new URL('../frontend/modules/js/providerHealth.js', import.meta.url), 'utf8')
         .replace(/^import .*;\r?$/gm, '')
@@ -18,10 +18,10 @@ function portal(request) {
         console: {log() {}, warn() {}, error() {}},
         request,
         escapeHtml: value => String(value ?? ''),
-        Modal: {},
+        Modal: overrides.Modal || {},
         URLSearchParams,
         window: {setInterval() {}, clearInterval() {}},
-        document: {},
+        document: overrides.document || {},
         crypto: {randomUUID: () => 'test'},
     });
     vm.runInContext(source, context);
@@ -176,4 +176,44 @@ test('coordinate feed recovers when retention removes the requested page', async
     assert.deepEqual(offsets, [80, 10]);
     assert.equal(vm.runInContext('state.positionPage', context), 2);
     assert.match(page.innerHTML, /Showing <strong>11–11<\/strong> of <strong>11<\/strong> responses/);
+});
+
+
+test('fleet reset requires typed confirmation and sends one destructive reset request', async () => {
+    const requests = [];
+    const confirmation = {value: 'RESET', disabled: false, focus() {}};
+    const errorBox = {textContent: ''};
+    let formOptions;
+    const Modal = {
+        form(options) { formOptions = options; },
+        close() {},
+        success() {},
+        error() {},
+    };
+    const document = {
+        getElementById(id) {
+            return id === 'provider-reset-all-confirm' ? confirmation : errorBox;
+        },
+    };
+    const {context, page} = portal(async (path, options = {}) => {
+        requests.push({path, options});
+        if (path.endsWith('/reset-all')) {
+            return {active_routes_reset_outbound: 2};
+        }
+        if (path.includes('/positions')) {
+            return {positions: [], total: 0, has_more: false};
+        }
+        return {counts: {}, buses: [], poll_interval_seconds: 20, history_retention_minutes: 1440};
+    }, {Modal, document});
+    vm.runInContext('state.loading = false; state.health = {counts: {}, buses: []}; renderPage(); openResetAllDialog();', context);
+
+    assert.match(page.innerHTML, /Reset all tracking/);
+    assert.match(formOptions.title, /Reset all fleet tracking/);
+    await formOptions.onSubmit();
+
+    const resetRequest = requests.find(item => item.path.endsWith('/reset-all'));
+    assert.ok(resetRequest);
+    assert.equal(resetRequest.options.method, 'POST');
+    assert.equal(JSON.parse(resetRequest.options.body).confirmation, 'RESET_ALL_GPS_DATA');
+    assert.equal(vm.runInContext('state.resettingAll', context), false);
 });

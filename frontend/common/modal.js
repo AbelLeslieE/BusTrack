@@ -710,7 +710,7 @@ function form(options = {}){
 
                 text:options.submitText || "Save",
 
-                style:"primary",
+                style:options.style || "primary",
 
                 onClick:options.onSubmit
 

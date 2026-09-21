@@ -33,6 +33,11 @@ from backend.services.gps_timestamp import (
     observation_is_newer,
     select_effective_observation_time,
 )
+from backend.services.gps_data_reset import (
+    advance_reset_boundary,
+    clear_reset_boundary,
+    observation_crosses_reset_boundary,
+)
 
 
 AIROTRACK_ENDPOINT = "https://api.airotrack.in/api/vehicle-live-data"
@@ -196,6 +201,27 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
         speed = None
     ignition = _ignition(data.get("ignition"))
     now = _utc_now()
+    if not observation_crosses_reset_boundary(
+        db,
+        bus_id=bus.id,
+        fix_time=fix_time,
+        received_at=now,
+    ):
+        return {
+            "bus_id": bus.id,
+            "bus_number": bus.bus_number,
+            "registration_number": bus.registration_number,
+            "imei": imei,
+            "source_date": fix_time,
+            "effective_time": None,
+            "timestamp_basis": DEVICE_TIME_BASIS,
+            "applied": False,
+            "quarantined": False,
+            "reset_pending": True,
+            "quarantine_reason": None,
+            "provider_position_id": None,
+            "active_trip_id": None,
+        }
     raw_json = json.dumps(data, separators=(",", ":"), default=str)
     mapping = db.query(GPSDeviceMapping).filter(
         GPSDeviceMapping.external_device_id == imei,
@@ -236,6 +262,7 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
     )
     db.add(history)
     db.flush()
+    advance_reset_boundary(db, bus_id=bus.id, fix_time=fix_time)
 
     apply = (
         quarantine_reason is None
@@ -260,6 +287,7 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
         state.effective_time, state.timestamp_basis = effective_time, timestamp_basis
         state.valid, state.protocol, state.raw_payload = True, "airotrack", raw_json
         db.flush()
+        clear_reset_boundary(db, bus_id=bus.id)
     # Reconcile from the canonical saved state even when Airotrack repeats the
     # same source_date. This repairs a missing provider-owned route session
     # after assignments change without treating the repeated payload as a new
@@ -379,7 +407,7 @@ def _refresh_airotrack_unlocked(db: Session, *, bus_id: int | None = None) -> di
                     protocol="airotrack",
                     source_time=(
                         newest["source_date"]
-                        if not newest["quarantined"]
+                        if not newest["quarantined"] and not newest.get("reset_pending")
                         else None
                     ),
                 )

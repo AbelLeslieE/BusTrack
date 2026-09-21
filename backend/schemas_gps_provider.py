@@ -43,3 +43,10 @@ class GPSProviderTripReset(BaseModel):
     trip_id: int = Field(gt=0)
     expected_reset_version: int = Field(ge=0)
     request_id: UUID
+
+
+class GPSProviderFleetReset(BaseModel):
+    """Explicit confirmation required before deleting retained GPS data."""
+
+    confirmation: Literal["RESET_ALL_GPS_DATA"]
+    request_id: UUID

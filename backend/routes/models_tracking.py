@@ -408,6 +408,33 @@ class BusGPSState(Base):
     raw_payload: Mapped[str] = mapped_column(Text, nullable=False)
 
 
+class GPSDataResetBoundary(Base):
+    """Per-bus watermark that rejects pre-reset provider replays.
+
+    A fleet GPS reset deliberately deletes the current coordinate and raw
+    provider history.  Keeping only this non-coordinate boundary prevents the
+    provider's next poll from restoring the same old fix as though it were
+    new data.
+    """
+
+    __tablename__ = "gps_data_reset_boundaries"
+
+    bus_id: Mapped[int] = mapped_column(ForeignKey("buses.id"), primary_key=True)
+    reset_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    previous_fix_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    request_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+
+
+class GPSDataResetOperation(Base):
+    """Idempotency record for a destructive technician fleet reset."""
+
+    __tablename__ = "gps_data_reset_operations"
+
+    request_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    reset_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    result_json: Mapped[str] = mapped_column(Text, nullable=False)
+
+
 class GPSProviderTranslationConfig(Base):
     """Technician-managed field paths for a vendor's changing JSON layout."""
 

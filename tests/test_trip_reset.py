@@ -20,16 +20,32 @@ from sqlalchemy.orm import sessionmaker
 from backend.database import Base, get_db, _add_trip_reset_columns
 from backend.models import AuditEvent, Bus, Driver, Route, RouteStop, Stop, Student, User
 from backend.routes.gps import update_location, change_trip_direction
+from backend.routes.buses import delete_bus
 from backend.routes.gps_provider import (
     get_trip_reset_options, reset_provider_trip, ingest_positions,
-    get_driver_tracking_source, override_provider_trip_direction, router,
+    get_driver_tracking_source, override_provider_trip_direction,
+    reset_all_provider_tracking, router,
 )
-from backend.routes.models_tracking import BusGPSState, GPSIngestToken, LiveLocation, LiveTrip, TripStopEvent
+from backend.routes.models_tracking import (
+    BusGPSState,
+    GPSDataResetBoundary,
+    GPSIngestToken,
+    GPSProviderHealthState,
+    LiveLocation,
+    LiveTrip,
+    ProviderGPSPosition,
+    TripStopEvent,
+)
 from backend.routes.student import get_student_live_tracking
-from backend.schemas_gps_provider import GPSProviderTripReset, GPSProviderTripDirectionUpdate
+from backend.schemas_gps_provider import (
+    GPSProviderFleetReset,
+    GPSProviderTripReset,
+    GPSProviderTripDirectionUpdate,
+)
 from backend.schemas_tracking import LocationUpdateRequest, TripDirectionRequest
 from backend.security import require_authenticated
 from backend.services.airotrack import _store_position
+from backend.services.kingstrack import _store_position as _store_kingstrack_position
 from backend.services.trip_reset import as_utc, lock_tracking_bus
 
 
@@ -99,6 +115,181 @@ class TripResetTest(unittest.TestCase):
         self.assertEqual([s.sequence for s in self.route_stops],[1,2,3])
         self.assertEqual(self.db.query(AuditEvent).filter_by(action="trip_progression_reset").count(),1)
         self.assertTrue(get_driver_tracking_source(self.driver_user,self.db)["reset_waiting_for_start"])
+
+    def test_fleet_reset_deletes_only_gps_data_and_waits_for_a_new_fix(self):
+        provider_position = ProviderGPSPosition(
+            bus_id=self.bus.id,
+            external_device_id="RESET-DEVICE",
+            latitude=10.01,
+            longitude=76,
+            speed_kmh=10,
+            fix_time=self.old,
+            received_at=self.old,
+            protocol="test",
+            raw_payload="{}",
+        )
+        self.db.add(provider_position)
+        self.db.flush()
+        state = self.db.query(BusGPSState).filter_by(bus_id=self.bus.id).one()
+        state.provider_position_id = provider_position.id
+        self.db.add(GPSProviderHealthState(
+            bus_id=self.bus.id,
+            protocol="test",
+            last_attempt_at=self.old,
+            last_success_at=self.old,
+            last_source_time=self.old,
+        ))
+        event = self.db.query(TripStopEvent).one()
+        event.latitude = 10.01
+        event.longitude = 76
+        event.distance_meters = 3
+        self.db.commit()
+
+        request_id = uuid4()
+        payload = GPSProviderFleetReset(
+            confirmation="RESET_ALL_GPS_DATA",
+            request_id=request_id,
+        )
+        with patch("backend.routes.gps_provider._utc_now", return_value=self.now):
+            result = reset_all_provider_tracking(payload, None, self.db, self.tech)
+
+        self.assertEqual(result["active_routes_reset_outbound"], 1)
+        self.assertEqual(result["deleted"]["provider_positions"], 1)
+        self.assertEqual(result["deleted"]["bus_gps_states"], 1)
+        self.assertEqual(result["deleted"]["provider_health_states"], 1)
+        self.assertEqual(result["deleted"]["live_locations"], 1)
+        self.assertEqual(self.db.query(ProviderGPSPosition).count(), 0)
+        self.assertEqual(self.db.query(BusGPSState).count(), 0)
+        self.assertEqual(self.db.query(GPSProviderHealthState).count(), 0)
+        self.assertEqual(self.db.query(LiveLocation).count(), 0)
+        self.assertEqual(self.db.query(GPSDataResetBoundary).count(), 1)
+        self.assertEqual(self.db.query(GPSIngestToken).count(), 1)
+        self.assertIsNotNone(self.db.get(Bus, self.bus.id))
+        self.assertIsNotNone(self.db.get(Route, self.route.id))
+        self.assertEqual([item.sequence for item in self.route_stops], [1, 2, 3])
+        self.assertEqual(self.db.query(TripStopEvent).count(), 1)
+        self.db.refresh(event)
+        self.assertIsNone(event.latitude)
+        self.assertIsNone(event.longitude)
+        self.assertIsNone(event.distance_meters)
+
+        self.db.refresh(self.trip)
+        self.assertEqual(self.trip.route_direction, "forward")
+        self.assertEqual(self.trip.current_route_stop_id, self.route_stops[0].id)
+        self.assertEqual(self.trip.current_stop_status, "Approaching")
+        self.assertTrue(self.trip.reset_waiting_for_start)
+        self.assertIsNone(self.trip.current_latitude)
+        self.assertIsNone(self.trip.last_location_update)
+
+        replay = ingest_positions(SimpleNamespace(state=SimpleNamespace()), {
+            "uniqueId": "RESET-DEVICE",
+            "latitude": 10.02,
+            "longitude": 76,
+            "speed": 10,
+            "fixTime": self.old.isoformat(),
+            "attributes": {"ignition": True},
+        }, "test-token", self.db)
+        self.assertTrue(replay["ignored"][0]["reset_pending"])
+        self.assertEqual(self.db.query(ProviderGPSPosition).count(), 0)
+        self.assertEqual(self.db.query(BusGPSState).count(), 0)
+
+        fresh = ingest_positions(SimpleNamespace(state=SimpleNamespace()), {
+            "uniqueId": "RESET-DEVICE",
+            "latitude": 10,
+            "longitude": 76,
+            "speed": 10,
+            "fixTime": (self.now + timedelta(seconds=1)).isoformat(),
+            "attributes": {"ignition": True},
+        }, "test-token", self.db)
+        self.assertEqual(len(fresh["accepted"]), 1)
+        self.assertTrue(fresh["accepted"][0]["applied_to_current_state"])
+        self.assertEqual(self.db.query(ProviderGPSPosition).count(), 1)
+        self.assertEqual(self.db.query(BusGPSState).count(), 1)
+        self.assertEqual(self.db.query(GPSDataResetBoundary).count(), 0)
+        self.db.refresh(self.trip)
+        self.assertFalse(self.trip.reset_waiting_for_start)
+        self.assertEqual(self.trip.current_stop_status, "Arrived")
+
+        repeated = reset_all_provider_tracking(payload, None, self.db, self.tech)
+        self.assertTrue(repeated["already_applied"])
+        self.assertEqual(
+            self.db.query(AuditEvent).filter_by(action="fleet_gps_data_reset").count(),
+            1,
+        )
+
+    def test_fleet_reset_boundary_covers_airotrack_and_kingstrack(self):
+        first_reset = GPSProviderFleetReset(
+            confirmation="RESET_ALL_GPS_DATA",
+            request_id=uuid4(),
+        )
+        with patch("backend.routes.gps_provider._utc_now", return_value=self.now):
+            reset_all_provider_tracking(first_reset, None, self.db, self.tech)
+
+        airotrack_packet = {
+            "vehicle_registration": "RESET-REG",
+            "imei_no": "RESET-DEVICE",
+            "latitude": 10,
+            "longitude": 76,
+            "speed": 10,
+            "ignition": "ON",
+            "source_date": "ignored by test patch",
+        }
+        with patch("backend.services.airotrack._as_vendor_time", return_value=self.old):
+            stale_airotrack = _store_position(self.db, self.bus, airotrack_packet)
+        self.assertTrue(stale_airotrack["reset_pending"])
+        self.assertEqual(self.db.query(ProviderGPSPosition).count(), 0)
+
+        first_new_time = self.now + timedelta(seconds=1)
+        with patch("backend.services.airotrack._as_vendor_time", return_value=first_new_time):
+            fresh_airotrack = _store_position(self.db, self.bus, airotrack_packet)
+        self.assertTrue(fresh_airotrack["applied"])
+        self.assertEqual(self.db.query(GPSDataResetBoundary).count(), 0)
+        self.db.commit()
+
+        self.bus.gps_provider = "kingstrack"
+        self.db.commit()
+        second_reset = GPSProviderFleetReset(
+            confirmation="RESET_ALL_GPS_DATA",
+            request_id=uuid4(),
+        )
+        with patch("backend.routes.gps_provider._utc_now", return_value=self.now + timedelta(seconds=2)):
+            reset_all_provider_tracking(second_reset, None, self.db, self.tech)
+
+        kingstrack_packet = {
+            "plate_no": "RESET-REG",
+            "imei_no": "RESET-DEVICE",
+            "latitude": 10,
+            "longitude": 76,
+            "speed": 10,
+            "ignition": True,
+            "gps": "ON",
+            "timestamp": "ignored by test patch",
+        }
+        with patch("backend.services.kingstrack._as_vendor_time", return_value=first_new_time):
+            stale_kingstrack = _store_kingstrack_position(self.db, self.bus, kingstrack_packet)
+        self.assertTrue(stale_kingstrack["reset_pending"])
+        self.assertEqual(self.db.query(ProviderGPSPosition).count(), 0)
+
+        with patch(
+            "backend.services.kingstrack._as_vendor_time",
+            return_value=self.now + timedelta(seconds=3),
+        ):
+            fresh_kingstrack = _store_kingstrack_position(self.db, self.bus, kingstrack_packet)
+        self.assertTrue(fresh_kingstrack["applied"])
+        self.assertEqual(self.db.query(GPSDataResetBoundary).count(), 0)
+
+    def test_fleet_reset_boundary_does_not_block_bus_deletion(self):
+        payload = GPSProviderFleetReset(
+            confirmation="RESET_ALL_GPS_DATA",
+            request_id=uuid4(),
+        )
+        reset_all_provider_tracking(payload, None, self.db, self.tech)
+        self.assertEqual(self.db.query(GPSDataResetBoundary).count(), 1)
+
+        delete_bus(self.bus.id, self.db, self.tech)
+
+        self.assertIsNone(self.db.get(Bus, self.bus.id))
+        self.assertEqual(self.db.query(GPSDataResetBoundary).count(), 0)
 
     def test_return_preview_and_reset_use_original_last_stop(self):
         options = get_trip_reset_options(self.bus.id,self.db,self.tech)
@@ -279,13 +470,18 @@ class TripResetTest(unittest.TestCase):
             return next(m["status"] for m in messages if m["type"]=="http.response.start")
         path=f"/api/integrations/gps/provider-health/buses/{self.bus.id}"
         body=self.payload().model_dump(mode="json")
+        fleet_body=GPSProviderFleetReset(
+            confirmation="RESET_ALL_GPS_DATA", request_id=uuid4()
+        ).model_dump(mode="json")
         # Use the real authorization dependency, replacing only authentication.
         app.dependency_overrides[require_authenticated]=lambda:self.user
         self.assertEqual(asyncio.run(call("POST",path+"/reset",body)),403)
         self.assertEqual(asyncio.run(call("GET",path+"/reset-options")),403)
+        self.assertEqual(asyncio.run(call("POST","/api/integrations/gps/provider-health/reset-all",fleet_body)),403)
         app.dependency_overrides[require_authenticated]=lambda:self.tech
         self.assertEqual(asyncio.run(call("GET",path+"/reset-options")),200)
         self.assertEqual(asyncio.run(call("POST",path+"/reset",body)),200)
+        self.assertEqual(asyncio.run(call("POST","/api/integrations/gps/provider-health/reset-all",fleet_body)),200)
 
 
 if __name__ == "__main__":

@@ -37,6 +37,11 @@ from backend.services.gps_timestamp import (
 )
 from backend.services.provider_health import record_provider_error, record_provider_success
 from backend.services.trip_reset import lock_tracking_bus
+from backend.services.gps_data_reset import (
+    advance_reset_boundary,
+    clear_reset_boundary,
+    observation_crosses_reset_boundary,
+)
 
 
 KINGSTRACK_ENDPOINT = "https://mvt.apmkingstrack.com/fleettracking/api/live/json"
@@ -153,6 +158,27 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
     ignition = ignition_value if isinstance(ignition_value, bool) else None
     gps_enabled = str(data.get("gps") or "").strip().upper() != "OFF"
     now = _utc_now()
+    if not observation_crosses_reset_boundary(
+        db,
+        bus_id=bus.id,
+        fix_time=fix_time,
+        received_at=now,
+    ):
+        return {
+            "bus_id": bus.id,
+            "bus_number": bus.bus_number,
+            "registration_number": bus.registration_number,
+            "imei": imei,
+            "source_date": fix_time,
+            "effective_time": None,
+            "timestamp_basis": DEVICE_TIME_BASIS,
+            "applied": False,
+            "quarantined": False,
+            "reset_pending": True,
+            "quarantine_reason": None,
+            "provider_position_id": None,
+            "active_trip_id": None,
+        }
     raw_json = json.dumps(data, separators=(",", ":"), default=str)
 
     mapping = db.query(GPSDeviceMapping).filter(
@@ -207,6 +233,7 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
     )
     db.add(history)
     db.flush()
+    advance_reset_boundary(db, bus_id=bus.id, fix_time=fix_time)
 
     apply = (
         gps_enabled
@@ -250,6 +277,7 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
         state.protocol = "kingstrack"
         state.raw_payload = raw_json
         db.flush()
+        clear_reset_boundary(db, bus_id=bus.id)
 
     # The same guarded progression function handles outbound/return order,
     # reset boundaries, skipped stops and legitimate terminal reversal.
@@ -327,7 +355,11 @@ def _refresh_kingstrack_unlocked(
                     db,
                     bus.id,
                     protocol="kingstrack",
-                    source_time=stored["source_date"] if not stored["quarantined"] else None,
+                    source_time=(
+                        stored["source_date"]
+                        if not stored["quarantined"] and not stored.get("reset_pending")
+                        else None
+                    ),
                 )
             except ValueError as error:
                 errors.append({"bus_id": bus.id, "registration_number": plate, "reason": str(error)})
