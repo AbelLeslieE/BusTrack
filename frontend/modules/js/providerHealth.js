@@ -345,7 +345,7 @@ async function openResetDialog(busId) {
             content: `<label for="provider-reset-direction">Journey direction</label>
                 <select id="provider-reset-direction"><option value="forward">Outbound</option><option value="reverse">Return</option></select>
                 <p>Starting stop: <strong id="provider-reset-start">${escapeHtml(options.starts.forward.name)}</strong></p>
-                <p>Clears current stop progress and waits for a fresh GPS arrival at this stop. The real bus location and journey history stay available.</p>
+                <p>Clears current stop progress. A fresh GPS arrival at this stop or any later stop in the selected direction resumes progress. The real bus location and journey history stay available.</p>
                 <p id="provider-reset-error" role="alert"></p>`,
             onOpen: () => document.getElementById("provider-reset-direction")?.addEventListener("change", event => {
                 direction = event.target.value;

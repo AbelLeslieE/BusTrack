@@ -649,7 +649,7 @@ function showTerminalArrival(nextDirection) {
 function showRunningTripStatus(direction = currentRouteDirection) {
     updateDirectionControls(direction);
     if (terminalMessageTimer === null) {
-        setText("tripStatus", resetWaitingForStart ? "Route reset — waiting to reach the first stop." : `🟢 Running · ${directionLabel()}`);
+        setText("tripStatus", resetWaitingForStart ? "Route reset — waiting for a fresh GPS fix at a route stop." : `🟢 Running · ${directionLabel()}`);
     }
 }
 

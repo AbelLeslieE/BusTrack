@@ -66,6 +66,15 @@ The included `render.yaml` provisions PostgreSQL and has Render generate a persi
 
 If the first administrator password is lost, set `BOOTSTRAP_ADMIN_RESET_PASSWORD=true` temporarily in Render together with the intended `BOOTSTRAP_ADMIN_USERNAME` and a new `BOOTSTRAP_ADMIN_PASSWORD`, then deploy once. This resets only that existing active administrator's password, ends its existing sessions, and clears login lockout. Remove the reset variable or set it to `false` immediately after the successful deployment so future deployments cannot overwrite a password changed in Settings.
 
+### Google Cloud deployment
+
+The repository includes a Cloud Build image definition, guarded Cloud Run
+deployment script, Cloud SQL backup/PITR script, and read-only post-deployment
+verifier. Start with the [GCP deployment runbook](deploy/gcp/README.md) and the
+[readiness report](docs/gcp-readiness-report.md). Production startup now rejects
+SQLite and refuses `RESET_DATABASE=true`; `/health` checks the process and
+`/ready` checks database availability.
+
 ## Security baseline
 
 - Management and identity APIs require server-side JWT authentication and role checks.

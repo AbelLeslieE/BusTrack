@@ -90,10 +90,10 @@ test('student waiting reset suppresses ETA and keeps stale-location notice visib
     vm.runInContext(`state.liveTrip = {reset_waiting_for_start: true};
         getTelemetry = () => ({is_fresh: false});`, context);
     await vm.runInContext('calculateNextStopETA()', context);
-    assert.equal(elements['#student-next-stop-eta'].textContent, 'Waiting for first stop');
+    assert.equal(elements['#student-next-stop-eta'].textContent, 'Waiting for route stop');
     assert.equal(elements['#student-next-stop-distance'].textContent, '');
     const message = vm.runInContext('renderTrackingMessage()', context);
-    assert.match(message, /waiting to reach the first stop/);
+    assert.match(message, /waiting for a fresh GPS fix at a route stop/);
     assert.match(message, /GPS is delayed/);
 });
 
@@ -109,10 +109,10 @@ test('driver reset updates waiting state without announcing a terminal arrival',
         updateDirectionControls = direction => {currentRouteDirection = direction;};
         showTerminalArrival = () => {throw Error('A reset is not a terminal arrival');};
         applyTrackingSource({active_trip_id: 7, route_direction: 'reverse', reset_version: 1,
-            reset_waiting_for_start: true, reset_message: 'Route reset — waiting to reach the first stop.',
+            reset_waiting_for_start: true, reset_message: 'Route reset — waiting for a fresh GPS fix at a route stop.',
             tracking_source: 'vehicle_gps_offline', reason: 'GPS is delayed'});
     `, context);
-    assert.match(elements.tripStatus.textContent, /waiting to reach the first stop/);
+    assert.match(elements.tripStatus.textContent, /waiting for a fresh GPS fix at a route stop/);
     assert.match(elements.trackingSourceReason.textContent, /GPS is delayed/);
     vm.runInContext(`applyTrackingSource({active_trip_id: 7, route_direction: 'forward', reset_version: 0});`, context);
     assert.equal(vm.runInContext('currentRouteDirection', context), 'reverse');

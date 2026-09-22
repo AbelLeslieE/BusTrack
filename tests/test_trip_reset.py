@@ -195,7 +195,7 @@ class TripResetTest(unittest.TestCase):
 
         fresh = ingest_positions(SimpleNamespace(state=SimpleNamespace()), {
             "uniqueId": "RESET-DEVICE",
-            "latitude": 10,
+            "latitude": 10.01,
             "longitude": 76,
             "speed": 10,
             "fixTime": (self.now + timedelta(seconds=1)).isoformat(),
@@ -209,6 +209,7 @@ class TripResetTest(unittest.TestCase):
         self.db.refresh(self.trip)
         self.assertFalse(self.trip.reset_waiting_for_start)
         self.assertEqual(self.trip.current_stop_status, "Arrived")
+        self.assertEqual(self.trip.current_route_stop_id, self.route_stops[1].id)
 
         repeated = reset_all_provider_tracking(payload, None, self.db, self.tech)
         self.assertTrue(repeated["already_applied"])
@@ -301,21 +302,35 @@ class TripResetTest(unittest.TestCase):
         self.assertEqual([s["stop_name"] for s in tracking["stops"]],["Stop 2","Stop 1","Stop 0"])
         self.assertEqual([s["tracking_status"] for s in tracking["stops"]],["approaching","pending","pending"])
 
-    def test_old_replayed_and_fresh_away_packets_cannot_undo_reset(self):
+    def test_old_replayed_packets_wait_but_fresh_later_stop_resumes_reset(self):
         self.reset()
-        for stop_index,seconds in [(2,-10),(2,-10),(0,-11),(0,0),(2,1)]:
+        for stop_index,seconds in [(2,-10),(2,-10),(0,-11),(0,0)]:
             self.ingest(stop_index,seconds)
             self.db.refresh(self.trip)
             self.assertTrue(self.trip.reset_waiting_for_start)
             self.assertEqual(self.trip.current_route_stop_id,self.route_stops[0].id)
             self.assertEqual(self.trip.route_direction,"forward")
-        self.ingest(0,2)
+        ingest_positions(SimpleNamespace(state=SimpleNamespace()), {
+            "uniqueId":"RESET-DEVICE", "latitude":10.005, "longitude":76,
+            "speed":10, "fixTime":(self.now+timedelta(seconds=1)).isoformat(),
+            "attributes":{"ignition":True},
+        }, "test-token", self.db)
+        self.db.refresh(self.trip)
+        self.assertTrue(self.trip.reset_waiting_for_start)
+        self.ingest(1,2)
         self.db.refresh(self.trip)
         self.assertFalse(self.trip.reset_waiting_for_start)
         self.assertEqual(self.trip.current_stop_status,"Arrived")
-        self.ingest(2,1)  # older observation after the reset has unlocked
+        self.assertEqual(self.trip.current_route_stop_id,self.route_stops[1].id)
+        self.assertEqual(
+            [event.event_type for event in self.db.query(TripStopEvent).filter(
+                TripStopEvent.occurred_at > self.now,
+            ).order_by(TripStopEvent.id)],
+            ["Skipped", "Arrived"],
+        )
+        self.ingest(2,0)  # older observation after the reset has unlocked
         self.db.refresh(self.trip)
-        self.assertEqual(self.trip.current_route_stop_id,self.route_stops[0].id)
+        self.assertEqual(self.trip.current_route_stop_id,self.route_stops[1].id)
 
     def test_new_journey_still_advances_skips_and_reverses_once(self):
         self.reset()
@@ -332,28 +347,28 @@ class TripResetTest(unittest.TestCase):
         self.db.refresh(self.trip)
         self.assertEqual(self.trip.route_direction,"forward")
 
-    def test_return_reset_unlocks_then_finishes_at_original_first_stop(self):
+    def test_return_reset_can_resume_at_middle_then_finish_at_original_first_stop(self):
         self.reset("reverse")
-        self.ingest(0,1)
-        self.assertTrue(self.trip.reset_waiting_for_start)
-        self.ingest(2,2)
-        self.ingest(1,3)
-        self.ingest(0,4)
+        self.ingest(1,1)
+        self.db.refresh(self.trip)
+        self.assertFalse(self.trip.reset_waiting_for_start)
+        self.assertEqual(self.trip.current_route_stop_id,self.route_stops[1].id)
+        self.ingest(0,2)
         self.db.refresh(self.trip)
         self.assertEqual(self.trip.route_direction,"forward")
 
-    def test_phone_rejects_old_callbacks_and_unlocks_only_at_first_stop(self):
+    def test_phone_rejects_old_callbacks_and_unlocks_at_later_stop(self):
         self.reset()
         for seconds,version in [(-1,1),(1,0),(None,1)]:
             response = update_location(LocationUpdateRequest(trip_id=self.trip.id,latitude=10,longitude=76,
                 recorded_at=self.now+timedelta(seconds=seconds) if seconds is not None else None,
                 reset_version=version),self.driver_user,self.db)
             self.assertFalse(response["applied"])
-        for lat,seconds in [(10.02,2),(10.0,3)]:
-            update_location(LocationUpdateRequest(trip_id=self.trip.id,latitude=lat,longitude=76,
-                recorded_at=self.now+timedelta(seconds=seconds),reset_version=1),self.driver_user,self.db)
+        update_location(LocationUpdateRequest(trip_id=self.trip.id,latitude=10.01,longitude=76,
+            recorded_at=self.now+timedelta(seconds=2),reset_version=1),self.driver_user,self.db)
         self.assertFalse(self.trip.reset_waiting_for_start)
         self.assertEqual(self.trip.current_stop_status,"Arrived")
+        self.assertEqual(self.trip.current_route_stop_id,self.route_stops[1].id)
 
     def test_airotrack_repeats_do_not_reconcile_old_progress(self):
         self.reset()
@@ -389,14 +404,16 @@ class TripResetTest(unittest.TestCase):
     def test_reset_survives_new_engine_and_session(self):
         self.reset("reverse")
         trip_id=self.trip.id
+        middle_route_stop_id=self.route_stops[1].id
         self.db.close(); self.engine.dispose()
         restarted=create_engine(self.url)
         try:
             with sessionmaker(bind=restarted,autoflush=False)() as db:
-                self.ingest(0,1,db)
+                self.ingest(1,1,db)
                 trip=db.get(LiveTrip,trip_id)
-                self.assertTrue(trip.reset_waiting_for_start)
+                self.assertFalse(trip.reset_waiting_for_start)
                 self.assertEqual(trip.route_direction,"reverse")
+                self.assertEqual(trip.current_route_stop_id,middle_route_stop_id)
                 self.assertEqual(trip.reset_version,1)
         finally:
             restarted.dispose()
@@ -452,8 +469,9 @@ class TripResetTest(unittest.TestCase):
             self.reset()  # commits the reset and releases the lock
             future.result(timeout=10)
         self.db.refresh(self.trip)
-        self.assertTrue(self.trip.reset_waiting_for_start)
-        self.assertEqual(self.trip.current_route_stop_id,self.route_stops[0].id)
+        self.assertFalse(self.trip.reset_waiting_for_start)
+        self.assertEqual(self.trip.current_route_stop_id,self.route_stops[2].id)
+        self.assertEqual(self.trip.route_direction,"reverse")
 
     def test_http_permission_and_validated_endpoint(self):
         app=FastAPI(); app.include_router(router)

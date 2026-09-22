@@ -1,0 +1,38 @@
+steps:
+  - name: python:3.12-slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        pip install --disable-pip-version-check --no-cache-dir -r requirements.txt
+        python -m unittest discover -s tests -p 'test_*.py'
+  - name: node:22-slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        for test_file in tests/*.mjs; do
+          node "$${test_file}"
+        done
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --tag
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:${_TAG}
+      - .
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:${_TAG}
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:${_TAG}
+
+substitutions:
+  _REGION: asia-south1
+  _REPOSITORY: bustrack
+  _IMAGE: bustrack
+  _TAG: latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY

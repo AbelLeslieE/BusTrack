@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from backend.models import Bus
 
 
-RESET_WAITING_MESSAGE = "Route reset — waiting to reach the first stop."
+RESET_WAITING_MESSAGE = "Route reset — waiting for a fresh GPS fix at a route stop."
 
 
 def as_utc(value):

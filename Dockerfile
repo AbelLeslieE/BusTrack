@@ -17,6 +17,7 @@ COPY --chown=bustrack:bustrack frontend ./frontend
 
 USER bustrack
 EXPOSE 8080
+STOPSIGNAL SIGTERM
 # A single worker owns the existing in-process provider polling loop. Never
 # silently start an empty SQLite database on an ephemeral cloud filesystem.
-CMD ["sh", "-c", "case \"$DATABASE_URL\" in postgres://*|postgresql://*) ;; *) echo 'Set DATABASE_URL to the production PostgreSQL connection before startup.' >&2; exit 1;; esac; exec uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1"]
+CMD ["sh", "-c", "case \"$DATABASE_URL\" in postgres://*|postgresql://*) ;; *) echo 'Set DATABASE_URL to the production PostgreSQL connection before startup.' >&2; exit 1;; esac; exec uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1 --proxy-headers --forwarded-allow-ips \"${FORWARDED_ALLOW_IPS:-127.0.0.1}\""]

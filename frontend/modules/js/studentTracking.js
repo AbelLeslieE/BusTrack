@@ -3544,7 +3544,7 @@ function updateETAInterface(
 
 
     if (state.liveTrip?.reset_waiting_for_start) {
-        etaElement.textContent = "Waiting for first stop";
+        etaElement.textContent = "Waiting for route stop";
         if (distanceElement) distanceElement.textContent = "";
         return;
     }
@@ -4036,7 +4036,7 @@ function updateTrackView() {
 
 function renderTrackingMessage() {
     if (state.liveTrip?.reset_waiting_for_start && !state.error) {
-        return `<div class="student-tracking-message"><p>${escapeHTML(state.liveTrip.reset_message || "Route reset — waiting to reach the first stop.")}</p>
+        return `<div class="student-tracking-message"><p>${escapeHTML(state.liveTrip.reset_message || "Route reset — waiting for a fresh GPS fix at a route stop.")}</p>
             <p>${getTelemetry().is_fresh ? "The map shows the actual reported bus location." : "GPS is delayed. Showing the last known bus location."}</p></div>`;
     }
 

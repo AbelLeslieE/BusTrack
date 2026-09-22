@@ -2,18 +2,33 @@
 
 from contextlib import asynccontextmanager, suppress
 import asyncio
+import logging
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+# Load local configuration before importing modules that construct the database
+# engine at import time. Managed deployments inject these values directly and
+# therefore do not depend on a file inside the container.
+PROJECT_DIR = Path(__file__).resolve().parent.parent
+FRONTEND_DIR = PROJECT_DIR / "frontend"
+load_dotenv(PROJECT_DIR / ".env")
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 from backend.routes.driver import router as driver_router
-import backend.models 
+import backend.models  # noqa: F401  # Register models before table creation.
 import backend.routes.models_tracking  # noqa: F401
- # noqa: F401  # Registers SQLAlchemy models before table creation.
-from backend.database import SessionLocal, initialize_database
+from backend.database import (
+    SessionLocal,
+    database_initialization_lock,
+    initialize_database,
+    validate_database_configuration,
+)
 from backend.services.telemetry_retention import (
     run_telemetry_retention,
     telemetry_retention_enabled,
@@ -43,11 +58,14 @@ from backend.routes.pass_validation import router as pass_validation_router
 from backend.security import RequestSecurityMiddleware
 from backend.request_audit import RequestAuditMiddleware
 from backend.utils.jwt_handler import validate_security_configuration
-from dotenv import load_dotenv
 
-PROJECT_DIR = Path(__file__).resolve().parent.parent
-FRONTEND_DIR = PROJECT_DIR / "frontend"
-load_dotenv(PROJECT_DIR / ".env")
+
+configured_log_level = os.getenv("LOG_LEVEL", "INFO").strip().upper()
+logging.basicConfig(
+    level=getattr(logging, configured_log_level, logging.INFO),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+logger = logging.getLogger("bustrack")
 
 
 class FrontendStaticFiles(StaticFiles):
@@ -80,13 +98,16 @@ async def _run_provider_refresh(label: str) -> None:
 
         result = await asyncio.to_thread(refresh_gps_providers, database_session)
         if result["errors"] or result["skipped"]:
-            print(
-                f"GPS providers {label}: {len(result['updated'])} updated, "
-                f"{len(result['errors'])} errors, {len(result['skipped'])} skipped."
+            logger.warning(
+                "GPS providers %s: %s updated, %s errors, %s skipped.",
+                label,
+                len(result["updated"]),
+                len(result["errors"]),
+                len(result["skipped"]),
             )
-    except Exception as error:  # Keep the tracker available if vendor is temporarily down.
+    except Exception:  # Keep the tracker available if vendor is temporarily down.
         database_session.rollback()
-        print(f"GPS providers {label} error: {error}")
+        logger.exception("GPS providers %s refresh failed.", label)
     finally:
         database_session.close()
 
@@ -134,9 +155,9 @@ async def _telemetry_retention_loop() -> None:
         try:
             await asyncio.to_thread(run_telemetry_retention, database_session)
             database_session.commit()
-        except Exception as error:  # A cleanup failure must never stop GPS ingest.
+        except Exception:  # A cleanup failure must never stop GPS ingest.
             database_session.rollback()
-            print(f"Telemetry retention error: {error}")
+            logger.exception("Telemetry retention failed.")
         finally:
             database_session.close()
         await asyncio.sleep(interval)
@@ -157,8 +178,8 @@ async def _document_expiry_loop() -> None:
             continue
         try:
             await asyncio.to_thread(check_documents)
-        except Exception as error:
-            print(f"Document expiry check error: {error}")
+        except Exception:
+            logger.exception("Document expiry check failed.")
             await asyncio.sleep(300)
             continue
         await asyncio.sleep(86400)
@@ -166,8 +187,10 @@ async def _document_expiry_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    validate_database_configuration()
     validate_security_configuration()
-    initialize_database()
+    with database_initialization_lock():
+        initialize_database()
     create_default_admin()
     # Repair any snapshot selected before future-device-time validation was
     # introduced. Raw provider history is retained and marked quarantined.
@@ -175,11 +198,11 @@ async def lifespan(_: FastAPI):
         repair_result = repair_future_gps_states(database_session)
         database_session.commit()
         if any(repair_result.values()):
-            print(
-                "GPS future timestamp repair: "
-                f"{repair_result['quarantined_positions']} quarantined, "
-                f"{repair_result['repaired_states']} restored, "
-                f"{repair_result['cleared_states']} cleared."
+            logger.warning(
+                "GPS future timestamp repair: %s quarantined, %s restored, %s cleared.",
+                repair_result["quarantined_positions"],
+                repair_result["repaired_states"],
+                repair_result["cleared_states"],
             )
     poll_task = None
     retention_task = None
@@ -192,7 +215,7 @@ async def lifespan(_: FastAPI):
     if run_background_jobs and provider_polling_configured():
         initial_refresh_completed = False
         if os.getenv("APP_ENV", "development").strip().casefold() == "production":
-            # On a Render cold start, refresh before the service reports ready.
+            # On a production cold start, refresh before the service reports ready.
             # The first student response then uses the newest fix available
             # from the provider instead of the pre-sleep database snapshot.
             await _run_provider_refresh("startup refresh")
@@ -207,9 +230,9 @@ async def lifespan(_: FastAPI):
         try:
             await asyncio.to_thread(run_telemetry_retention, database_session)
             database_session.commit()
-        except Exception as error:
+        except Exception:
             database_session.rollback()
-            print(f"Initial telemetry retention error: {error}")
+            logger.exception("Initial telemetry retention failed.")
         finally:
             database_session.close()
         retention_task = asyncio.create_task(_telemetry_retention_loop())
@@ -279,6 +302,42 @@ app.include_router(pass_validation_router)
 
 # Serve the self-contained frontend files without depending on external tooling.
 app.mount("/static", FrontendStaticFiles(directory=FRONTEND_DIR), name="frontend")
+
+
+@app.get("/health", include_in_schema=False)
+async def health_check() -> JSONResponse:
+    """Cloud liveness probe: the process is running and can answer HTTP."""
+
+    return JSONResponse(
+        {"status": "ok", "service": "bustrack"},
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.get("/ready", include_in_schema=False)
+def readiness_check() -> JSONResponse:
+    """Cloud startup/readiness probe: restores are idle and PostgreSQL responds."""
+
+    if restore_in_progress():
+        return JSONResponse(
+            {"status": "unavailable", "reason": "database_restore_in_progress"},
+            status_code=503,
+            headers={"Cache-Control": "no-store"},
+        )
+    try:
+        with SessionLocal() as database_session:
+            database_session.execute(text("SELECT 1"))
+    except Exception:
+        logger.exception("Readiness database check failed.")
+        return JSONResponse(
+            {"status": "unavailable", "reason": "database_unavailable"},
+            status_code=503,
+            headers={"Cache-Control": "no-store"},
+        )
+    return JSONResponse(
+        {"status": "ready", "service": "bustrack"},
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/", include_in_schema=False)

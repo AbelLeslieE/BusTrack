@@ -46,6 +46,6 @@ class DocumentTrackingTest(unittest.TestCase):
         try:
             fixture.db.add(BusDocument(bus_id=fixture.bus.id,document_type='fitness',valid_until=fixture.now.date()-timedelta(days=1)))
             fixture.db.commit()
-            fixture.test_phone_rejects_old_callbacks_and_unlocks_only_at_first_stop()
+            fixture.test_phone_rejects_old_callbacks_and_unlocks_at_later_stop()
         finally:
             fixture.tearDown()

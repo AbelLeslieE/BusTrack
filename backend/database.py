@@ -1,6 +1,7 @@
 """Database configuration, startup schema creation, and compatibility upgrades."""
 
 from collections.abc import Generator
+from contextlib import contextmanager
 import os
 from pathlib import Path
 import re
@@ -78,6 +79,61 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 class Base(DeclarativeBase):
     """Base class for all Bus Tracker SQLAlchemy models."""
+
+
+def validate_database_configuration(
+    *,
+    environment: str | None = None,
+    database_url: str | None = None,
+    reset_database: bool | None = None,
+) -> None:
+    """Fail closed when production could use ephemeral data or erase tables."""
+
+    selected_environment = (
+        environment if environment is not None else os.getenv("APP_ENV", "development")
+    ).strip().casefold()
+    selected_url = database_url if database_url is not None else DATABASE_URL
+    selected_reset = reset_database
+    if selected_reset is None:
+        selected_reset = os.getenv("RESET_DATABASE", "false").strip().casefold() == "true"
+
+    if selected_environment != "production":
+        return
+    if not selected_url.startswith(("postgresql://", "postgresql+")):
+        raise RuntimeError(
+            "Production requires a PostgreSQL DATABASE_URL; SQLite is not permitted."
+        )
+    if selected_reset:
+        raise RuntimeError(
+            "RESET_DATABASE=true is forbidden when APP_ENV=production. "
+            "Use a reviewed migration or restore procedure instead."
+        )
+
+
+@contextmanager
+def database_initialization_lock():
+    """Serialize startup compatibility migrations across Cloud Run instances."""
+
+    if not DATABASE_URL.startswith("postgresql"):
+        yield
+        return
+
+    # PostgreSQL advisory locks are connection-scoped. Holding this dedicated
+    # connection prevents the web and worker revisions from inspecting and
+    # altering the same compatibility column at the same time.
+    lock_id = 4_278_775_219
+    with engine.connect() as connection:
+        connection.execute(
+            text("SELECT pg_advisory_lock(:lock_id)"),
+            {"lock_id": lock_id},
+        )
+        try:
+            yield
+        finally:
+            connection.execute(
+                text("SELECT pg_advisory_unlock(:lock_id)"),
+                {"lock_id": lock_id},
+            )
 
 
 def _make_live_trip_driver_optional(database_engine=engine) -> None:
@@ -265,6 +321,7 @@ def initialize_database() -> None:
     reset_database = (
         os.getenv("RESET_DATABASE", "false").lower() == "true"
     )
+    validate_database_configuration(reset_database=reset_database)
 
     # WAL lets read-only portal polling continue while a short write (such as
     # login auditing or a GPS update) is in progress.  It is safe to issue on

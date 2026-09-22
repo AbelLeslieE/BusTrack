@@ -1706,7 +1706,7 @@ def reset_provider_trip(bus_id: int, payload: GPSProviderTripReset, request: Req
     db.refresh(trip)
     return {"bus_id": bus.id, "trip_id": trip.id, "route_direction": trip.route_direction,
             "current_route_stop_id": trip.current_route_stop_id, **reset_metadata(trip),
-            "message": f"Route reset to {first.stop.stop_name}. Waiting for a fresh GPS arrival at this stop."}
+            "message": f"Route reset to {first.stop.stop_name}. A fresh GPS arrival at this or any later stop will resume progress."}
 
 
 @router.post("/provider-health/buses/{bus_id}/direction")
@@ -1750,7 +1750,7 @@ def override_provider_trip_direction(
         )
 
     if trip.reset_waiting_for_start:
-        raise HTTPException(status_code=409, detail="Route reset is waiting for its first stop. Use Reset to first stop to choose another direction.")
+        raise HTTPException(status_code=409, detail="Route reset is waiting for a fresh route-stop fix. Use Reset to first stop to choose another direction.")
     previous_direction = trip.route_direction
     trip.route_direction = payload.direction
 

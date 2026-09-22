@@ -8,13 +8,14 @@ still preserves current progress for trips that are not waiting after a reset.
 The reset keeps the current trip, physical GPS position, GPS timestamp,
 assignments, stop definitions, and history. Only current progression is reset.
 Students see the first stop approaching, all others upcoming, and “Route reset —
-waiting to reach the first stop.” A reset does not make an old GPS position fresh.
+waiting for a fresh GPS fix at a route stop.” A reset does not make an old GPS
+position fresh.
 
-Progression waits for a timestamped observation captured **after** the reset,
-within the existing freshness window, and inside the selected first stop's
-geofence. Positions elsewhere may update the map but cannot skip the first stop.
-After its arrival, the existing departure, skipped-stop, and terminal-reversal
-rules resume. Do not use reset as a way to continue from a middle stop.
+Progression waits for a timestamped observation captured **after** the reset and
+within the existing freshness window. A fix inside the selected first stop or
+any later stop in that direction resumes the trip immediately. Stops bypassed by
+the first post-reset fix are recorded as skipped. Old, replayed, timestamp-less,
+off-route, and backward observations still cannot unlock or rewind progression.
 
 ## API and persistence
 
@@ -47,7 +48,8 @@ rules resume. Do not use reset as a way to continue from a middle stop.
 - `backend/routes/gps_provider.py`: preview/reset endpoints, provider gating,
   provider-health and driver-source metadata.
 - `backend/services/airotrack.py`: shared tracking write lock.
-- `backend/routes/gps.py`: first-stop gate and phone/reset write synchronization.
+- `backend/routes/gps.py`: post-reset route-stop gate, shortcut progression, and
+  phone/reset write synchronization.
 - `backend/routes/student.py`: reset state in student responses.
 - `frontend/modules/js/providerHealth.js`, `frontend/modules/css/providerHealth.css`:
   reset dialog, direction preview, submission protection, waiting status.

@@ -448,18 +448,54 @@ def update_route_stop_progression(
         current_stop,
     )
 
+    current_index = route_stops.index(current_route_stop)
+    stops_ahead_inside_radius = []
+    for route_index, route_stop in enumerate(
+        route_stops[current_index + 1:],
+        start=current_index + 1,
+    ):
+        stop = route_stop.stop
+        if stop is None:
+            continue
+        distance = calculate_stop_distance(latitude, longitude, stop)
+        if distance is not None and is_inside_stop_radius(distance, stop):
+            stops_ahead_inside_radius.append((route_index, route_stop, distance))
+
+    # Prefer the closest physical stop. The travel-order index keeps ties
+    # deterministic when two geofences overlap.
+    stops_ahead_inside_radius.sort(key=lambda item: (item[2], item[0]))
+
+    reset_started_at_later_stop = False
     if getattr(trip, "reset_waiting_for_start", False):
-        # Only the selected first stop can start this new progression. Never
-        # infer its arrival from an old crossing or a later stop's geofence.
-        if not inside_radius:
+        # A reset establishes a clean progression boundary, not a requirement
+        # for the bus to drive back through the selected terminal. The first
+        # fresh post-reset fix may therefore resume at any stop at or ahead in
+        # the selected direction. Timestamp/replay checks above still prevent
+        # an old position from unlocking the reset.
+        reset_candidates = list(stops_ahead_inside_radius)
+        if inside_radius:
+            reset_candidates.append((current_index, current_route_stop, current_distance))
+        if not reset_candidates:
             return None
+        reset_candidates.sort(key=lambda item: (item[2], item[0]))
+        selected_index, _, _ = reset_candidates[0]
         trip.reset_waiting_for_start = False
-        trip.current_stop_status = "Arrived"
-        trip.current_stop_arrived_at = current_timestamp
-        trip.current_stop_departed_at = None
-        record_stop_event("Arrived", current_route_stop, current_stop, current_distance)
-        return {"event": "Arrived", "route_stop_id": current_route_stop.id,
-                "stop_id": current_stop.id, "reset_start_confirmed": True}
+
+        if selected_index == current_index:
+            trip.current_stop_status = "Arrived"
+            trip.current_stop_arrived_at = current_timestamp
+            trip.current_stop_departed_at = None
+            record_stop_event("Arrived", current_route_stop, current_stop, current_distance)
+            return {"event": "Arrived", "route_stop_id": current_route_stop.id,
+                    "stop_id": current_stop.id, "reset_start_confirmed": True}
+
+        # Let the normal shortcut path below advance to the selected later
+        # stop and record every bypassed stop, including the reset start.
+        stops_ahead_inside_radius = [
+            candidate for candidate in stops_ahead_inside_radius
+            if candidate[0] == selected_index
+        ]
+        reset_started_at_later_stop = True
 
     # Reconcile a terminal that was already marked as arrived before a device
     # reconnect, server restart, or delayed provider heartbeat. Direction is
@@ -514,23 +550,7 @@ def update_route_stop_progression(
     # Only later stops are examined, so a delayed reading can never move the
     # trip backward or change its direction.
     if current_route_stop in route_stops:
-        current_index = route_stops.index(current_route_stop)
-        stops_ahead_inside_radius = []
-        for route_index, route_stop in enumerate(
-            route_stops[current_index + 1:],
-            start=current_index + 1,
-        ):
-            stop = route_stop.stop
-            if stop is None:
-                continue
-            distance = calculate_stop_distance(latitude, longitude, stop)
-            if distance is not None and is_inside_stop_radius(distance, stop):
-                stops_ahead_inside_radius.append((route_index, route_stop, distance))
-
         if stops_ahead_inside_radius:
-            # Prefer the closest physical stop. The travel-order index keeps
-            # ties deterministic when two geofences overlap.
-            stops_ahead_inside_radius.sort(key=lambda item: (item[2], item[0]))
             target_index, target_route_stop, target_distance = stops_ahead_inside_radius[0]
             target_stop = target_route_stop.stop
 
@@ -538,7 +558,12 @@ def update_route_stop_progression(
             # student timeline can then distinguish a served stop from a stop
             # that the bus skipped while still advancing immediately to the
             # later geofence.
-            for skipped_route_stop in route_stops[current_index + 1:target_index]:
+            skipped_start_index = (
+                current_index
+                if reset_started_at_later_stop
+                else current_index + 1
+            )
+            for skipped_route_stop in route_stops[skipped_start_index:target_index]:
                 skipped_stop = skipped_route_stop.stop
                 if skipped_stop is None:
                     continue
@@ -590,7 +615,9 @@ def update_route_stop_progression(
                 "distance_meters": round(target_distance, 2),
                 "radius_meters": float(target_stop.radius) if target_stop.radius is not None else 50.0,
                 "advanced_from_sequence": current_route_stop.sequence,
-                "skipped_stop_count": target_index - current_index - 1,
+                "skipped_stop_count": target_index - current_index - (
+                    0 if reset_started_at_later_stop else 1
+                ),
                 "departed_stop": departed_stop,
                 "terminal_reached": terminal_reached,
                 "completed_direction": completed_direction,
@@ -1387,7 +1414,7 @@ def change_trip_direction(
         raise HTTPException(status_code=404, detail="Active trip not found.")
 
     if trip.reset_waiting_for_start:
-        raise HTTPException(status_code=409, detail="Route reset is waiting for its first stop.")
+        raise HTTPException(status_code=409, detail="Route reset is waiting for a fresh route-stop fix.")
     route_stops = db.query(RouteStop).filter(
         RouteStop.route_id == trip.route_id,
     ).order_by(RouteStop.sequence.asc()).all()

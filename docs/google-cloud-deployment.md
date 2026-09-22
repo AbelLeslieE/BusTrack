@@ -1,5 +1,13 @@
 # Google Cloud deployment preparation
 
+> **Current deployment package:** use
+> [`deploy/gcp/README.md`](../deploy/gcp/README.md) for the maintained Cloud Run,
+> Cloud SQL, Secret Manager, probe, backup, and verification workflow. The
+> notes below preserve the earlier cost/architecture analysis. Source code can
+> prepare the deployment, but it cannot approve billing, create a production
+> domain, migrate live data, or complete the MVD acceptance test without the
+> corresponding owners and credentials.
+
 The Dockerfile runs the existing FastAPI app and static frontend together. It
 uses Python 3.12, a non-root account, the platform-provided PORT, and one Uvicorn
 worker. It refuses to start without PostgreSQL configuration. The Docker build
