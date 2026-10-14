@@ -98,7 +98,8 @@ Create a deployer service account with `roles/run.admin`,
 `roles/serviceusage.serviceUsageConsumer` on the project. Grant it
 `roles/iam.serviceAccountUser` on the runtime service account,
 `roles/artifactregistry.reader` on the image repository, and
-`roles/storage.objectCreator` on the Cloud Build source bucket. Configure a
+`roles/storage.objectCreator` and `roles/storage.bucketViewer` on the Cloud
+Build source bucket. Configure a
 Workload Identity Provider restricted to this repository's immutable ID and
 the `main` branch, then grant its principal set `roles/iam.workloadIdentityUser`
 on the deployer service account.
