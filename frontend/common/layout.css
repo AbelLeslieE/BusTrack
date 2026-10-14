@@ -156,7 +156,11 @@
 
     gap:18px;
 
-    min-height:500px;
+    min-height:clamp(240px, 60vh, 500px);
+
+    padding:24px;
+
+    text-align:center;
 
     color:var(--muted);
 
@@ -180,6 +184,16 @@
 
     animation:orbit .8s linear infinite;
 
+}
+
+@media (max-width:520px){
+    .page-loader{ gap:14px; font-size:14px; }
+    .loader-orbit{ width:46px; height:46px; }
+}
+
+@media (prefers-reduced-motion:reduce){
+    .page-loader,
+    .loader-orbit{ animation:none; }
 }
 
 /* ==========================================================

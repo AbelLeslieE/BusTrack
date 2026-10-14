@@ -264,6 +264,56 @@ function createFallback(title, message) {
   return view;
 }
 
+const pendingStyleLoads = new Map();
+
+function loadStylesheet(id, href) {
+    const pending = pendingStyleLoads.get(id);
+    if (pending?.href === href) return pending.promise;
+    pending?.cancel();
+
+    const current = document.getElementById(id);
+    if (current?.getAttribute("href") === href) return Promise.resolve();
+
+    // Keep the current page's CSS until the replacement has fully loaded.
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = href;
+
+    let resolveLoad;
+    let rejectLoad;
+    const promise = new Promise((resolve, reject) => {
+        resolveLoad = resolve;
+        rejectLoad = reject;
+    });
+    const entry = {
+        href,
+        link,
+        promise,
+        cancel() {
+            link.remove();
+            pendingStyleLoads.delete(id);
+            rejectLoad(new Error(`Stylesheet load superseded: ${href}`));
+        }
+    };
+    pendingStyleLoads.set(id, entry);
+
+    link.addEventListener("load", () => {
+        if (pendingStyleLoads.get(id) !== entry) return;
+        current?.remove();
+        link.id = id;
+        pendingStyleLoads.delete(id);
+        resolveLoad();
+    }, { once: true });
+    link.addEventListener("error", () => {
+        if (pendingStyleLoads.get(id) !== entry) return;
+        link.remove();
+        pendingStyleLoads.delete(id);
+        rejectLoad(new Error(`Unable to load stylesheet: ${href}`));
+    }, { once: true });
+    document.head.appendChild(link);
+    return promise;
+}
+
 function applyModuleStyles(moduleName) {
 
     // Some route keys are intentionally shared by the Driver and Student
@@ -278,32 +328,20 @@ function applyModuleStyles(moduleName) {
                     ? "studentProfile"
                     : moduleName;
 
-    // Main page stylesheet
-    let pageStyle = document.querySelector("#active-module-styles");
-
-    if (!pageStyle) {
-        pageStyle = document.createElement("link");
-        pageStyle.id = "active-module-styles";
-        pageStyle.rel = "stylesheet";
-        document.head.appendChild(pageStyle);
-    }
-
-    pageStyle.href = `/static/modules/css/${styleModuleName}.css`;
+    const styles = [loadStylesheet(
+        "active-module-styles",
+        `/static/modules/css/${styleModuleName}.css`
+    )];
 
     // Driver shared styles
     if (isDriver) {
-        let topbarStyle = document.querySelector("#driver-topbar-style");
-
-        if (!topbarStyle) {
-            topbarStyle = document.createElement("link");
-            topbarStyle.id = "driver-topbar-style";
-            topbarStyle.rel = "stylesheet";
-            document.head.appendChild(topbarStyle);
-        }
-
-        topbarStyle.href = "/static/modules/css/driverTopbar.css";
+        styles.push(loadStylesheet(
+            "driver-topbar-style",
+            "/static/modules/css/driverTopbar.css"
+        ));
     }
 
+    return Promise.all(styles);
 }
 
 function createShell(initialRoute) {
@@ -645,11 +683,13 @@ export async function loadModule(requestedRoute) {
         );
 
     }
-  applyModuleStyles(route);
   shell.content.replaceChildren(createLoader(`Loading ${modules[route].title.toLowerCase()}`));
 
   try {
-    const module = await modules[route].load();
+    const [module] = await Promise.all([
+        modules[route].load(),
+        applyModuleStyles(route)
+    ]);
     // A newer hash change may have started while this dynamic import was in
     // flight. Never render an older module over the current page; doing so can
     // orphan its polling timers, EventSource, map, or geolocation watcher.
@@ -666,6 +706,7 @@ export async function loadModule(requestedRoute) {
             );
 
     shell.content.replaceChildren(view);
+    document.getElementById("startup-loader")?.remove();
 
     // A route change must never leave the mobile drawer over the new page.
     // Removing this class is harmless on desktop, where it has no visual role.
@@ -674,7 +715,11 @@ export async function loadModule(requestedRoute) {
     if (thisNavigation !== navigationVersion) return;
     console.error("========== MODULE ERROR ==========");
     console.error(error);
-    throw error;
+    shell.content.replaceChildren(createFallback(
+        "Unable to load this page",
+        "Please check your connection and refresh the page."
+    ));
+    document.getElementById("startup-loader")?.remove();
   }
 }
 

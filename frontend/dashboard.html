@@ -5,9 +5,70 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Bus Tracker</title>
+    <style>
+      /* Keep the first screen styled while authentication and page assets load. */
+      .startup-loader {
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        display: grid;
+        place-items: center;
+        box-sizing: border-box;
+        min-height: 100vh;
+        min-height: 100dvh;
+        padding: max(24px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right))
+          max(24px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+        background: radial-gradient(circle at 50% 35%, #142b51 0%, #08182e 55%, #06111f 100%);
+        color: #eaf2ff;
+        font: 500 16px/1.5 system-ui, sans-serif;
+        text-align: center;
+      }
+      .startup-loader__content { width: min(100%, 320px); }
+      .startup-loader__mark {
+        display: grid;
+        place-items: center;
+        width: 64px;
+        height: 64px;
+        margin: 0 auto 24px;
+        border: 1px solid rgba(110, 231, 255, .5);
+        border-radius: 18px;
+        background: linear-gradient(135deg, #1688c1, #604fbe);
+        box-shadow: 0 12px 34px rgba(2, 12, 31, .35);
+        font-size: 22px;
+        font-weight: 800;
+        letter-spacing: -.04em;
+      }
+      .startup-loader__name { margin: 0; font-size: clamp(24px, 7vw, 30px); font-weight: 750; }
+      .startup-loader__spinner {
+        display: block;
+        width: 40px;
+        height: 40px;
+        margin: 24px auto 18px;
+        border: 3px solid rgba(255, 255, 255, .16);
+        border-top-color: #4fd1ff;
+        border-right-color: #9e84ff;
+        border-radius: 50%;
+        animation: startup-spin .85s linear infinite;
+      }
+      .startup-loader__message { margin: 0; color: #b8c9df; font-size: 14px; }
+      .startup-loader__retry {
+        margin-top: 20px;
+        padding: 10px 18px;
+        border: 1px solid rgba(110, 231, 255, .5);
+        border-radius: 10px;
+        background: #173b65;
+        color: #eaf2ff;
+        font: inherit;
+        cursor: pointer;
+      }
+      @keyframes startup-spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) {
+        .startup-loader__spinner { animation: none; }
+      }
+    </style>
     <link rel="icon" type="image/png" href="/static/assets/images/logo.png?v=20260917c">
     <link rel="stylesheet" href="/static/common/theme.css">
-    <link rel="stylesheet" href="/static/common/layout.css">
+    <link rel="stylesheet" href="/static/common/layout.css?v=20261014a">
     <link rel="stylesheet" href="/static/common/sidebar.css?v=20260917c">
     <link rel="stylesheet" href="/static/common/topbar.css">
     <!-- Font Awesome Icons -->
@@ -27,6 +88,14 @@
     <script src="https://unpkg.com/lucide@latest"></script>
   </head>
   <body>
+    <div id="startup-loader" class="startup-loader" role="status" aria-live="polite">
+      <div class="startup-loader__content">
+        <div class="startup-loader__mark" aria-hidden="true">BT</div>
+        <p class="startup-loader__name">BusTrack</p>
+        <span class="startup-loader__spinner" aria-hidden="true"></span>
+        <p class="startup-loader__message">Loading your workspace…</p>
+      </div>
+    </div>
     <main id="app" class="app-root" aria-live="polite"></main>
     <!-- ==========================================================
         LEAFLET MAP ENGINE
@@ -40,6 +109,6 @@
         BUSTRACK APPLICATION
     ========================================================== -->
 
-    <script type="module" src="/static/common/bootstrap.js?v=20260917c"></script>
+    <script type="module" src="/static/common/bootstrap.js?v=20261014a"></script>
   </body>
 </html>
