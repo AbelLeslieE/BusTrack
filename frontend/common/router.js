@@ -46,7 +46,7 @@ const adminModules = {
 
     dashboard: {
         title: "Overview",
-        load: () => import("../modules/js/adminDashboard.js")
+        load: () => import("../modules/js/adminDashboard.js?v=20261014b")
     },
 
     live_tracking: {
@@ -330,7 +330,7 @@ function applyModuleStyles(moduleName) {
 
     const styles = [loadStylesheet(
         "active-module-styles",
-        `/static/modules/css/${styleModuleName}.css`
+        `/static/modules/css/${styleModuleName}.css?v=20261014b`
     )];
 
     // Driver shared styles

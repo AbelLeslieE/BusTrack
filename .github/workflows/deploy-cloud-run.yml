@@ -1,0 +1,85 @@
+name: Build and deploy to Cloud Run
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: cloud-run-production
+  cancel-in-progress: false
+
+env:
+  PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  REGION: ${{ vars.GCP_REGION }}
+  REPOSITORY: ${{ vars.GCP_ARTIFACT_REPOSITORY }}
+  IMAGE_NAME: ${{ vars.GCP_IMAGE_NAME }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Build and push tested image
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          gcloud builds submit \
+            --project "$PROJECT_ID" \
+            --region "$REGION" \
+            --config deploy/gcp/cloudbuild.yaml \
+            --substitutions "_REGION=$REGION,_REPOSITORY=$REPOSITORY,_IMAGE=$IMAGE_NAME,_TAG=$IMAGE_TAG" \
+            .
+
+      - name: Deploy Cloud Run services
+        shell: pwsh
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+          DATABASE_SECRET: ${{ vars.GCP_DATABASE_SECRET }}
+          JWT_SECRET: ${{ vars.GCP_JWT_SECRET }}
+          BUS_PASS_SECRET: ${{ vars.GCP_BUS_PASS_SECRET }}
+          BOOTSTRAP_ADMIN_SECRET: ${{ vars.GCP_BOOTSTRAP_ADMIN_SECRET }}
+          OPTIONAL_SECRET_BINDINGS: ${{ vars.GCP_OPTIONAL_SECRET_BINDINGS }}
+        run: |
+          $image = "$env:REGION-docker.pkg.dev/$env:PROJECT_ID/$env:REPOSITORY/$env:IMAGE_NAME`:$env:IMAGE_TAG"
+          $optional = @()
+          if ($env:OPTIONAL_SECRET_BINDINGS) {
+            $optional = $env:OPTIONAL_SECRET_BINDINGS -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+          }
+          ./deploy/gcp/deploy-cloud-run.ps1 `
+            -ProjectId $env:PROJECT_ID `
+            -Region $env:REGION `
+            -Image $image `
+            -DatabaseSecret $env:DATABASE_SECRET `
+            -JwtSecret $env:JWT_SECRET `
+            -BusPassSecret $env:BUS_PASS_SECRET `
+            -BootstrapAdminSecret $env:BOOTSTRAP_ADMIN_SECRET `
+            -OptionalSecretBindings $optional `
+            -ExternalDatabase `
+            -SkipProjectSetup
+
+      - name: Verify public service
+        shell: pwsh
+        run: |
+          $url = gcloud run services describe bustrack-web --project $env:PROJECT_ID --region $env:REGION --format 'value(status.url)'
+          if ($LASTEXITCODE -ne 0 -or -not $url) { throw 'Could not read the deployed service URL.' }
+          ./deploy/gcp/verify-deployment.ps1 -BaseUrl $url.Trim()

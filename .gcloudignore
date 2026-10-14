@@ -1,8 +1,10 @@
 .gcloudignore
 .git/
 .gitignore
+gha-creds-*.json
 .env
 .env.*
+compose.env
 !.env.example
 .venv/
 venv/
@@ -20,3 +22,7 @@ database/.dev_jwt_secret
 node_modules/
 build/
 dist/
+artifacts/
+.codex-finalizer/
+.codex-ppt-build/
+.pytest_cache/

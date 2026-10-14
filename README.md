@@ -68,10 +68,13 @@ If the first administrator password is lost, set `BOOTSTRAP_ADMIN_RESET_PASSWORD
 
 ### Google Cloud deployment
 
-The repository includes a Cloud Build image definition, guarded Cloud Run
-deployment script, Cloud SQL backup/PITR script, and read-only post-deployment
-verifier. Start with the [GCP deployment runbook](deploy/gcp/README.md) and the
-[readiness report](docs/gcp-readiness-report.md). Production startup now rejects
+The application and frontend share one Docker image. A local `compose.yaml`
+runs that image as web and worker containers alongside PostgreSQL; see the
+[container and GCP runbook](deploy/gcp/README.md) for startup commands. The
+repository includes a Cloud Build image definition, guarded Cloud Run
+deployment script and read-only post-deployment
+verifier. Review the [readiness report](docs/gcp-readiness-report.md) before
+staging. Production startup rejects
 SQLite and refuses `RESET_DATABASE=true`; `/health` checks the process and
 `/ready` checks database availability.
 

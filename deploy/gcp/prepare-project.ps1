@@ -38,5 +38,6 @@ if ($LASTEXITCODE -ne 0 -or -not $buildServiceAccount) {
 }
 Invoke-Gcloud projects add-iam-policy-binding $ProjectId --member "serviceAccount:$buildServiceAccount" --role roles/artifactregistry.writer --condition None --quiet
 Invoke-Gcloud projects add-iam-policy-binding $ProjectId --member "serviceAccount:$buildServiceAccount" --role roles/logging.logWriter --condition None --quiet
+Invoke-Gcloud projects add-iam-policy-binding $ProjectId --member "serviceAccount:$buildServiceAccount" --role roles/cloudbuild.builds.builder --condition None --quiet
 
 Write-Host "Project preparation complete. Cloud Build service account: $buildServiceAccount"

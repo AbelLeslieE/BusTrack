@@ -22,6 +22,9 @@
 
     position:relative;
 
+    --accent:var(--primary);
+    --ink:var(--text);
+
     display:grid;
 
     gap:1rem;

@@ -1,0 +1,59 @@
+# Local container stack. GCP uses the same app image with Neon PostgreSQL
+# instead of running PostgreSQL in Cloud Run.
+x-app: &app
+  image: bustrack:local
+  build:
+    context: .
+  restart: unless-stopped
+  stop_grace_period: 30s
+
+x-app-environment: &app-environment
+  # The local web endpoint is HTTP. Development mode permits browser session
+  # cookies on that endpoint; Cloud Run overrides this with production mode.
+  APP_ENV: development
+  LOG_LEVEL: INFO
+  PORT: "8080"
+  DATABASE_URL: postgresql://${DB_USER:-bustrack}:${DB_PASSWORD:?Run scripts/create_compose_env.py first}@db:5432/${DB_NAME:-bustrack}
+  JWT_SECRET_KEY: ${JWT_SECRET_KEY:?Run scripts/create_compose_env.py first}
+  BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:?Run scripts/create_compose_env.py first}
+  BUS_PASS_SIGNING_KEY_PEM: ${BUS_PASS_SIGNING_KEY_PEM:?Run scripts/create_compose_env.py first}
+  STATIC_ASSET_CACHE_SECONDS: "3600"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-bustrack}
+      POSTGRES_DB: ${DB_NAME:-bustrack}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Run scripts/create_compose_env.py first}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  web:
+    <<: *app
+    environment:
+      <<: *app-environment
+      BACKGROUND_JOBS_ENABLED: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8080}:8080"
+
+  worker:
+    <<: *app
+    environment:
+      <<: *app-environment
+      BACKGROUND_JOBS_ENABLED: "true"
+    depends_on:
+      web:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

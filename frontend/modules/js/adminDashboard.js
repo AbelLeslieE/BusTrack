@@ -22,8 +22,8 @@ async function loadDashboard() {
 
 export function render() {
   view = document.createElement("section");
-  view.className = "dashboard-view";
-  view.innerHTML = `<section class="welcome-banner glass-panel"><p>Loading fleet data…</p></section>`;
+  view.className = "dashboard-host";
+  view.innerHTML = `<section class="dashboard-view"><section class="welcome-banner glass-panel"><p>Loading fleet data…</p></section></section>`;
   queueMicrotask(loadDashboard);
   return view;
 }

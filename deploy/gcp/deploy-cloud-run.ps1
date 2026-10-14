@@ -6,8 +6,8 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Image,
 
-    [Parameter(Mandatory = $true)]
     [string]$CloudSqlInstance,
+    [switch]$ExternalDatabase,
 
     [string]$Region = "asia-south1",
     [string]$WebServiceName = "bustrack-web",
@@ -26,6 +26,7 @@ param(
     [ValidateRange(1, 2147483647)]
     [int]$BootstrapAdminSecretVersion = 1,
     [string[]]$OptionalSecretBindings = @(),
+    [switch]$SkipProjectSetup,
     [ValidateRange(0, 20)]
     [int]$WebMinInstances = 0,
     [ValidateRange(1, 100)]
@@ -48,7 +49,7 @@ if (-not (Get-Command gcloud -ErrorAction SilentlyContinue)) {
 if ($WebMinInstances -gt $WebMaxInstances) {
     throw "WebMinInstances cannot be greater than WebMaxInstances."
 }
-if ($CloudSqlInstance -notmatch '^[^:]+:[^:]+:[^:]+$') {
+if (-not $ExternalDatabase -and $CloudSqlInstance -notmatch '^[^:]+:[^:]+:[^:]+$') {
     throw "CloudSqlInstance must be the full PROJECT:REGION:INSTANCE connection name."
 }
 if ($Image -notmatch '\.pkg\.dev/.+/.+:.+$') {
@@ -75,21 +76,27 @@ if (-not $PSCmdlet.ShouldProcess($ProjectId, "configure APIs, IAM, and deploy Bu
     return
 }
 
-Invoke-Gcloud config set project $ProjectId
-Invoke-Gcloud services enable run.googleapis.com sqladmin.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com logging.googleapis.com monitoring.googleapis.com
+if (-not $SkipProjectSetup) {
+    Invoke-Gcloud config set project $ProjectId
+    Invoke-Gcloud services enable run.googleapis.com sqladmin.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com logging.googleapis.com monitoring.googleapis.com
 
-& gcloud iam service-accounts describe $serviceAccountEmail --project $ProjectId *> $null
-if ($LASTEXITCODE -ne 0) {
-    Invoke-Gcloud iam service-accounts create $RuntimeServiceAccount --project $ProjectId --display-name "BusTrack runtime"
-}
+    & gcloud iam service-accounts describe $serviceAccountEmail --project $ProjectId *> $null
+    if ($LASTEXITCODE -ne 0) {
+        Invoke-Gcloud iam service-accounts create $RuntimeServiceAccount --project $ProjectId --display-name "BusTrack runtime"
+    }
 
-foreach ($role in @("roles/cloudsql.client", "roles/logging.logWriter", "roles/monitoring.metricWriter")) {
-    Invoke-Gcloud projects add-iam-policy-binding $ProjectId --member "serviceAccount:$serviceAccountEmail" --role $role --condition None --quiet
-}
+    $runtimeRoles = @("roles/logging.logWriter", "roles/monitoring.metricWriter")
+    if (-not $ExternalDatabase) {
+        $runtimeRoles = @("roles/cloudsql.client") + $runtimeRoles
+    }
+    foreach ($role in $runtimeRoles) {
+        Invoke-Gcloud projects add-iam-policy-binding $ProjectId --member "serviceAccount:$serviceAccountEmail" --role $role --condition None --quiet
+    }
 
-foreach ($secretName in ($requiredSecrets | Sort-Object -Unique)) {
-    Invoke-Gcloud secrets describe $secretName --project $ProjectId
-    Invoke-Gcloud secrets add-iam-policy-binding $secretName --project $ProjectId --member "serviceAccount:$serviceAccountEmail" --role roles/secretmanager.secretAccessor --condition None --quiet
+    foreach ($secretName in ($requiredSecrets | Sort-Object -Unique)) {
+        Invoke-Gcloud secrets describe $secretName --project $ProjectId
+        Invoke-Gcloud secrets add-iam-policy-binding $secretName --project $ProjectId --member "serviceAccount:$serviceAccountEmail" --role roles/secretmanager.secretAccessor --condition None --quiet
+    }
 }
 
 $secretBindings = @(
@@ -107,6 +114,11 @@ $secretBindings += $OptionalSecretBindings | ForEach-Object {
     "$($parts[0])=$reference"
 }
 $secretArgument = $secretBindings -join ','
+
+$databaseArguments = @()
+if (-not $ExternalDatabase) {
+    $databaseArguments = @('--set-cloudsql-instances', $CloudSqlInstance)
+}
 
 $commonEnvironment = @(
     "APP_ENV=production",
@@ -127,9 +139,10 @@ Invoke-Gcloud run deploy $WebServiceName `
     --region $Region `
     --platform managed `
     --image $Image `
+    --execution-environment gen2 `
     --port 8080 `
     --service-account $serviceAccountEmail `
-    --set-cloudsql-instances $CloudSqlInstance `
+    @databaseArguments `
     --set-secrets $secretArgument `
     --set-env-vars "$commonEnvironment,BACKGROUND_JOBS_ENABLED=false" `
     --cpu 1 `
@@ -138,9 +151,9 @@ Invoke-Gcloud run deploy $WebServiceName `
     --timeout 3600 `
     --min-instances $WebMinInstances `
     --max-instances $WebMaxInstances `
-    --cpu-throttling `
+    --no-cpu-throttling `
     --allow-unauthenticated `
-    --startup-probe "httpGet.path=/ready,httpGet.port=8080,initialDelaySeconds=0,failureThreshold=20,timeoutSeconds=2,periodSeconds=3" `
+    --startup-probe "httpGet.path=/ready,httpGet.port=8080,initialDelaySeconds=0,failureThreshold=60,timeoutSeconds=2,periodSeconds=5" `
     --liveness-probe "httpGet.path=/health,httpGet.port=8080,initialDelaySeconds=10,failureThreshold=3,timeoutSeconds=2,periodSeconds=30" `
     --deploy-health-check `
     --quiet
@@ -152,9 +165,10 @@ Invoke-Gcloud run deploy $WorkerServiceName `
     --region $Region `
     --platform managed `
     --image $Image `
+    --execution-environment gen2 `
     --port 8080 `
     --service-account $serviceAccountEmail `
-    --set-cloudsql-instances $CloudSqlInstance `
+    @databaseArguments `
     --set-secrets $secretArgument `
     --set-env-vars "$commonEnvironment,BACKGROUND_JOBS_ENABLED=true" `
     --cpu 1 `
@@ -166,7 +180,7 @@ Invoke-Gcloud run deploy $WorkerServiceName `
     --no-cpu-throttling `
     --ingress internal `
     --no-allow-unauthenticated `
-    --startup-probe "httpGet.path=/ready,httpGet.port=8080,initialDelaySeconds=0,failureThreshold=20,timeoutSeconds=2,periodSeconds=3" `
+    --startup-probe "httpGet.path=/ready,httpGet.port=8080,initialDelaySeconds=0,failureThreshold=60,timeoutSeconds=2,periodSeconds=5" `
     --liveness-probe "httpGet.path=/health,httpGet.port=8080,initialDelaySeconds=10,failureThreshold=3,timeoutSeconds=2,periodSeconds=30" `
     --deploy-health-check `
     --quiet

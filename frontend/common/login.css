@@ -82,8 +82,6 @@ body{
 
     color:var(--text);
 
-    overflow:hidden;
-
 }
 
 
@@ -95,7 +93,8 @@ body{
 
     min-height:100vh;
 
-    overflow:hidden;
+    overflow-x:hidden;
+    overflow-y:auto;
 
     font-family:"Inter",sans-serif;
 
@@ -192,7 +191,7 @@ body::before{
 
 .login-card{
 
-    
+    position:relative;
 
     max-width:470px;
 
@@ -866,6 +865,8 @@ body::before{
 
     inset:0;
 
+    border-radius:inherit;
+
     overflow:hidden;
 
     pointer-events:none;
@@ -1271,6 +1272,11 @@ body::before{
     .login-card{
         padding:24px 20px;
         border-radius:22px;
+    }
+
+    .login-options{
+        flex-wrap:wrap;
+        gap:12px;
     }
 
     .login-logo{

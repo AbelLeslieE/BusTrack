@@ -10,6 +10,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from fastapi import Response
 from sqlalchemy import create_engine
@@ -163,7 +164,7 @@ class KingstrackIntegrationTest(unittest.TestCase):
                     "latitude": 10.4,
                     "longitude": 76.3,
                     "imei_no": "AIRO-IMEI-2",
-                    "source_date": datetime.now().astimezone().strftime("%d-%m-%Y %I:%M:%S %p"),
+                    "source_date": datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%d-%m-%Y %I:%M:%S %p"),
                     "speed": 0,
                     "ignition": "OFF",
                 },

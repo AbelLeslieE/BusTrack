@@ -23,7 +23,9 @@ ENV/
 # ==========================================================
 .env
 .env.*
+/compose.env
 /.certs/
+gha-creds-*.json
 
 # Keep the example file
 !.env.example
