@@ -51,7 +51,7 @@ const adminModules = {
 
     live_tracking: {
         title: "Live Tracking",
-        load: () => import("../modules/js/live_tracking.js")
+        load: () => import("../modules/js/live_tracking.js?v=20261015b")
     },
 
     tripHistory: {
@@ -330,7 +330,7 @@ function applyModuleStyles(moduleName) {
 
     const styles = [loadStylesheet(
         "active-module-styles",
-        `/static/modules/css/${styleModuleName}.css?v=20261015a`
+        `/static/modules/css/${styleModuleName}.css?v=20261015b`
     )];
 
     // Driver shared styles

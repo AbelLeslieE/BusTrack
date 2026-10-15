@@ -5,9 +5,11 @@ import {
 
     startFleetRefresh,
 
+    resizeFleetMap,
+
     cleanupFleetTracking
 
-} from "./adminTrackingService.js";
+} from "./adminTrackingService.js?v=20261015b";
 export function render() {
 
     const page = document.createElement("div");
@@ -22,7 +24,7 @@ export function render() {
 
         <section class="tracking-header glass-panel">
 
-            <div>
+            <div class="tracking-header-copy">
 
                 <p class="tracking-title">
 
@@ -38,17 +40,19 @@ export function render() {
 
                 <p>
 
-                    Registered buses appear here. A map pin is shown after the configured GPS device reports a position.
+                    Registered buses appear here. Switch views to check each bus's track updates or its live map position.
 
                 </p>
 
                 <p class="tracking-header-note">
 
-                    Cards without a GPS report clearly show that tracking is waiting to start. Select a reported bus card to focus its real-time map pin.
+                    Buses without a GPS report clearly show that tracking is waiting to start. In map view, select a reported bus card to focus its real-time pin.
 
                 </p>
 
             </div>
+
+            <button class="tracking-view-toggle" id="trackingViewToggle" type="button" aria-controls="fleetMapView fleetTrackUpdates">View track updates</button>
 
         </section>
 
@@ -56,7 +60,7 @@ export function render() {
              MAIN GRID
         =========================================== -->
 
-        <section class="live-grid">
+        <section class="live-grid" id="fleetMapView">
 
             <!-- LEFT -->
 
@@ -107,7 +111,22 @@ export function render() {
 
         </section>
 
+        <section class="track-monitor glass-panel" id="fleetTrackUpdates" role="region" aria-label="Fleet track updates" hidden>
+            <p class="empty-state">Loading fleet track updates…</p>
+        </section>
+
     `;
+
+    const toggle = page.querySelector("#trackingViewToggle");
+    const mapView = page.querySelector("#fleetMapView");
+    const trackView = page.querySelector("#fleetTrackUpdates");
+    toggle.addEventListener("click", () => {
+        const showTracks = trackView.hidden;
+        trackView.hidden = !showTracks;
+        mapView.hidden = showTracks;
+        toggle.textContent = showTracks ? "View live map" : "View track updates";
+        if (!showTracks) requestAnimationFrame(resizeFleetMap);
+    });
 
     setTimeout(() => {
 

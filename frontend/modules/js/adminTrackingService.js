@@ -10,12 +10,17 @@ import { Modal } from "/static/common/modal.js";
 import { escapeHtml } from "/static/common/security.js";
 import { createVehicleMarkerIcon } from "/static/common/vehicleMarker.js";
 import { animateVehicleMarker, snapVehicleMarkerToRoad } from "/static/common/vehicleMotion.js?v=road-safe-7";
+import { renderFleetTrackUpdates, reportFleetTrackFeedError, resetFleetTrackUpdates } from "./adminTrackUpdates.js";
 
 /* ==========================================================
    ADMIN LIVE TRACKING STATE
 ========================================================== */
 
 let map = null;
+
+export function resizeFleetMap() {
+    map?.invalidateSize({ animate: false, pan: false });
+}
 
 const markers = new Map();
 const lastServerUpdates = new Map();
@@ -1245,6 +1250,8 @@ export async function loadLiveTrips(
 
         if (response && !response.ok) {
 
+            reportFleetTrackFeedError("Live tracking feed is unavailable. Last shown updates may be old.");
+
             console.error(
                 "Unable to load trips"
             );
@@ -1258,6 +1265,8 @@ export async function loadLiveTrips(
             ? await response.json()
             : streamTrips;
         if (!Array.isArray(trips)) {
+
+            reportFleetTrackFeedError("Live tracking feed returned invalid data. Last shown updates may be old.");
 
             console.error(
                 "Unable to apply invalid live tracking data"
@@ -1303,10 +1312,15 @@ export async function loadLiveTrips(
 
 
         updateFleet(trips, buses);
+        if (!cachedFleetBusesAt) {
+            reportFleetTrackFeedError("Registered bus list is unavailable. Showing buses with live reports only.");
+        }
 
     }
 
     catch (error) {
+
+        reportFleetTrackFeedError("Live tracking feed could not be refreshed. Last shown updates may be old.");
 
         console.error(
             "Admin live tracking error:",
@@ -1539,6 +1553,7 @@ function endTripAsAdmin(trip, action) {
 ========================================================== */
 
 function updateFleet(trips, buses = []) {
+    renderFleetTrackUpdates(trips, buses);
 
     /* ======================================================
        MAP MUST EXIST
@@ -2484,6 +2499,7 @@ function appendWaitingBusCards(tripList, buses, activeBusIds = new Set()) {
 ========================================================== */
 
 export function cleanupFleetTracking() {
+    resetFleetTrackUpdates();
 
     console.log(
         "=========================================="
