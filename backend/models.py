@@ -50,7 +50,7 @@ class User(Base):
     # ======================================================
 
     username: Mapped[str] = mapped_column(
-        String(64),
+        String(100),
         unique=True,
         index=True,
         nullable=False,
@@ -60,6 +60,9 @@ class User(Base):
         String(255),
         nullable=False,
     )
+
+    # Set only for accounts issued an initial password by bulk onboarding.
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # ======================================================
     # PERSONAL INFORMATION

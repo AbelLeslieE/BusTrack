@@ -8,21 +8,30 @@ The browser never supplies a student ID for these endpoints.
 """
 
 import asyncio
+import csv
 from copy import deepcopy
 from datetime import date, datetime, timezone
+from io import StringIO
 import json
 import os
+import secrets
 import time
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
+from pydantic import EmailStr, TypeAdapter, ValidationError
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from backend.audit import record_audit_event
+from backend.auth import get_password_hash
 from backend.database import SessionLocal, get_db
+from backend.services.generated_codes import lock_generated_code_writes, next_student_code
 from backend.services.trip_reset import reset_metadata
-from backend.security import require_management, require_user
+from backend.security import require_admin, require_management, require_user
 from backend.models import (
     Student,
     User,
@@ -114,6 +123,195 @@ def get_student_directory(
     """Return every student and their current route, bus, and stop."""
     students = db.query(Student).order_by(Student.student_code).all()
     return [_student_directory_item(student, db) for student in students]
+
+
+_STUDENT_CSV_MAX_BYTES = 1_000_000
+_STUDENT_CSV_MAX_ROWS = 500
+_EMAIL_ADAPTER = TypeAdapter(EmailStr)
+
+
+@router.post("/import-logins")
+def import_student_logins(
+    request: Request,
+    response: Response,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    """Create student logins from a CSV and reveal initial passwords once."""
+
+    if not (file.filename or "").casefold().endswith(".csv"):
+        raise HTTPException(status_code=422, detail="Choose a .csv file.")
+    raw = file.file.read(_STUDENT_CSV_MAX_BYTES + 1)
+    if len(raw) > _STUDENT_CSV_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="CSV files must be smaller than 1 MB.")
+    try:
+        decoded = raw.decode("utf-8-sig")
+    except UnicodeDecodeError as error:
+        raise HTTPException(status_code=422, detail="Save the CSV as UTF-8.") from error
+
+    try:
+        reader = csv.DictReader(StringIO(decoded, newline=""), strict=True)
+        headers = [header.strip().casefold() for header in (reader.fieldnames or [])]
+        if len(headers) != len(set(headers)) or not {"full_name", "email"}.issubset(headers):
+            raise HTTPException(status_code=422, detail="CSV columns must include full_name and email exactly once.")
+        if any(header not in {"full_name", "email"} for header in headers):
+            raise HTTPException(status_code=422, detail="Only full_name and email columns are supported.")
+        rows = []
+        seen_emails = set()
+        for row_number, source_row in enumerate(reader, start=2):
+            if len(rows) >= _STUDENT_CSV_MAX_ROWS:
+                raise HTTPException(status_code=422, detail="Upload up to 500 students per CSV.")
+            row = {key.strip().casefold(): value for key, value in source_row.items() if key is not None}
+            if None in source_row or any(value is None for value in row.values()):
+                raise HTTPException(status_code=422, detail=f"Row {row_number} has the wrong number of columns.")
+            full_name = row["full_name"].strip()
+            raw_email = row["email"].strip()
+            if not full_name and not raw_email:
+                continue
+            if not 2 <= len(full_name) <= 100 or any(ord(character) < 32 for character in full_name):
+                raise HTTPException(status_code=422, detail=f"Row {row_number} needs a full name of 2–100 characters.")
+            try:
+                email = str(_EMAIL_ADAPTER.validate_python(raw_email)).casefold()
+            except ValidationError as error:
+                raise HTTPException(status_code=422, detail=f"Row {row_number} has an invalid email address.") from error
+            if len(email) > 100:
+                raise HTTPException(status_code=422, detail=f"Row {row_number} email exceeds 100 characters.")
+            if email in seen_emails:
+                raise HTTPException(status_code=422, detail=f"Row {row_number} repeats an email in this CSV.")
+            seen_emails.add(email)
+            rows.append((full_name, email))
+    except csv.Error as error:
+        raise HTTPException(status_code=422, detail="CSV formatting is invalid.") from error
+
+    if not rows:
+        raise HTTPException(status_code=422, detail="The CSV has no students to import.")
+
+    try:
+        emails = [email for _, email in rows]
+        existing_by_id = {
+            user.id: user for user in db.query(User).filter(func.lower(User.email).in_(emails)).all()
+        }
+        existing_by_id.update({
+            user.id: user for user in db.query(User).filter(func.lower(User.username).in_(emails)).all()
+        })
+        existing_by_email = {}
+        for user in existing_by_id.values():
+            for key in (user.email, user.username):
+                if key and key.casefold() in seen_emails:
+                    if key.casefold() in existing_by_email and existing_by_email[key.casefold()].id != user.id:
+                        raise HTTPException(status_code=409, detail=f"{key.casefold()} matches more than one account.")
+                    existing_by_email[key.casefold()] = user
+        for _, email in rows:
+            match = existing_by_email.get(email)
+            if match and (canonical_role(match.role) != ROLE_USER or match.student is None):
+                raise HTTPException(status_code=409, detail=f"{email} belongs to a non-student account.")
+
+        # Hash before taking the code-allocation write lock. A large class must
+        # not hold SQLite's write lock while bcrypt processes every password.
+        prepared = []
+        existing_count = 0
+        for full_name, email in rows:
+            if email in existing_by_email:
+                existing_count += 1
+                continue
+            initial_password = f"Bt!{secrets.token_urlsafe(18)}9a"
+            prepared.append((full_name, email, initial_password, get_password_hash(initial_password)))
+
+        lock_generated_code_writes(db, "student")
+        next_number = int(next_student_code(db)[3:])
+        credentials = []
+        for full_name, email, initial_password, password_hash in prepared:
+            student_code = f"STU{next_number:03d}"
+            next_number += 1
+            user = User(
+                full_name=full_name,
+                username=email,
+                email=email,
+                password_hash=password_hash,
+                role=ROLE_USER,
+                status="Active",
+                must_change_password=True,
+            )
+            db.add(user)
+            db.flush()
+            db.add(Student(user_id=user.id, student_code=student_code))
+            credentials.append({
+                "full_name": full_name,
+                "email": email,
+                "student_code": student_code,
+                "temporary_password": initial_password,
+            })
+        record_audit_event(
+            db,
+            category="security",
+            action="student_logins_imported",
+            actor=admin,
+            subject_type="student_batch",
+            subject_label="Student login import",
+            details={"created": len(credentials), "already_existing": existing_count},
+            request=request,
+        )
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        raise
+    except IntegrityError as error:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Student accounts changed during import. Try the CSV again.") from error
+    except Exception:
+        db.rollback()
+        raise
+
+    response.headers["Cache-Control"] = "no-store"
+    return {"created_count": len(credentials), "existing_count": existing_count, "credentials": credentials}
+
+
+@router.post("/{student_id:int}/reset-login")
+def reset_student_login(
+    student_id: int,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    """Issue one replacement password for a student without exposing old hashes."""
+
+    student = db.get(Student, student_id)
+    if student is None or student.user is None or canonical_role(student.user.role) != ROLE_USER:
+        raise HTTPException(status_code=404, detail="Student account not found.")
+    user = student.user
+    if user.status != "Active":
+        raise HTTPException(status_code=409, detail="Activate this student account before resetting its login.")
+    temporary_password = f"Bt!{secrets.token_urlsafe(18)}9a"
+    user.password_hash = get_password_hash(temporary_password)
+    user.must_change_password = True
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    user.auth_version += 1
+    now = datetime.now(timezone.utc)
+    db.query(UserSession).filter(
+        UserSession.user_id == user.id,
+        UserSession.revoked_at.is_(None),
+    ).update({UserSession.revoked_at: now, UserSession.revoked_reason: "Password reset by Admin"}, synchronize_session=False)
+    record_audit_event(
+        db,
+        category="security",
+        action="student_login_reset",
+        actor=admin,
+        subject_type="student",
+        subject_id=student.id,
+        subject_label=student.student_code,
+        request=request,
+    )
+    db.commit()
+    response.headers["Cache-Control"] = "no-store"
+    return {
+        "full_name": user.full_name,
+        "login": user.email or user.username,
+        "student_code": student.student_code,
+        "temporary_password": temporary_password,
+    }
 
 
 @router.put("/{student_id:int}/assignment")
@@ -1327,8 +1525,8 @@ def get_student_live_tracking(
 def _student_stream_key(payload: dict, user_id: int) -> tuple[str, int, int]:
     """Share a snapshot across students on one bus/route without mixing identities."""
 
-    route_id = int(payload.get("route", {}).get("id") or 0)
-    bus_id = int(payload.get("bus", {}).get("id") or 0)
+    route_id = int((payload.get("route") or {}).get("id") or 0)
+    bus_id = int((payload.get("bus") or {}).get("id") or 0)
     return ("route", route_id, bus_id) if route_id and bus_id else ("student", user_id, 0)
 
 

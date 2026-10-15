@@ -260,7 +260,9 @@ form?.addEventListener("submit", async (event) => {
         case ROLE_USER:
 
             window.location.assign(
-                "/dashboard#studentTracking"
+                data.user.must_change_password
+                    ? "/dashboard#studentSettings"
+                    : "/dashboard#studentTracking"
             );
 
             break;

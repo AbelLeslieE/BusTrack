@@ -7,7 +7,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
 from passlib.context import CryptContext
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.database import SessionLocal, get_db
@@ -52,6 +52,12 @@ def authenticate_user(database_session: Session, username: str, password: str) -
     user = database_session.scalar(
         select(User).where(User.username == normalize_username(username))
     )
+    if user is None and "@" in username:
+        user = database_session.scalar(
+            select(User).where(func.lower(User.email) == normalize_username(username))
+        )
+        if user is not None and canonical_role(user.role) != "User":
+            user = None
     # User not found
     if user is None:
         return None
@@ -220,5 +226,17 @@ def get_current_user(
         if last_seen_at is None or now - last_seen_at >= SESSION_HEARTBEAT_INTERVAL:
             session.last_seen_at = now
             database_session.commit()
+
+    if user.must_change_password and canonical_role(user.role) == "User":
+        allowed = {
+            ("GET", "/api/auth/me"),
+            ("GET", "/api/settings/account"),
+            ("PUT", "/api/settings/account/password"),
+        }
+        if (request.method, request.url.path) not in allowed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Change your temporary password in Account settings before using BusTrack.",
+            )
 
     return user

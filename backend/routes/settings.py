@@ -8,12 +8,14 @@ changing another account while editing their own settings.
 from __future__ import annotations
 
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 import secrets
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile, status
 from fastapi.responses import StreamingResponse
+from pydantic import EmailStr, TypeAdapter, ValidationError
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -123,6 +125,13 @@ def update_account_settings(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Full name is required.")
 
     username = normalize_username(update.username)
+    if "@" in username:
+        try:
+            TypeAdapter(EmailStr).validate_python(username)
+        except ValidationError as error:
+            raise HTTPException(status_code=422, detail="Enter a valid email address as the username.") from error
+    elif re.fullmatch(r"[a-z0-9_.-]+", username) is None:
+        raise HTTPException(status_code=422, detail="Username contains unsupported characters.")
     duplicate_username = db.query(User).filter(
         User.username == username,
         User.id != current_user.id,
@@ -169,6 +178,7 @@ def change_account_password(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=policy_error)
 
     current_user.password_hash = get_password_hash(update.new_password)
+    current_user.must_change_password = False
     current_user.failed_login_attempts = 0
     current_user.locked_until = None
     current_user.auth_version += 1

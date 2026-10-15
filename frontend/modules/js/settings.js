@@ -1,5 +1,5 @@
 import { request } from "/static/common/api.js";
-import { clearSession, replaceSession } from "/static/common/auth.js";
+import { clearSession, replaceSession } from "/static/common/auth.js?v=20261015d";
 import { escapeHtml } from "/static/common/security.js";
 
 const state = { view: null, account: null, loading: false };

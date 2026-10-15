@@ -382,9 +382,8 @@ def initialize_database() -> None:
                 )
 
     if "users" in inspector.get_table_names():
-        user_columns = {
-            column["name"] for column in inspector.get_columns("users")
-        }
+        user_column_details = {column["name"]: column for column in inspector.get_columns("users")}
+        user_columns = set(user_column_details)
         with engine.begin() as connection:
             if "failed_login_attempts" not in user_columns:
                 connection.execute(text(
@@ -399,6 +398,16 @@ def initialize_database() -> None:
                 connection.execute(text(
                     "ALTER TABLE users "
                     "ADD COLUMN auth_version INTEGER NOT NULL DEFAULT 1"
+                ))
+            if "must_change_password" not in user_columns:
+                connection.execute(text(
+                    "ALTER TABLE users "
+                    "ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT 0"
+                ))
+            username_length = getattr(user_column_details["username"]["type"], "length", None)
+            if engine.dialect.name == "postgresql" and username_length is not None and username_length < 100:
+                connection.execute(text(
+                    "ALTER TABLE users ALTER COLUMN username TYPE VARCHAR(100)"
                 ))
 
         # Consolidate the historic role names into the three supported roles.

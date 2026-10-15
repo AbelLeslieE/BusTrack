@@ -1,4 +1,4 @@
-import { requireAuthenticatedSession } from "/static/common/auth.js";
+import { requireAuthenticatedSession } from "/static/common/auth.js?v=20261015d";
 import { canonicalRole, ROLE_ADMIN, ROLE_DRIVER, ROLE_TECHNICIAN, ROLE_USER } from "/static/common/roles.js";
 import { installHardRefreshShortcut } from "/static/common/cacheRefresh.js";
 
@@ -14,7 +14,7 @@ if (!profile) {
 // Import the role-sensitive router only after the server session has refreshed
 // localStorage. Otherwise a previous account's cached role can build the wrong
 // sidebar when a technician opens or reloads a bookmarked module.
-const { loadModule } = await import("/static/common/router.js?v=20261015b");
+const { loadModule } = await import("/static/common/router.js?v=20261015e");
 
 const role = canonicalRole(profile.role);
 let moduleName;
@@ -28,6 +28,11 @@ switch (role) {
         moduleName = "driverDashboard";
         break;
     case ROLE_USER:
+        if (profile.must_change_password) {
+            window.location.hash = "studentSettings";
+            moduleName = "studentSettings";
+            break;
+        }
         // The student dashboard was retired.  Bookmarked dashboard hashes are
         // normalised before the shell is created so Live Tracking is active.
         if (!window.location.hash || window.location.hash === "#studentDashboard") {

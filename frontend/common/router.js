@@ -6,22 +6,22 @@ import { canonicalRole, ROLE_ADMIN, ROLE_DRIVER, ROLE_TECHNICIAN, ROLE_USER } fr
 import {
     createSidebar,
     setSidebarActive
-} from "./sidebar.js";
+} from "./sidebar.js?v=20261015d";
 
 import {
     createDriverSidebar,
     setDriverSidebarActive
-} from "../modules/js/driverSidebar.js";
+} from "../modules/js/driverSidebar.js?v=20261015d";
 
 import {
     createStudentSidebar,
     setStudentSidebarActive
-} from "../modules/js/studentSidebar.js";
+} from "../modules/js/studentSidebar.js?v=20261015d";
 
 import {
     createTechnicianSidebar,
     setTechnicianSidebarActive
-} from "../modules/js/technicianSidebar.js";
+} from "../modules/js/technicianSidebar.js?v=20261015d";
 
 
 import {
@@ -86,7 +86,7 @@ const adminModules = {
 
     students: {
         title: "Students",
-        load: () => import("../modules/js/students.js")
+        load: () => import("../modules/js/students.js?v=20261015d")
     },
 
     busPasses: {
@@ -116,7 +116,7 @@ const adminModules = {
 
     settings: {
         title: "Settings",
-        load: () => import("../modules/js/settings.js")
+        load: () => import("../modules/js/settings.js?v=20261015d")
     }
 
 };
@@ -170,7 +170,7 @@ const driverModules = {
 
     driverSettings: {
         title: "Settings",
-        load: () => import("../modules/js/driverSettings.js")
+        load: () => import("../modules/js/driverSettings.js?v=20261015d")
     }
 
 };
@@ -201,7 +201,7 @@ const studentModules = {
 
     studentSettings: {
         title: "Settings",
-        load: () => import("../modules/js/studentSettings.js")
+        load: () => import("../modules/js/studentSettings.js?v=20261015d")
     }
 
 };
@@ -330,7 +330,7 @@ function applyModuleStyles(moduleName) {
 
     const styles = [loadStylesheet(
         "active-module-styles",
-        `/static/modules/css/${styleModuleName}.css?v=20261015c`
+        `/static/modules/css/${styleModuleName}.css?v=20261015d`
     )];
 
     // Driver shared styles
@@ -581,6 +581,13 @@ return {
 
 export async function loadModule(requestedRoute) {
   const thisNavigation = ++navigationVersion;
+  const currentProfile = JSON.parse(localStorage.getItem("bus_tracker_profile") || "{}");
+  if (isStudent && currentProfile.must_change_password && requestedRoute !== "studentSettings") {
+      requestedRoute = "studentSettings";
+      if (window.location.hash !== "#studentSettings") {
+          window.history.replaceState(null, "", "#studentSettings");
+      }
+  }
   // Bus document alerts retain their target in the hash query string.
   if (typeof requestedRoute === "string" && requestedRoute.startsWith("buses?")) {
       requestedRoute = "buses";

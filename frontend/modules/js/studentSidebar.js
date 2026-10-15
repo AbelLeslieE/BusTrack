@@ -1,4 +1,4 @@
-import { logoutSession } from "/static/common/auth.js";
+import { logoutSession } from "/static/common/auth.js?v=20261015d";
 
 /* ==========================================================
    BUSTRACK

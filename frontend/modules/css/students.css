@@ -211,6 +211,22 @@
 
 }
 
+.students-toolbar{
+    display:flex;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+    gap:9px;
+}
+
+.students-toolbar .students-refresh{
+    white-space:nowrap;
+}
+
+@media(max-width:760px){
+    .students-table-heading{align-items:stretch;flex-direction:column}
+    .students-toolbar{justify-content:flex-start}
+}
+
 .students-refresh{
 
     display:inline-flex;
@@ -378,6 +394,23 @@
     background:rgba(124,92,255,.2);
     box-shadow:0 0 18px rgba(124,92,255,.18);
 
+}
+
+.students-actions .student-reset{
+    width:auto;
+    min-width:95px;
+    padding:0 10px;
+    color:#ffd5a0;
+    border-color:rgba(255,189,101,.3);
+    background:rgba(194,122,28,.12);
+    font-size:.75rem;
+    font-weight:700;
+    white-space:nowrap;
+}
+
+.students-actions .student-reset:disabled{
+    opacity:.5;
+    cursor:not-allowed;
 }
 
 /* ==========================================================

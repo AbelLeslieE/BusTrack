@@ -13,6 +13,7 @@ class UserResponse(BaseModel):
 
     id: int
     username: str
+    must_change_password: bool = False
     full_name: str
 
     email: str | None
@@ -49,11 +50,11 @@ class TokenResponse(BaseModel):
 
 
 class AccountProfileUpdate(BaseModel):
-    """Editable identity fields for the authenticated administrator only."""
+    """Editable identity fields for the authenticated account."""
 
     full_name: str = Field(min_length=2, max_length=100)
-    username: str = Field(min_length=3, max_length=64, pattern=r"^[A-Za-z0-9_.-]+$")
-    email: EmailStr | None = None
+    username: str = Field(min_length=3, max_length=100)
+    email: EmailStr | None = Field(default=None, max_length=100)
     phone: str | None = Field(default=None, max_length=20, pattern=r"^[0-9+() .-]*$")
 
 
