@@ -2,7 +2,7 @@ import { Modal } from "/static/common/modal.js";
 import { request } from "/static/common/api.js";
 import { createDropdown } from "/static/common/dropdown.js";
 import { confirmDeletion, showOperationFeedback } from "/static/common/operationFeedback.js";
-import { editPassIdentity, passHistory } from "/static/modules/js/passAdministration.js";
+import { editPassIdentity, passHistory } from "/static/modules/js/passAdministration.js?v=20261015a";
 
 const API = "/bus-passes";
 

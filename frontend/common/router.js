@@ -91,7 +91,7 @@ const adminModules = {
 
     busPasses: {
         title: "Bus Passes",
-        load: () => import("../modules/js/busPasses.js")
+        load: () => import("../modules/js/busPasses.js?v=20261015a")
     },
 
     users: {
@@ -186,7 +186,7 @@ const studentModules = {
 
     busPass: {
         title: "Bus Pass",
-        load: () => import("../modules/js/busPass.js")
+        load: () => import("../modules/js/busPass.js?v=20261015a")
     },
 
     notifications: {
@@ -209,11 +209,11 @@ const studentModules = {
 const technicianModules = {
     technicianDashboard: {
         title: "GPS Integration",
-        load: () => import("../modules/js/technicianDashboard.js")
+        load: () => import("../modules/js/technicianDashboard.js?v=20261015a")
     },
     providerHealth: {
         title: "Provider Health",
-        load: () => import("../modules/js/providerHealth.js")
+        load: () => import("../modules/js/providerHealth.js?v=20261015a")
     }
 };
 let shell;
@@ -330,7 +330,7 @@ function applyModuleStyles(moduleName) {
 
     const styles = [loadStylesheet(
         "active-module-styles",
-        `/static/modules/css/${styleModuleName}.css?v=20261014b`
+        `/static/modules/css/${styleModuleName}.css?v=20261015a`
     )];
 
     // Driver shared styles
