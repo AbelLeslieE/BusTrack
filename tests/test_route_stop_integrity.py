@@ -255,6 +255,55 @@ class RouteStopIntegrityTest(unittest.TestCase):
             result = get_live_tracking(db, object())
             self.assertEqual([item["trip_id"] for item in result], [trip.id])
 
+    def test_admin_live_route_progress_follows_direction_and_reset(self) -> None:
+        with self.session_factory() as db:
+            _route, stops, route_stops, trip = self._seed_route(db)
+            live = get_live_tracking(db, object())[0]
+            self.assertEqual(
+                [(stop["stop_code"], stop["tracking_status"])
+                 for stop in live["route_stops"]],
+                [("SAFE-1", "completed"), ("SAFE-2", "reached"),
+                 ("SAFE-3", "pending")],
+            )
+
+            trip.current_route_stop_id = route_stops[2].id
+            trip.current_stop_status = "Approaching"
+            db.add(TripStopEvent(
+                trip_id=trip.id,
+                route_stop_id=route_stops[1].id,
+                stop_id=stops[1].id,
+                event_type="Skipped",
+                occurred_at=datetime.now(timezone.utc),
+            ))
+            db.commit()
+            live = get_live_tracking(db, object())[0]
+            self.assertEqual(
+                [stop["tracking_status"] for stop in live["route_stops"]],
+                ["completed", "skipped", "approaching"],
+            )
+
+            trip.reset_waiting_for_start = True
+            db.commit()
+            live = get_live_tracking(db, object())[0]
+            self.assertTrue(live["reset_waiting_for_start"])
+            self.assertEqual(
+                [stop["tracking_status"] for stop in live["route_stops"]],
+                ["pending", "pending", "pending"],
+            )
+
+            trip.reset_waiting_for_start = False
+            trip.route_direction = "reverse"
+            trip.current_route_stop_id = route_stops[1].id
+            db.commit()
+            live = get_live_tracking(db, object())[0]
+            self.assertEqual(
+                [(stop["stop_code"], stop["sequence"], stop["tracking_status"])
+                 for stop in live["route_stops"]],
+                [("SAFE-3", 1, "completed"),
+                 ("SAFE-2", 2, "approaching"),
+                 ("SAFE-1", 3, "pending")],
+            )
+
     def test_management_lists_batch_related_records(self) -> None:
         with self.session_factory() as db:
             route, _stops, _route_stops, _trip = self._seed_route(db)

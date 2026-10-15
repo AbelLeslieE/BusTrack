@@ -1593,6 +1593,19 @@ def _build_live_tracking(db: Session):
         current_route_stop = None
         next_stop = None
 
+        trip_route_stops = ordered_route_stops(
+            db.query(RouteStop)
+            .filter(RouteStop.route_id == trip.route_id)
+            .order_by(RouteStop.sequence.asc())
+            .all(),
+            trip.route_direction,
+        )
+        current_index = next(
+            (index for index, item in enumerate(trip_route_stops)
+             if item.id == trip.current_route_stop_id),
+            -1,
+        )
+
         if trip.current_route_stop_id is not None:
 
             current_route_stop = (
@@ -1643,26 +1656,6 @@ def _build_live_tracking(db: Session):
             # journey travels that same list in reverse from the campus stop.
             # --------------------------------------------------
 
-            trip_route_stops = (
-                db.query(RouteStop)
-                .filter(
-                    RouteStop.route_id == trip.route_id,
-                )
-                .order_by(RouteStop.sequence.asc())
-                .all()
-            )
-            trip_route_stops = ordered_route_stops(
-                trip_route_stops,
-                trip.route_direction,
-            )
-            current_index = next(
-                (
-                    index
-                    for index, route_stop in enumerate(trip_route_stops)
-                    if route_stop.id == current_route_stop.id
-                ),
-                -1,
-            )
             next_route_stop = (
                 trip_route_stops[current_index + 1]
                 if current_index >= 0
@@ -1763,6 +1756,55 @@ def _build_live_tracking(db: Session):
             and current_route_stop.stop is not None
             and current_route_stop.stop.id == trip.terminal_stop_id
         )
+        skipped_route_stop_ids: set[int] = set()
+        if current_index > 0:
+            leg_started_at = (
+                db.query(TripStopEvent.occurred_at)
+                .filter(TripStopEvent.trip_id == trip.id,
+                        TripStopEvent.event_type == "Leg completed")
+                .order_by(TripStopEvent.occurred_at.desc())
+                .limit(1)
+                .scalar()
+            )
+            skipped_query = db.query(TripStopEvent.route_stop_id).filter(
+                TripStopEvent.trip_id == trip.id,
+                TripStopEvent.event_type == "Skipped",
+            )
+            if leg_started_at is not None:
+                skipped_query = skipped_query.filter(
+                    TripStopEvent.occurred_at > leg_started_at
+                )
+            skipped_route_stop_ids = {
+                route_stop_id for (route_stop_id,) in skipped_query.all()
+            }
+        route_timeline = []
+        for index, route_stop in enumerate(trip_route_stops):
+            stop = route_stop.stop
+            if stop is None:
+                continue
+            if current_index < 0 or trip.reset_waiting_for_start:
+                tracking_status = "pending"
+            elif index < current_index:
+                tracking_status = (
+                    "skipped" if route_stop.id in skipped_route_stop_ids
+                    else "completed"
+                )
+            elif index == current_index:
+                tracking_status = (
+                    "terminal_completed" if terminal_reached
+                    else "reached" if trip.current_stop_status == "Arrived"
+                    else "approaching"
+                )
+            else:
+                tracking_status = "pending"
+            route_timeline.append({
+                "route_stop_id": route_stop.id,
+                "stop_id": stop.id,
+                "stop_code": stop.stop_code,
+                "stop_name": stop.stop_name,
+                "sequence": index + 1,
+                "tracking_status": tracking_status,
+            })
         # ==================================================
         # RESPONSE
         # ==================================================
@@ -1832,6 +1874,8 @@ def _build_live_tracking(db: Session):
             "gps_freshness": gps_freshness,
 
             "route_direction": trip.route_direction,
+            "route_stops": route_timeline,
+            "reset_waiting_for_start": trip.reset_waiting_for_start,
 
             "terminal_reached": terminal_reached,
 
@@ -1903,6 +1947,24 @@ def _build_live_tracking(db: Session):
             "route_id": route.id if route else None,
             "route_name": route.route_name if route else None,
             "route_code": route.route_code if route else None,
+            "route_stops": [
+                {
+                    "route_stop_id": item.id,
+                    "stop_id": item.stop.id,
+                    "stop_code": item.stop.stop_code,
+                    "stop_name": item.stop.stop_name,
+                    "sequence": index + 1,
+                    "tracking_status": "pending",
+                }
+                for index, item in enumerate(ordered_route_stops(
+                    db.query(RouteStop)
+                    .filter(RouteStop.route_id == route.id)
+                    .order_by(RouteStop.sequence.asc())
+                    .all(),
+                    "forward",
+                ))
+                if item.stop is not None
+            ] if route else [],
             "latitude": provider_state.latitude,
             "longitude": provider_state.longitude,
             "speed": provider_state.speed_kmh,

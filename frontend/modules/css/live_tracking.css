@@ -713,6 +713,99 @@
     background:rgba(148,163,184,.16);
     color:#d3dce8 !important;
 }
+.track-update-card.running{border-left-color:#43d8bb;}
+.track-update-card.running .track-update-status{
+    background:rgba(67,216,187,.15);
+    color:#a6f7e7 !important;
+}
+.track-route-heading{margin:18px 0 0;padding-top:14px;border-top:1px solid rgba(131,190,230,.2);}
+.track-route-heading small{
+    color:#75d8f7;
+    font-size:.68rem;
+    font-weight:800;
+    letter-spacing:.12em;
+}
+.track-route-heading h3{margin:5px 0 0;color:#f3f8ff;font-size:1.15rem;}
+.track-route-live{margin:10px 0 16px;color:#c9dcf3;font-size:.85rem;}
+.fleet-route-timeline{
+    position:relative;
+    max-height:440px;
+    overflow-y:auto;
+    margin:0;
+    padding:0 4px 0 0;
+    list-style:none;
+    scrollbar-color:#538eb4 transparent;
+}
+.fleet-route-stop{
+    position:relative;
+    display:grid;
+    grid-template-columns:34px minmax(0,1fr) auto;
+    align-items:center;
+    gap:10px;
+    min-height:75px;
+    padding:8px 0;
+}
+.fleet-route-stop:not(:last-child)::before{
+    content:"";
+    position:absolute;
+    left:16px;
+    top:54px;
+    bottom:-20px;
+    width:2px;
+    background:rgba(111,170,213,.36);
+}
+.fleet-route-marker{
+    z-index:1;
+    display:grid;
+    place-items:center;
+    width:34px;
+    height:34px;
+    border:1px solid #53708f;
+    border-radius:50%;
+    background:#112c4b;
+    color:#a9bdd8;
+    font-size:1.05rem;
+}
+.fleet-route-stop.completed .fleet-route-marker,
+.fleet-route-stop.terminal_completed .fleet-route-marker,
+.fleet-route-stop.reached .fleet-route-marker{
+    border-color:#39cba3;
+    background:#164f50;
+    color:#a4ffe0;
+}
+.fleet-route-stop.approaching .fleet-route-marker{
+    border-color:#55cffa;
+    background:#164b68;
+    color:#9eeaff;
+}
+.fleet-route-stop.skipped .fleet-route-marker{
+    border-color:#efae69;
+    color:#ffdcaf;
+}
+.fleet-route-stop-copy{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.fleet-route-stop-copy small{color:#86a9ce;font-size:.65rem;font-weight:800;letter-spacing:.08em;}
+.fleet-route-stop-copy strong{overflow-wrap:anywhere;color:#f0f7ff;font-size:.9rem;}
+.fleet-route-stop-copy span{color:#9fb9d3;font-size:.72rem;}
+.fleet-route-stop-status{
+    padding:5px 7px;
+    border:1px solid rgba(121,173,215,.24);
+    border-radius:999px;
+    color:#bbd4eb;
+    font-size:.66rem;
+    font-weight:700;
+    white-space:nowrap;
+}
+.fleet-route-stop.completed .fleet-route-stop-status,
+.fleet-route-stop.reached .fleet-route-stop-status,
+.fleet-route-stop.terminal_completed .fleet-route-stop-status{color:#94f2ce;border-color:rgba(71,210,161,.35);}
+.fleet-route-stop.approaching .fleet-route-stop-status{color:#94eaff;border-color:rgba(85,207,250,.4);}
+.fleet-route-stop.skipped .fleet-route-stop-status{color:#ffdbad;border-color:rgba(239,174,105,.4);}
+.track-route-telemetry,.track-route-empty{
+    margin:15px 0 0;
+    color:#aac4df;
+    font-size:.76rem;
+    line-height:1.5;
+}
 .track-update-route{margin:12px 0;}
 .track-update-details{
     display:grid;

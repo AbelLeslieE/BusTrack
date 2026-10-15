@@ -9,7 +9,7 @@ import {
 
     cleanupFleetTracking
 
-} from "./adminTrackingService.js?v=20261015b";
+} from "./adminTrackingService.js?v=20261015c";
 export function render() {
 
     const page = document.createElement("div");
@@ -40,7 +40,7 @@ export function render() {
 
                 <p>
 
-                    Registered buses appear here. Switch views to check each bus's track updates or its live map position.
+                    Registered buses appear here. Switch views to see every bus's live stop-by-stop route progress or its map position.
 
                 </p>
 
@@ -52,7 +52,7 @@ export function render() {
 
             </div>
 
-            <button class="tracking-view-toggle" id="trackingViewToggle" type="button" aria-controls="fleetMapView fleetTrackUpdates">View track updates</button>
+            <button class="tracking-view-toggle" id="trackingViewToggle" type="button" aria-controls="fleetMapView fleetTrackUpdates" aria-pressed="false">View route progress</button>
 
         </section>
 
@@ -112,7 +112,7 @@ export function render() {
         </section>
 
         <section class="track-monitor glass-panel" id="fleetTrackUpdates" role="region" aria-label="Fleet track updates" hidden>
-            <p class="empty-state">Loading fleet track updates…</p>
+            <p class="empty-state">Loading fleet route progress…</p>
         </section>
 
     `;
@@ -124,7 +124,8 @@ export function render() {
         const showTracks = trackView.hidden;
         trackView.hidden = !showTracks;
         mapView.hidden = showTracks;
-        toggle.textContent = showTracks ? "View live map" : "View track updates";
+        toggle.textContent = showTracks ? "View live map" : "View route progress";
+        toggle.setAttribute("aria-pressed", String(showTracks));
         if (!showTracks) requestAnimationFrame(resizeFleetMap);
     });
 
