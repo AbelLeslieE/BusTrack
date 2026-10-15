@@ -132,88 +132,19 @@ body::-webkit-scrollbar{
     display:none;
 
 }
-/* ==========================================================
-   ADMIN WALLPAPER
-========================================================== */
-
-body.admin-theme{
-
-    background:
-        linear-gradient(
-            rgba(5,15,30,.45),
-            rgba(5,15,30,.60)
-        ),
-        url("/static/assets/images/admin-campus-bg.jpg");
-
-    background-size:cover;
-    background-position:center;
-    background-repeat:no-repeat;
-    background-attachment:fixed;
-
-}
-
-/* ==========================================================
-   DRIVER THEME
-========================================================== */
-
-body.driver-theme{
-
-    background:
-        linear-gradient(
-            rgba(5,15,30,.45),
-            rgba(5,15,30,.60)
-        ),
-        url("/static/assets/images/driver-banner.png");
-
-    background-size:cover;
-
-    background-position:center;
-
-    background-repeat:no-repeat;
-
-    background-attachment:fixed;
-
-}
-/* ==========================================================
-   STUDENT THEME
-========================================================== */
-
-body.student-theme{
-
-    background:
-        linear-gradient(
-            rgba(5,15,30,.45),
-            rgba(5,15,30,.60)
-        ),
-        url("/static/assets/images/student-banner.png");
-
-    background-size:cover;
-
-    background-position:center;
-
-    background-repeat:no-repeat;
-
-    background-attachment:fixed;
-
-}
-/* ==========================================================
-   TECHNICIAN THEME
-========================================================== */
-
+/* All signed-in portals use the same campus wallpaper. */
+body.admin-theme,
+body.driver-theme,
+body.student-theme,
 body.technician-theme{
-
     background:
-        linear-gradient(
-            rgba(5,15,30,.45),
-            rgba(5,15,30,.60)
-        ),
-        url("/static/assets/images/fleet-bg.png");
-
-    background-size:cover;
-    background-position:center;
+        linear-gradient(rgba(5,15,30,.45),rgba(5,15,30,.60)),
+        url("/static/assets/images/portal-background.png");
     background-repeat:no-repeat;
+    background-position:center center;
+    background-size:cover;
     background-attachment:fixed;
-
+    background-color:#050B17;
 }
 /* ==========================================================
    AMBIENT LIGHTING

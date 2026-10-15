@@ -101,11 +101,8 @@ body{
     color:var(--text);
 
     background:
-        linear-gradient(
-            rgba(3,8,20,.20),
-            rgba(3,8,20,.30)
-        ),
-        url("/static/assets/images/login-bg.png");
+        linear-gradient(rgba(5,15,30,.45),rgba(5,15,30,.60)),
+        url("/static/assets/images/portal-background.png");
 
     background-repeat:no-repeat;
 
