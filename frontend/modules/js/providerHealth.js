@@ -26,6 +26,8 @@ let visibilityRefreshHandler = null;
 const PROVIDER_HEALTH_REFRESH_MS = 60_000;
 const PROVIDER_HEALTH_JITTER_MS = 5_000;
 const PROVIDER_POSITION_PAGE_SIZES = [10, 25, 50];
+const PROVIDER_HEALTH_REQUEST_TIMEOUT_MS = 30_000;
+const FLEET_RESET_TIMEOUT_MS = 90_000;
 
 function formatDate(value) {
     if (!value) return "Never";
@@ -40,7 +42,9 @@ function formatDate(value) {
 
 function formatAge(seconds) {
     if (seconds === null || seconds === undefined) return "Unknown";
-    const value = Math.max(0, Number(seconds) || 0);
+    const numeric = Number(seconds);
+    if (!Number.isFinite(numeric)) return "Unknown";
+    const value = Math.max(0, numeric);
     if (value < 60) return `${Math.round(value)} sec`;
     if (value < 3600) return `${Math.floor(value / 60)} min ${Math.round(value % 60)} sec`;
     return `${Math.floor(value / 3600)} hr ${Math.floor((value % 3600) / 60)} min`;
@@ -64,7 +68,17 @@ function ignitionLabel(value) {
 }
 
 function coordinate(value) {
-    return Number.isFinite(Number(value)) ? Number(value).toFixed(6) : "—";
+    return value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value))
+        ? Number(value).toFixed(6) : "—";
+}
+
+function contactAgeLabel(seconds) {
+    return seconds === null || seconds === undefined ? "No provider contact yet" : `${formatAge(seconds)} ago`;
+}
+
+function speedLabel(value) {
+    return value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value))
+        ? `${Number(value).toFixed(1)} km/h` : "—";
 }
 
 function providerLabel(value) {
@@ -109,9 +123,9 @@ function healthCard(item) {
     return `<article class="provider-bus-card ${escapeHtml(item.health_status)}">
         <header><div><p>${escapeHtml(item.bus_number)}</p><strong>${escapeHtml(item.registration_number || "No registration")}</strong></div><div class="provider-card-badges"><span class="provider-source-pill ${escapeHtml(item.protocol || "unknown")}">${escapeHtml(providerLabel(item.protocol))}</span><span class="provider-health-pill ${escapeHtml(item.health_status)}">${escapeHtml(statusLabel(item.health_status))}</span></div></header>
         <dl>
-            <div><dt>Latest provider contact</dt><dd>${escapeHtml(formatDate(item.last_provider_success_at))}<small>${escapeHtml(formatAge(item.provider_contact_age_seconds))} ago · valid or quarantined response</small></dd></div>
-            <div><dt>Tracking time</dt><dd>${escapeHtml(formatDate(item.latest_tracking_time))}<small>${item.clock_fallback_active ? "Trusted BusTrack receipt time" : "Accepted device time"}</small></dd></div>
-            <div><dt>Device timestamp</dt><dd>${escapeHtml(formatDate(item.latest_device_time))}<small>${escapeHtml(formatAge(item.raw_device_age_seconds))} old · original provider value</small></dd></div>
+            <div><dt>Latest provider contact</dt><dd>${escapeHtml(formatDate(item.last_provider_success_at))}<small>${escapeHtml(contactAgeLabel(item.provider_contact_age_seconds))}</small></dd></div>
+            <div><dt>Tracking time</dt><dd>${escapeHtml(formatDate(item.latest_tracking_time))}<small>${item.clock_fallback_active ? "Trusted BusTrack receipt time" : item.timestamp_basis === "device" ? "Accepted device time" : "BusTrack receipt time"}</small></dd></div>
+            <div><dt>Device timestamp</dt><dd>${escapeHtml(formatDate(item.latest_device_time))}<small>${item.latest_device_time ? `${item.raw_device_age_seconds == null ? "Age unavailable" : `${escapeHtml(formatAge(item.raw_device_age_seconds))} old`} · original provider value` : "No device time reported"}</small></dd></div>
             <div><dt>Device / receipt difference</dt><dd>${escapeHtml(formatAge(item.latest_delivery_delay_seconds))}<small>Diagnostic only; it does not control the route</small></dd></div>
             <div><dt>GPS update gap</dt><dd>${escapeHtml(formatAge(item.device_update_gap_seconds))}<small>${escapeHtml(updateGapDetail(item))}</small></dd></div>
             <div><dt>Ignition / expected</dt><dd>${escapeHtml(ignitionLabel(item.ignition))}</dd></div>
@@ -133,7 +147,7 @@ function positionRow(item) {
         <td>${escapeHtml(formatDate(item.received_at))}</td>
         <td>${escapeHtml(formatDate(item.fix_time))}<small>${item.quarantined ? item.device_clock_ahead_seconds !== null && item.device_clock_ahead_seconds !== undefined ? `Clock ahead: ${escapeHtml(formatAge(item.device_clock_ahead_seconds))}` : "Clock mismatch · waiting for confirmation" : item.clock_fallback_active ? `Clock corrected · tracking time ${escapeHtml(formatDate(item.effective_time))}` : `Delivery lag: ${escapeHtml(formatAge(item.delivery_delay_seconds))}`}</small></td>
         <td><code>${escapeHtml(coordinate(item.latitude))}</code><small><code>${escapeHtml(coordinate(item.longitude))}</code></small></td>
-        <td>${escapeHtml(item.speed_kmh === null ? "—" : `${Number(item.speed_kmh).toFixed(1)} km/h`)}<small>${escapeHtml(ignitionLabel(item.ignition))}</small></td>
+        <td>${escapeHtml(speedLabel(item.speed_kmh))}<small>${escapeHtml(ignitionLabel(item.ignition))}</small></td>
         <td><span class="provider-applied ${item.applied_to_current_state ? "yes" : "no"}">${item.quarantined ? "QUARANTINED" : item.applied_to_current_state ? "CURRENT" : "HISTORY"}</span><small>${escapeHtml(item.quarantine_reason || (item.clock_fallback_active ? "Safe receipt-clock fallback" : item.protocol) || "Unknown protocol")}</small></td>
         <td><button class="tech-button secondary provider-raw-button" type="button" data-provider-position="${item.id}">Raw data</button></td>
     </tr>`;
@@ -298,9 +312,12 @@ function openResetAllDialog() {
             state.resettingAll = true;
             if (confirmation) confirmation.disabled = true;
             renderPage();
+            const controller = new AbortController();
+            const timeoutId = window.setTimeout(() => controller.abort(), FLEET_RESET_TIMEOUT_MS);
             try {
                 const result = await request("/integrations/gps/provider-health/reset-all", {
                     method: "POST",
+                    signal: controller.signal,
                     body: JSON.stringify({
                         confirmation: "RESET_ALL_GPS_DATA",
                         request_id: requestId,
@@ -308,15 +325,22 @@ function openResetAllDialog() {
                 });
                 Modal.close();
                 state.positionPage = 1;
-                await refreshData({force: true});
+                const routesWithoutStops = result.routes_without_stops?.length || 0;
                 Modal.success({
                     title: "Fleet tracking reset",
-                    subtitle: `${result.active_routes_reset_outbound} active route${result.active_routes_reset_outbound === 1 ? " is" : "s are"} outbound and waiting for new GPS data.`,
+                    subtitle: `${result.active_routes_reset_outbound} active route${result.active_routes_reset_outbound === 1 ? " is" : "s are"} outbound and waiting for new GPS data.${routesWithoutStops ? ` ${routesWithoutStops} active route${routesWithoutStops === 1 ? " has" : "s have"} no stops and could not be restarted.` : ""}`,
                 });
+                // Health is a separate read request. Its latency must not
+                // keep the reset button busy or delay the success notice.
+                void refreshData({force: true});
             } catch (error) {
-                if (errorBox) errorBox.textContent = error.message;
-                else Modal.error({title: "Unable to reset fleet tracking", subtitle: error.message});
+                const message = controller.signal.aborted
+                    ? "The reset is taking longer than expected. It may still finish; retry in this dialog to check using the same request ID."
+                    : error.message;
+                if (errorBox) errorBox.textContent = message;
+                else Modal.error({title: "Unable to reset fleet tracking", subtitle: message});
             } finally {
+                window.clearTimeout(timeoutId);
                 submitting = false;
                 state.resettingAll = false;
                 if (confirmation) confirmation.disabled = false;
@@ -432,6 +456,8 @@ function showRawPosition(id) {
 async function refreshData({ preserveError = false, force = false } = {}) {
     if (state.refreshing && !force) return;
     const requestId = ++state.refreshRequestId;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), PROVIDER_HEALTH_REQUEST_TIMEOUT_MS);
     state.refreshing = true;
     if (!preserveError) state.lastRefreshError = "";
     try {
@@ -447,8 +473,8 @@ async function refreshData({ preserveError = false, force = false } = {}) {
         const healthQuery = healthParameters.toString();
         const healthSuffix = healthQuery ? `?${healthQuery}` : "";
         let [health, feed] = await Promise.all([
-            request(`/integrations/gps/provider-health${healthSuffix}`),
-            request(`/integrations/gps/provider-health/positions?${parameters}`),
+            request(`/integrations/gps/provider-health${healthSuffix}`, { signal: controller.signal }),
+            request(`/integrations/gps/provider-health/positions?${parameters}`, { signal: controller.signal }),
         ]);
         if (requestId !== state.refreshRequestId) return;
         const total = Math.max(0, Number(feed.total) || 0);
@@ -456,7 +482,7 @@ async function refreshData({ preserveError = false, force = false } = {}) {
         if (state.positionPage > lastPage) {
             state.positionPage = lastPage;
             parameters.set("offset", String((lastPage - 1) * state.positionPageSize));
-            feed = await request(`/integrations/gps/provider-health/positions?${parameters}`);
+            feed = await request(`/integrations/gps/provider-health/positions?${parameters}`, { signal: controller.signal });
             if (requestId !== state.refreshRequestId) return;
         }
         state.health = health;
@@ -464,8 +490,17 @@ async function refreshData({ preserveError = false, force = false } = {}) {
         state.positionTotal = Math.max(0, Number(feed.total) || 0);
         state.positionHasMore = Boolean(feed.has_more);
     } catch (error) {
-        if (requestId === state.refreshRequestId) state.lastRefreshError = `Unable to refresh provider health: ${error.message}`;
+        if (requestId === state.refreshRequestId) {
+            state.health = null;
+            state.positions = [];
+            state.positionTotal = 0;
+            state.positionHasMore = false;
+            state.lastRefreshError = controller.signal.aborted
+                ? "Provider health is taking too long to load. Try refreshing again."
+                : `Unable to refresh provider health: ${error.message}`;
+        }
     } finally {
+        window.clearTimeout(timeoutId);
         if (requestId !== state.refreshRequestId) return;
         state.loading = false;
         state.refreshing = false;

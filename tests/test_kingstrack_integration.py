@@ -21,7 +21,7 @@ import backend.routes.models_tracking  # noqa: F401
 from backend.database import Base
 from backend.models import Bus, Route, RouteStop, Stop, Student, User
 from backend.routes.gps_provider import get_provider_health, list_provider_positions
-from backend.routes.models_tracking import BusGPSState, LiveTrip, ProviderGPSPosition
+from backend.routes.models_tracking import BusGPSState, LiveTrip, ProviderGPSPosition, TripStopEvent
 from backend.routes.student import get_student_live_tracking
 from backend.services.airotrack import refresh_airotrack
 from backend.services.kingstrack import _store_position, refresh_kingstrack
@@ -138,6 +138,57 @@ class KingstrackIntegrationTest(unittest.TestCase):
             self.assertEqual(returning["trip"]["route_direction"], "reverse")
             self.assertEqual([item["tracking_status"] for item in returning["stops"]], ["completed", "reached", "pending"])
             self.assertEqual(db.query(BusGPSState).filter_by(bus_id=bus.id).one().protocol, "kingstrack")
+
+    def test_receipt_clock_advances_past_unfinished_stop_without_replaying_old_location(self) -> None:
+        with self.sessions() as db:
+            _, bus, stops = self._route_fixture(db)
+            receipt = datetime.now(timezone.utc).replace(microsecond=0) - timedelta(seconds=20)
+            device_time = receipt - timedelta(minutes=25)
+
+            def poll(stop_index: int, raw_time: datetime, received_at: datetime):
+                with patch("backend.services.kingstrack._utc_now", return_value=received_at):
+                    return _store_position(
+                        db,
+                        bus,
+                        self.record(
+                            bus.registration_number, "KING-RECEIPT-IMEI",
+                            stops[stop_index].latitude, stops[stop_index].longitude,
+                            raw_time,
+                        ),
+                    )
+
+            first = poll(0, device_time, receipt)
+            skipped = poll(2, device_time + timedelta(seconds=20), receipt + timedelta(seconds=20))
+            trip = db.query(LiveTrip).filter_by(bus_id=bus.id).one()
+            state = db.query(BusGPSState).filter_by(bus_id=bus.id).one()
+            self.assertTrue(first["applied"])
+            self.assertTrue(skipped["applied"])
+            self.assertEqual(state.timestamp_basis, "receipt")
+            self.assertEqual(state.fix_time.replace(tzinfo=timezone.utc), device_time + timedelta(seconds=20))
+            self.assertEqual(state.effective_time.replace(tzinfo=timezone.utc), receipt + timedelta(seconds=20))
+            self.assertEqual(trip.last_location_update.replace(tzinfo=timezone.utc), receipt + timedelta(seconds=20))
+            self.assertEqual(trip.route_direction, "reverse")
+            self.assertEqual(trip.current_route_stop_id, db.query(RouteStop).filter_by(route_id=trip.route_id, sequence=3).one().id)
+            self.assertEqual(
+                [event.event_type for event in db.query(TripStopEvent).filter_by(trip_id=trip.id).order_by(TripStopEvent.id)],
+                ["Arrived", "Skipped", "Departed", "Arrived", "Leg completed"],
+            )
+
+            replay = poll(0, device_time, receipt + timedelta(seconds=40))
+            db.refresh(state)
+            db.refresh(trip)
+            self.assertFalse(replay["applied"])
+            self.assertEqual((state.latitude, state.longitude), (stops[2].latitude, stops[2].longitude))
+            self.assertEqual(trip.route_direction, "reverse")
+            self.assertEqual(trip.last_location_update.replace(tzinfo=timezone.utc), receipt + timedelta(seconds=20))
+
+            returning = poll(1, device_time + timedelta(seconds=40), receipt + timedelta(seconds=60))
+            db.flush()
+            db.refresh(trip)
+            self.assertTrue(returning["applied"])
+            self.assertEqual(trip.route_direction, "reverse")
+            self.assertEqual(trip.current_route_stop_id, db.query(RouteStop).filter_by(route_id=trip.route_id, sequence=2).one().id)
+            self.assertEqual(trip.last_location_update.replace(tzinfo=timezone.utc), receipt + timedelta(seconds=60))
 
     def test_fleet_poll_claims_matching_plate_and_airotrack_does_not_query_it(self) -> None:
         with self.sessions() as db:

@@ -11,6 +11,7 @@ const state = {
     tokenFilters: { search: "", state: "" },
     requestFilters: { search: "", method: "", statusClass: "", tokenId: "" },
     loading: true,
+    loadError: "",
 };
 let page;
 let filterDropdowns = [];
@@ -70,7 +71,10 @@ function mountFilterDropdowns() {
 }
 
 function formatDate(value) {
-    return value ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "Never";
+    if (!value) return "Never";
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "Invalid timestamp"
+        : new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
 function auditLabel(action) {
@@ -151,14 +155,17 @@ function revealProviderTokenOnce(result, title, subtitle) {
 }
 
 function renderDashboard() {
+    if (!page) return;
     closeFilterDropdowns();
     const tokenRows = state.tokens.length ? state.tokens.map(token => `
         <tr><td>${escapeHtml(token.label)}</td><td>${token.bus_id ? `Bus #${token.bus_id}` : "Fleet-wide"}</td><td><span class="tech-status ${token.is_active ? "live" : "offline"}">${token.is_active ? "Active" : "Disabled"}</span></td><td>${formatDate(token.last_used_at)}</td><td class="tech-token-actions"><button class="tech-button secondary" data-view-token="${token.id}">Details</button><button class="tech-button danger-outline" data-rotate-token="${token.id}">Rotate</button><button class="tech-button delete-outline" data-delete-token="${token.id}">Delete</button></td></tr>`).join("") : `<tr><td colspan="5" class="tech-empty">No provider tokens exist yet.</td></tr>`;
     const deviceRows = state.devices.length ? state.devices.map(device => `
         <tr><td>${escapeHtml(device.bus_number || `Bus #${device.bus_id}`)}</td><td><code>${escapeHtml(device.external_device_id)}</code></td><td>${escapeHtml(device.display_name || "—")}</td><td><span class="tech-status ${device.is_active ? "live" : "offline"}">${device.is_active ? "Mapped" : "Disabled"}</span></td><td><button class="tech-button secondary" data-edit-device="${device.id}">Edit ID</button></td></tr>`).join("") : `<tr><td colspan="5" class="tech-empty">No device IDs have been mapped.</td></tr>`;
     const statusCards = state.statuses.length ? state.statuses.slice(0, 6).map(item => `
-        <article class="tech-device-card"><div><p>${escapeHtml(item.bus_number)}</p><strong>${item.speed_kmh == null ? "—" : `${Math.round(item.speed_kmh)} km/h`}</strong></div><span class="tech-status ${item.is_fresh ? "live" : "offline"}">${item.ignition ? "Ignition on" : "Ignition off"}</span><small>${escapeHtml(item.external_device_id)} · ${item.age_seconds}s ago</small></article>`).join("") : `<p class="tech-empty">Waiting for the GPS provider’s first position.</p>`;
-    const translationSummary = state.translator ? Object.entries(state.translator.field_paths).map(([key, value]) => `<div><span>${escapeHtml(key.replaceAll("_", " "))}</span><code>${escapeHtml(Array.isArray(value) ? value.join(", ") : value)}</code></div>`).join("") : "";
+        <article class="tech-device-card"><div><p>${escapeHtml(item.bus_number)}</p><strong>${item.speed_kmh == null ? "—" : `${Math.round(item.speed_kmh)} km/h`}</strong></div><span class="tech-status ${item.is_fresh ? "live" : "offline"}">${item.ignition === true ? "Ignition on" : item.ignition === false ? "Ignition off" : "Ignition unknown"}</span><small>${escapeHtml(item.external_device_id || "Device ID unavailable")} · ${item.age_seconds == null ? "time unknown" : `${item.age_seconds}s ago`}</small></article>`).join("") : `<p class="tech-empty">Waiting for the GPS provider’s first position.</p>`;
+    const translationSummary = state.translator?.field_paths
+        ? Object.entries(state.translator.field_paths).map(([key, value]) => `<div><span>${escapeHtml(key.replaceAll("_", " "))}</span><code>${escapeHtml(Array.isArray(value) ? value.join(", ") : value)}</code></div>`).join("")
+        : `<p class="tech-empty">Provider field layout is unavailable.</p>`;
     const auditRows = state.auditEvents.length ? state.auditEvents.map(event => `
         <tr><td>${formatDate(event.created_at)}</td><td><strong>${escapeHtml(auditLabel(event.action))}</strong><small>${escapeHtml(event.subject_label || event.subject_type || "BusTrack")}</small></td><td>${escapeHtml(auditActor(event))}</td><td>${escapeHtml(event.client_ip || "—")}</td><td>${escapeHtml(auditDetails(event))}</td></tr>`).join("") : `<tr><td colspan="5" class="tech-empty">No audit events have been recorded since this feature was enabled.</td></tr>`;
     const requestRows = state.requestLogs.length ? state.requestLogs.map(entry => `
@@ -166,6 +173,7 @@ function renderDashboard() {
     page.innerHTML = `
         <section class="tech-page">
             <header class="tech-hero glass-card"><div><p class="tech-eyebrow">TECHNICIAN WORKSPACE</p><h1>GPS Integration Control</h1><p>Securely translate provider data, protect live tracking, and keep vehicle mappings correct.</p></div><button class="tech-button primary" id="tech-refresh">↻ Refresh status</button></header>
+            ${state.loadError ? `<p class="tech-page-error" role="alert">${escapeHtml(state.loadError)}</p>` : ""}
             <section class="tech-stat-grid"><article class="tech-stat glass-card"><span>Provider tokens</span><strong>${state.tokens.filter(item => item.is_active).length}</strong><small>active credentials</small></article><article class="tech-stat glass-card"><span>Mapped buses</span><strong>${state.devices.filter(item => item.is_active).length}</strong><small>external device IDs</small></article><article class="tech-stat glass-card"><span>Live devices</span><strong>${state.statuses.filter(item => item.is_fresh).length}</strong><small>fresh positions</small></article></section>
             <section class="tech-grid">
                 <article class="tech-panel glass-card tech-wide"><div class="tech-panel-heading"><div><p class="tech-eyebrow">CREDENTIALS</p><h2>Provider tokens</h2><p>View safe token metadata and lifecycle history here. Values are shown only once immediately after creation or rotation, then remain hidden.</p></div><button class="tech-button primary" id="create-token">Create token</button></div><div class="tech-filter-bar"><input class="tech-filter-input" id="tech-token-search" value="${escapeHtml(state.tokenFilters.search)}" maxlength="100" placeholder="Search token label"><div id="tech-token-state-container" class="tech-dropdown-container"></div><button class="tech-button secondary" id="tech-apply-token-filters">Apply</button><button class="tech-filter-clear" id="tech-clear-token-filters" type="button">Clear</button></div><div class="tech-table-wrap"><table><thead><tr><th>Label</th><th>Scope</th><th>Status</th><th>Last used</th><th></th></tr></thead><tbody>${tokenRows}</tbody></table></div></article>
@@ -196,16 +204,31 @@ async function refresh() {
         const filteredTokensRequest = tokenFilters
             ? request(`/integrations/gps/tokens${tokenFilters}`)
             : allTokensRequest;
-        const [tokens, allTokens, devices, buses, statuses, translator, audit, requestLog] = await Promise.all([
+        const results = await Promise.allSettled([
             filteredTokensRequest, allTokensRequest, request("/integrations/gps/devices"), request("/integrations/gps/buses"), request("/integrations/gps/status"), request("/integrations/gps/translator"), request("/integrations/gps/audit?limit=100&offset=0"), request(`/integrations/gps/requests${requestFilters}`),
         ]);
+        const failedSections = [];
+        const value = (index, fallback, label) => {
+            if (results[index].status === "fulfilled") return results[index].value;
+            failedSections.push(`${label} (${results[index].reason?.message || "request failed"})`);
+            return fallback;
+        };
+        const tokens = value(0, [], "filtered tokens");
+        const allTokens = value(1, [], "token list");
+        const devices = value(2, [], "device mappings");
+        const buses = value(3, [], "bus list");
+        const statuses = value(4, [], "live signal");
+        const translator = value(5, null, "field layout");
+        const audit = value(6, { events: [], total: 0, has_more: false }, "audit history");
+        const requestLog = value(7, { requests: [], total: 0, has_more: false, offset: 0 }, "request history");
         Object.assign(state, {
             tokens, allTokens, devices, buses, statuses, translator,
             auditEvents: audit.events, auditTotal: audit.total, auditHasMore: audit.has_more, auditOffset: audit.events.length,
             requestLogs: requestLog.requests, requestTotal: requestLog.total, requestHasMore: requestLog.has_more, requestOffset: requestLog.offset,
+            loadError: failedSections.length ? `Could not load ${failedSections.join(", ")}. Refresh to retry.` : "",
         });
     } catch (error) {
-        Modal.error({ title: "Unable to load integration tools", subtitle: error.message });
+        state.loadError = `Unable to load integration tools: ${error.message}`;
     } finally { state.loading = false; renderDashboard(); }
 }
 

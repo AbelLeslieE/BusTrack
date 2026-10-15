@@ -50,6 +50,7 @@ from backend.services.tracking_engine import (
 from backend.services.trip_direction import ordered_route_stops
 from backend.services.vehicle_gps import GPS_OFFLINE_GRACE_SECONDS
 from backend.services.gps_timestamp import effective_state_time, future_timestamp_seconds
+from backend.services.pass_credentials import assignment as pass_assignment
 from backend.schemas import StudentAssignmentUpdate
 from backend.roles import ROLE_USER, canonical_role
 from backend.auth import SESSION_COOKIE_NAME
@@ -311,15 +312,10 @@ def get_current_student_bus_pass(
             detail="Student profile not found.",
         )
 
-    # This is the same resolution path used by /me and /me/tracking.  A pass
-    # never stores a competing bus or route assignment.
-    route = student.route or (
-        db.query(Route).filter(Route.bus_id == student.bus_id).first()
-        if student.bus_id else None
-    )
-    bus = db.get(Bus, route.bus_id) if route and route.bus_id else (
-        student.bus if route is None else None
-    )
+    # Use the QR issuer's route resolution so an ambiguous bus-only
+    # assignment is not presented as a verified route.
+    route, assigned_bus = pass_assignment(student, db)
+    bus = assigned_bus or (student.bus if route is None else None)
     stop = student.stop
     bus_pass = db.query(BusPass).filter(BusPass.student_id == student.id).first()
 
@@ -346,7 +342,7 @@ def get_current_student_bus_pass(
             "id": student.id,
             "name": official_identity.official_name if official_identity else current_user.full_name,
             "department": official_identity.department if official_identity else None,
-            "photo": "data:image/jpeg;base64," + official_identity.photo_base64 if official_identity else None,
+            "photo": "data:image/jpeg;base64," + official_identity.photo_base64 if official_identity and official_identity.photo_base64 else None,
             "student_code": student.student_code,
         },
         "bus_pass": (

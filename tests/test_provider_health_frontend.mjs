@@ -20,9 +20,10 @@ function portal(request, overrides = {}) {
         escapeHtml: value => String(value ?? ''),
         Modal: overrides.Modal || {},
         URLSearchParams,
-        window: {setInterval() {}, clearInterval() {}},
+        window: overrides.window || {setInterval() {}, clearInterval() {}, setTimeout() {}, clearTimeout() {}},
         document: overrides.document || {},
         crypto: {randomUUID: () => 'test'},
+        AbortController,
     });
     vm.runInContext(source, context);
     context.testPage = page;
@@ -216,4 +217,106 @@ test('fleet reset requires typed confirmation and sends one destructive reset re
     assert.equal(resetRequest.options.method, 'POST');
     assert.equal(JSON.parse(resetRequest.options.body).confirmation, 'RESET_ALL_GPS_DATA');
     assert.equal(vm.runInContext('state.resettingAll', context), false);
+});
+
+test('fleet reset reports success even when the following health read is slow', async () => {
+    const confirmation = {value: 'RESET', disabled: false, focus() {}};
+    const errorBox = {textContent: ''};
+    const notices = [];
+    let formOptions;
+    const Modal = {
+        form(options) { formOptions = options; },
+        close() {},
+        success(options) { notices.push(options); },
+        error(options) { notices.push(options); },
+    };
+    const document = {
+        getElementById(id) {
+            return id === 'provider-reset-all-confirm' ? confirmation : errorBox;
+        },
+    };
+    const {context, page} = portal(async path => {
+        if (path.endsWith('/reset-all')) return {active_routes_reset_outbound: 2};
+        if (path.includes('/positions')) return {positions: [], total: 0};
+        return new Promise(() => {});
+    }, {Modal, document});
+    vm.runInContext('state.loading = false; state.health = {counts: {}, buses: []}; renderPage(); openResetAllDialog();', context);
+
+    await formOptions.onSubmit();
+
+    assert.match(notices[0].title, /Fleet tracking reset/);
+    assert.equal(vm.runInContext('state.resettingAll', context), false);
+    assert.match(page.innerHTML, /Reset all tracking/);
+    assert.doesNotMatch(page.innerHTML, /Resetting…/);
+});
+
+test('timed-out fleet reset clears busy state and retains its retry ID', async () => {
+    const confirmation = {value: 'RESET', disabled: false, focus() {}};
+    const errorBox = {textContent: ''};
+    const requestIds = [];
+    let formOptions;
+    const {context, page} = portal(async (path, options) => {
+        if (!path.endsWith('/reset-all')) return {counts: {}, buses: []};
+        requestIds.push(JSON.parse(options.body).request_id);
+        return new Promise((_, reject) => {
+            options.signal.addEventListener('abort', () => reject(new Error('aborted')));
+        });
+    }, {
+        document: {
+            getElementById(id) {
+                return id === 'provider-reset-all-confirm' ? confirmation : errorBox;
+            },
+        },
+        Modal: {form(options) { formOptions = options; }, error() {}},
+        window: {
+            setTimeout(callback) { queueMicrotask(callback); return 1; },
+            clearTimeout() {},
+            setInterval() {},
+            clearInterval() {},
+        },
+    });
+    vm.runInContext('state.loading = false; state.health = {counts: {}, buses: []}; renderPage(); openResetAllDialog();', context);
+
+    await formOptions.onSubmit();
+    assert.match(errorBox.textContent, /may still finish/);
+    assert.equal(vm.runInContext('state.resettingAll', context), false);
+    assert.doesNotMatch(page.innerHTML, /Resetting…/);
+
+    await formOptions.onSubmit();
+    assert.deepEqual(requestIds, ['test', 'test']);
+});
+
+test('missing telemetry is not displayed as zero coordinates or NaN speed', async () => {
+    const {context, page} = portal(async path => path.includes('/positions')
+        ? {positions: [{id: 1, bus_number: 'BUS-001', latitude: null, longitude: null, speed_kmh: undefined}], total: 1}
+        : {counts: {no_data: 1}, buses: [{bus_id: 1, bus_number: 'BUS-001', health_status: 'no_data', latitude: null, longitude: null}]});
+    await vm.runInContext('refreshData()', context);
+    assert.match(page.innerHTML, /No coordinate received/);
+    assert.doesNotMatch(page.innerHTML, /0\.000000|NaN km\/h|Unknown ago/);
+});
+
+test('failed provider refresh clears stale visible telemetry and shows an error', async () => {
+    const {context, page} = portal(async () => { throw new Error('service unavailable'); });
+    vm.runInContext(`state.health = {counts: {healthy: 1}, buses: [{bus_id: 1, bus_number: 'STALE'}]}; state.positions = [{id: 1, bus_number: 'STALE'}];`, context);
+    await vm.runInContext('refreshData()', context);
+    assert.match(page.innerHTML, /service unavailable/);
+    assert.doesNotMatch(page.innerHTML, /STALE/);
+});
+
+test('timed-out health refresh releases the busy state', async () => {
+    const {context, page} = portal(async (_path, options) => new Promise((_, reject) => {
+        options.signal.addEventListener('abort', () => reject(new Error('aborted')));
+    }), {
+        window: {
+            setTimeout(callback) { queueMicrotask(callback); return 1; },
+            clearTimeout() {},
+            setInterval() {},
+            clearInterval() {},
+        },
+    });
+
+    await vm.runInContext('refreshData()', context);
+
+    assert.equal(vm.runInContext('state.refreshing', context), false);
+    assert.match(page.innerHTML, /taking too long to load/);
 });

@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import SessionLocal, get_db
 from backend.auth import SESSION_COOKIE_NAME, is_user_session_active
-from backend.services.trip_reset import lock_tracking_bus, reset_metadata
+from backend.services.trip_reset import lock_tracking_bus, observation_after_reset, reset_metadata
 from backend.audit import record_audit_event
 from backend.models import APIRequestLog, AuditEvent, Bus, Driver, Route, User
 from backend.routes.models_tracking import (
@@ -365,6 +365,11 @@ def _serialize_provider_health(
 
     source_age = _age_seconds(source_time, now)
     raw_device_age = _age_seconds(state.fix_time, now) if state else None
+    device_data_age = (
+        raw_device_age
+        if state and state.timestamp_basis in {"device", "receipt"} and raw_device_age is not None
+        else source_age
+    )
     contact_age = _age_seconds(provider_contact_at, now)
     latest_delivery_delay = None
     previous_position = None
@@ -413,15 +418,17 @@ def _serialize_provider_health(
     contact_late_after = max(GPS_OFFLINE_GRACE_SECONDS, expected_interval + 60)
     if active_error:
         health_status = "error"
+    elif state is None and provider_contact_at is None:
+        health_status = "no_data"
     elif contact_age is None or contact_age > contact_late_after:
         health_status = "offline"
     elif timestamp_warning:
         health_status = "clock_error"
     elif state is None:
         health_status = "no_data"
-    elif source_age is None or source_age > GPS_OFFLINE_GRACE_SECONDS:
-        # The provider is answering, but its device timestamp is old. This is
-        # the exact lag condition that must not be presented as live tracking.
+    elif device_data_age is None or device_data_age > GPS_OFFLINE_GRACE_SECONDS:
+        # Keep delayed provider fixes visible in diagnostics even though the
+        # accepted trip clock uses server receipt time.
         health_status = "delayed"
     else:
         health_status = "healthy"
@@ -462,7 +469,7 @@ def _serialize_provider_health(
         "previous_device_time": (
             previous_position.fix_time if previous_position else None
         ),
-        "device_data_age_seconds": source_age,
+        "device_data_age_seconds": device_data_age,
         "raw_device_age_seconds": raw_device_age,
         "latest_delivery_delay_seconds": latest_delivery_delay,
         "device_update_gap_seconds": device_update_gap,
@@ -654,7 +661,7 @@ def _position_from_current_state(state: BusGPSState) -> dict[str, Any]:
         "accuracy": state.accuracy,
         "fix_time": effective_state_time(state),
         "raw_fix_time": state.fix_time,
-        "has_device_timestamp": state.fix_time is not None,
+        "timestamp_basis": state.timestamp_basis,
         "valid": state.valid,
         "ignition": state.ignition,
     }
@@ -673,6 +680,29 @@ def _update_active_trip_from_vehicle(db: Session, position: dict[str, Any], bus_
     # but never blocks a final-stop coordinate from reversing the route.
 
     position_timestamp = position.get("fix_time") or received_at
+    raw_fix_time = position.get("raw_fix_time")
+    # Fleet resets retain the last device fix as a replay watermark. Once a
+    # newer fix crosses it, receipt time proves the new journey even when the
+    # device clock still trails the reset wall clock. A single-trip reset
+    # preserves its old GPS state and keeps the strict raw-time check. A
+    # proven broken clock already uses receipt time for that check.
+    fleet_reset = bool(
+        trip.reset_request_id
+        and db.get(GPSDataResetOperation, trip.reset_request_id) is not None
+    )
+    receipt_proves_new_journey = fleet_reset or position.get("timestamp_basis") == "receipt_clock_fallback"
+    reset_observation_time = position_timestamp if receipt_proves_new_journey else raw_fix_time
+    reset_fix_is_new = not trip.route_reset_at or (
+        reset_observation_time is not None
+        and observation_after_reset(trip, reset_observation_time)
+    )
+    if trip.route_reset_at and reset_fix_is_new:
+        reset_at = _normalized_datetime(trip.route_reset_at)
+        if _normalized_datetime(position_timestamp) <= reset_at:
+            # A concurrent reset and poll may share one receipt-clock tick.
+            # The raw fix proves this is the new journey; keep event time
+            # strictly after the reset without using the device clock.
+            position_timestamp = reset_at + timedelta(microseconds=1)
 
     # Provider history is intentionally retained even when a packet is old,
     # but the current trip snapshot is a strict trusted-time state machine.
@@ -714,8 +744,9 @@ def _update_active_trip_from_vehicle(db: Session, position: dict[str, Any], bus_
         )
 
     # Receipt time alone cannot prove an observation belongs to the new
-    # journey. Keep its location without letting it unlock a manual reset.
-    if not trip.route_reset_at or position.get("has_device_timestamp", position.get("fix_time") is not None):
+    # journey. Require the raw device fix to cross the reset boundary before
+    # it may advance stops; the event time itself remains the server clock.
+    if reset_fix_is_new:
         update_route_stop_progression(
             trip=trip,
             route_stops=ordered_route_stops(route_stops, trip.route_direction),
@@ -738,9 +769,9 @@ def _update_active_trip_from_vehicle(db: Session, position: dict[str, Any], bus_
     trip.current_longitude = position["longitude"]
     trip.current_speed = position["speed_kmh"]
     trip.current_accuracy = position["accuracy"]
-    # Use the validated tracking time. This is normally device time; after a
-    # stable broken-clock sequence is proven it is the separately persisted
-    # receipt clock. The original device timestamp remains in provider history.
+    # Use the persisted server receipt clock for newly accepted observations.
+    # The original device timestamp remains in provider history and still
+    # guards against duplicate and backward provider packets.
     trip.last_location_update = position_timestamp
     trip.current_location_source = "vehicle_gps"
     return trip.id
@@ -1575,23 +1606,14 @@ def reset_all_provider_tracking(
         canonical.current_location_source = None
         reset_trip_count += 1
 
-    provider_positions = db.query(ProviderGPSPosition).all()
-    provider_health_states = db.query(GPSProviderHealthState).all()
-    live_locations = db.query(LiveLocation).all()
-    provider_position_count = len(provider_positions)
-    bus_state_count = len(states)
-    provider_health_count = len(provider_health_states)
-    live_location_count = len(live_locations)
-
-    for state in states.values():
-        db.delete(state)
+    # GPS history can contain tens of thousands of rows. Delete it in SQL
+    # instead of loading and deleting every row through the ORM; the latter
+    # can leave a production reset request waiting for minutes.
     db.flush()
-    for item in provider_positions:
-        db.delete(item)
-    for item in provider_health_states:
-        db.delete(item)
-    for item in live_locations:
-        db.delete(item)
+    bus_state_count = db.query(BusGPSState).delete(synchronize_session="fetch")
+    provider_position_count = db.query(ProviderGPSPosition).delete(synchronize_session="fetch")
+    provider_health_count = db.query(GPSProviderHealthState).delete(synchronize_session="fetch")
+    live_location_count = db.query(LiveLocation).delete(synchronize_session="fetch")
     db.query(TripStopEvent).update(
         {
             TripStopEvent.latitude: None,
@@ -1600,9 +1622,7 @@ def reset_all_provider_tracking(
         },
         synchronize_session=False,
     )
-    for item in prior_boundaries.values():
-        db.delete(item)
-    db.flush()
+    db.query(GPSDataResetBoundary).delete(synchronize_session="fetch")
     for bus in buses:
         db.add(GPSDataResetBoundary(
             bus_id=bus.id,

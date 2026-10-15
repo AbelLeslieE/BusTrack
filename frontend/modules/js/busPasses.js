@@ -59,8 +59,8 @@ function recordRow(record) {
         ? `<div class="bus-passes-actions"><button type="button" class="bus-passes-action edit-pass" data-pass-id="${pass.id}">Manage</button><button type="button" class="bus-passes-action is-delete delete-pass" data-pass-id="${pass.id}">Delete</button></div>`
         : `<button type="button" class="bus-passes-action issue-pass" data-student-id="${record.student.id}" ${assignment.assigned ? "" : "disabled title=\"Assign a route and bus first\""}>Issue pass</button>`;
     return `<tr>
-        <td><strong>${escapeHtml(record.student.name)}</strong><small>${escapeHtml(record.student.student_code)}</small></td>
-        <td>${assignment.assigned ? `<strong>${escapeHtml(assignment.bus_number)}</strong><small>${escapeHtml(assignment.route_name)}</small>` : '<span class="bus-passes-unassigned">Bus assignment pending</span>'}</td>
+        <td><strong>${escapeHtml(record.student.name)}</strong><small>${escapeHtml(record.student.student_code)}</small>${assignment.identity_ready ? "" : '<small class="bus-passes-unassigned">Official photo needed for live QR</small>'}</td>
+        <td>${assignment.assigned ? `<strong>${escapeHtml(assignment.bus_number)}</strong><small>${escapeHtml(assignment.route_name)}</small>` : `<span class="bus-passes-unassigned">${assignment.bus_number ? `${escapeHtml(assignment.bus_number)} · choose a route` : "Bus assignment pending"}</span>`}</td>
         <td>${escapeHtml(assignment.boarding_stop || "—")}</td>
         <td>${pass ? `<strong>${escapeHtml(pass.pass_number)}</strong><small>${escapeHtml(pass.validity_period)}</small>` : "—"}</td>
         <td>${badge(pass)}${pass?.expiring_soon ? '<small class="bus-passes-expiry">Expires within 30 days</small>' : ""}</td>
@@ -77,7 +77,7 @@ function renderPage(data) {
             <div><p class="bus-passes-eyebrow">Transport administration</p><h1>Bus Passes</h1><p>Issue, renew, and suspend passes. The bus, route, and boarding stop always come from each student's central transport assignment.</p></div>
             <div class="bus-passes-summary"><strong>${data.issued}/${data.total}</strong><span>passes issued</span><small>${data.expiring_soon} expiring within 30 days</small></div>
         </header>
-        <section class="bus-passes-guidance glass-card"><span>1. Assign bus and route</span><i>→</i><span>2. Assign student and stop</span><i>→</i><span>3. Issue pass for any validity</span><i>→</i><span>4. Renew or change dates</span></section>
+        <section class="bus-passes-guidance glass-card"><span>1. Assign bus and route</span><i>→</i><span>2. Assign student and stop</span><i>→</i><span>3. Enroll official photo</span><i>→</i><span>4. Issue pass</span><i>→</i><span>5. Renew or change dates</span></section>
         <section class="bus-passes-table-card glass-card">
             <div class="bus-passes-table-heading"><div><h2>Student bus passes</h2><p>Set one-day, yearly, two-semester, or custom expiry dates directly when issuing or renewing.</p></div><button type="button" class="bus-passes-refresh">↻ Refresh</button></div>
             <div class="bus-passes-table-wrap"><table class="bus-passes-table"><thead><tr><th>Student</th><th>Assigned transport</th><th>Boarding stop</th><th>Pass number</th><th>Status</th><th>Valid until</th><th>Action</th></tr></thead><tbody>${data.records.length ? data.records.map(recordRow).join("") : '<tr><td colspan="7" class="bus-passes-empty">No student accounts are available.</td></tr>'}</tbody></table></div>
@@ -89,7 +89,7 @@ function renderPage(data) {
 
 function formMarkup(record, mode) {
     const pass = record.bus_pass;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = dateInputValue(new Date());
     const initialStartDate = dateValue(pass?.valid_from) || today;
     const initialValidityPeriod = pass?.validity_period || "One Year";
     // A normal pass is always shown as one full year by default.  Only a
@@ -179,10 +179,10 @@ function openPassModal(record, mode, reload) {
 }
 
 function attachEvents(root, data) {
-    root.querySelectorAll(".enroll-pass").forEach(button => button.addEventListener("click", () => void editPassIdentity(Number(button.dataset.studentId))));
     const reload = async () => {
         root.replaceWith(await loadPage());
     };
+    root.querySelectorAll(".enroll-pass").forEach(button => button.addEventListener("click", () => void editPassIdentity(Number(button.dataset.studentId), reload)));
     root.querySelector(".bus-passes-refresh").addEventListener("click", () => void reload());
     root.querySelectorAll(".issue-pass").forEach(button => button.addEventListener("click", () => {
         const record = data.records.find(item => item.student.id === Number(button.dataset.studentId));

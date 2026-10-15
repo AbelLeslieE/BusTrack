@@ -27,6 +27,7 @@ from backend.services.provider_health import record_provider_error, record_provi
 from backend.services.vehicle_gps import GPS_OFFLINE_GRACE_SECONDS
 from backend.services.gps_timestamp import (
     DEVICE_TIME_BASIS,
+    as_utc,
     device_timestamp_quarantine_reason,
     effective_state_time,
     latest_clock_observation,
@@ -348,7 +349,12 @@ def _refresh_airotrack_unlocked(db: Session, *, bus_id: int | None = None) -> di
             )
             continue
         state = current_states.get(bus.id)
-        state_time = effective_state_time(state) if state else None
+        # A recent BusTrack receipt does not mean Airotrack's queued device
+        # fixes have caught up. Keep draining that queue by raw source time.
+        if state is not None and state.timestamp_basis == "receipt":
+            state_time = as_utc(state.fix_time)
+        else:
+            state_time = effective_state_time(state) if state is not None else None
         catch_up = state_time is None or state_time < (
             refresh_started_at - timedelta(seconds=GPS_OFFLINE_GRACE_SECONDS)
         )

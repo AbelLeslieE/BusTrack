@@ -149,11 +149,12 @@ The translated positions feed the existing Admin and User live-tracking APIs
 automatically. A GPS technician can run an immediate authorised refresh with
 `POST /api/integrations/gps/airotrack/refresh`.
 
-The vendor's `source_date`, not the time BusTrack polled it, determines whether
-a location is fresh. An old last-known point remains visible to management but
-is never presented to users as current vehicle movement. If a sleeping service
-wakes to an advancing queue of older Airotrack heartbeats, BusTrack performs a
-bounded catch-up read and applies only the greatest device timestamp. Set
+BusTrack timestamps accepted live positions and stop events when it receives
+them. Airotrack's `source_date` remains in provider history and is used to
+reject duplicate or older fixes and to report delivery delay in Provider
+Health. If a sleeping service wakes to an advancing queue of older Airotrack
+heartbeats, BusTrack performs a bounded catch-up read and applies only the
+greatest device timestamp. Set
 `AIROTRACK_CATCHUP_MAX_REQUESTS` to tune the maximum (default 8). A production
 cold start completes its first provider refresh before serving tracking pages.
 

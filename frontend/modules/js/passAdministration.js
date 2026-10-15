@@ -2,7 +2,7 @@ import { Modal } from "/static/common/modal.js";
 import { request } from "/static/common/api.js";
 import { escapeHtml } from "/static/common/security.js";
 
-export async function editPassIdentity(studentId) {
+export async function editPassIdentity(studentId, onSaved) {
     try {
         const identity = await request(`/bus-passes/identities/${studentId}`);
         const content = document.createElement("div");
@@ -38,15 +38,16 @@ export async function editPassIdentity(studentId) {
                     photo_base64: photo || null
                 }) });
                 Modal.close();
+                await onSaved?.();
             }
         });
-    } catch (error) { Modal.error({ title: "Identity unavailable", message: error.message }); }
+    } catch (error) { Modal.error({ title: "Identity unavailable", subtitle: error.message }); }
 }
 
 export function passHistory() {
     const panel = document.createElement("section");
     panel.className = "bus-passes-table-card glass-card pass-history";
-    const states = ["VALID", "INVALID_SIGNATURE", "QR_EXPIRED", "PASS_EXPIRED", "REVOKED", "SUSPENDED", "WRONG_BUS", "WRONG_ROUTE", "UNKNOWN_PASS", "REPLAY_SUSPECTED", "NO_ACTIVE_TRIP", "UNAUTHORIZED_SCANNER", "ASSIGNMENT_CHANGED", "IDENTITY_REQUIRED"];
+    const states = ["VALID", "INVALID_SIGNATURE", "INVALID_BUS_PASS", "QR_EXPIRED", "PASS_EXPIRED", "PASS_INACTIVE", "REVOKED", "SUSPENDED", "STUDENT_INACTIVE", "WRONG_BUS", "WRONG_ROUTE", "UNKNOWN_PASS", "REPLAY_SUSPECTED", "NO_ACTIVE_TRIP", "UNAUTHORIZED_SCANNER", "ASSIGNMENT_CHANGED", "ASSIGNMENT_INACTIVE", "IDENTITY_REQUIRED"];
     panel.innerHTML = `<div class="bus-passes-table-heading"><div><h2>Verification history</h2><p>Server decisions, including suspicious attempts. No raw QR credentials are retained.</p></div></div>
         <form class="pass-history-filters"><label>Result <select name="result"><option value="">All results</option>${states.map(s => `<option>${s}</option>`).join("")}</select></label>
         <label>Student ID <input name="student_id" type="number" min="1" placeholder="Database ID"></label>

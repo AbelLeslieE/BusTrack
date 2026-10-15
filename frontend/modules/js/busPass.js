@@ -32,6 +32,20 @@ function statusClass(status) {
     return String(status || "pending").toLowerCase().replace(/[^a-z]/g, "");
 }
 
+function qrUnavailableReason(data) {
+    const pass = data.bus_pass;
+    if (!pass?.is_valid) {
+        return `This pass is ${String(pass?.effective_status || pass?.status || "inactive").toLowerCase()}. Contact the transport office to activate or renew it.`;
+    }
+    if (!data.transport?.route || !data.transport?.bus) {
+        return "A route and bus assignment is required for a live QR. Contact the transport office.";
+    }
+    if (!data.student?.photo) {
+        return "The transport office must enroll your official photo before a live QR is available.";
+    }
+    return null;
+}
+
 function renderEmptyAssignment() {
     return `
         <section class="portal-card bus-pass-empty">
@@ -160,7 +174,9 @@ export function render() {
                     <p>Your verified transport pass and current assignment.</p>
                 </header>
                 ${renderEmptyAssignment()}`;
-            if (data.bus_pass) {
+            const unavailableReason = data.bus_pass && qrUnavailableReason(data);
+            if (unavailableReason) clearQR(unavailableReason);
+            else if (data.bus_pass) {
                 const token = await request(`${BUS_PASS_ENDPOINT}/live-token`, {
                     method: "POST", body: "{}", cache: "no-store", signal: requestController.signal
                 });

@@ -24,9 +24,9 @@ from backend.database import Base, get_db, _add_pass_credential_columns
 from backend.models import User, Bus, Driver, Route, Student, BusPass, PassIdentity, PassVerification
 from backend.routes.models_tracking import LiveTrip
 from backend.routes.pass_validation import router, live_token, verify_pass, save_identity, EmptyRequest, VerifyRequest, IdentityRequest
-from backend.routes.bus_passes import router as admin_router, update_bus_pass
+from backend.routes.bus_passes import router as admin_router, issue_bus_pass, list_bus_passes, update_bus_pass
 from backend.routes.student import router as student_router, get_current_student_bus_pass
-from backend.schemas import BusPassUpdate
+from backend.schemas import BusPassIssue, BusPassUpdate
 from backend.security import require_authenticated, RequestSecurityMiddleware
 from backend.services.pass_credentials import utcnow, locked_pass
 
@@ -153,6 +153,40 @@ class PassValidationTest(unittest.TestCase):
         extra=Route(route_code="ALT",route_name="Other route",bus_id=self.bus.id,status="Active",total_stops=0)
         self.db.add(extra); self.db.flush(); self.student.route_id=extra.id; self.db.commit()
         self.assertEqual(self.verify(self.token()["signedToken"])["status"],"WRONG_ROUTE")
+
+    def test_ambiguous_assignment_matches_admin_student_and_qr_views(self):
+        self.db.add(Route(route_code="R05B", route_name="Second bus route", bus_id=self.bus.id,
+                          driver_id=self.driver.id, status="Active", total_stops=0))
+        other_user = User(username="bus-only", full_name="Bus only", password_hash="unused",
+                          role="User", status="Active")
+        self.db.add(other_user); self.db.flush()
+        bus_only = Student(user_id=other_user.id, student_code="BUSONLY", bus_id=self.bus.id)
+        self.db.add(bus_only); self.db.commit()
+        records = list_bus_passes(self.db, self.admin)["records"]
+        record = next(item for item in records if item["student"]["id"] == bus_only.id)
+        self.assertFalse(record["transport"]["assigned"])
+        self.assertEqual(record["transport"]["bus_number"], self.bus.bus_number)
+        self.assertFalse(record["transport"]["identity_ready"])
+        self.assertIsNone(get_current_student_bus_pass(other_user, self.db)["transport"]["route"])
+        issue = BusPassIssue(student_id=bus_only.id, valid_from=date.today())
+        with self.assertRaises(HTTPException) as error:
+            issue_bus_pass(issue, self.db, self.admin)
+        self.assertEqual(error.exception.status_code, 400)
+        self.db.rollback()
+        bus_only.route_id = self.route.id; self.db.commit()
+        issued = issue_bus_pass(issue, self.db, self.admin)
+        self.assertTrue(issued["transport"]["assigned"])
+        self.assertFalse(issued["transport"]["identity_ready"])
+        with self.assertRaises(HTTPException) as error:
+            live_token(EmptyRequest(), self.db, other_user)
+        self.assertEqual(error.exception.status_code, 403)
+        self.db.rollback()
+        save_identity(bus_only.id, IdentityRequest(official_name="Bus Only", department="Engineering",
+                                                  photo_base64=self.photo), self.db, self.admin)
+        self.assertTrue(next(item for item in list_bus_passes(self.db, self.admin)["records"]
+                             if item["student"]["id"] == bus_only.id)["transport"]["identity_ready"])
+        self.assertTrue(json.loads(live_token(EmptyRequest(), self.db, other_user).body)["qrImage"]
+                        .startswith("data:image/png;base64,"))
 
     def test_no_active_trip_ambiguous_trip_and_stale_assignment(self):
         token=self.token()["signedToken"]

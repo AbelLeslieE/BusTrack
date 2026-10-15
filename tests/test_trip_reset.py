@@ -24,7 +24,7 @@ from backend.routes.buses import delete_bus
 from backend.routes.gps_provider import (
     get_trip_reset_options, reset_provider_trip, ingest_positions,
     get_driver_tracking_source, override_provider_trip_direction,
-    reset_all_provider_tracking, router,
+    reset_all_provider_tracking, _update_active_trip_from_vehicle, router,
 )
 from backend.routes.models_tracking import (
     BusGPSState,
@@ -279,6 +279,54 @@ class TripResetTest(unittest.TestCase):
         self.assertTrue(fresh_kingstrack["applied"])
         self.assertEqual(self.db.query(GPSDataResetBoundary).count(), 0)
 
+    def test_fleet_reset_starts_every_active_route_without_an_existing_trip(self):
+        second_bus = Bus(bus_number="RESET-2", registration_number="RESET-REG-2", device_id="RESET-DEVICE-2", capacity=40,
+                         manufacturer="Test", model="Test", year=2026, fuel_type="Diesel", status="Active")
+        self.db.add(second_bus)
+        self.db.flush()
+        second_route = Route(route_code="R2", route_name="Second reset route", bus_id=second_bus.id,
+                             status="Active", total_stops=2)
+        self.db.add(second_route)
+        self.db.flush()
+        self.db.add_all([
+            RouteStop(route_id=second_route.id, stop_id=self.stops[0].id, sequence=1),
+            RouteStop(route_id=second_route.id, stop_id=self.stops[1].id, sequence=2),
+        ])
+        self.db.commit()
+
+        result = reset_all_provider_tracking(GPSProviderFleetReset(
+            confirmation="RESET_ALL_GPS_DATA", request_id=uuid4(),
+        ), None, self.db, self.tech)
+
+        self.assertEqual(result["active_routes_reset_outbound"], 2)
+        self.assertEqual(result["tracking_sessions_created"], 1)
+        for route in (self.route, second_route):
+            trip = self.db.query(LiveTrip).filter_by(bus_id=route.bus_id, route_id=route.id, status="Running").one()
+            first_stop = self.db.query(RouteStop).filter_by(route_id=route.id).order_by(RouteStop.sequence).first()
+            self.assertEqual(trip.current_route_stop_id, first_stop.id)
+            self.assertEqual(trip.route_direction, "forward")
+            self.assertTrue(trip.reset_waiting_for_start)
+
+    def test_fleet_reset_accepts_newer_delayed_fix_using_receipt_time(self):
+        payload = GPSProviderFleetReset(confirmation="RESET_ALL_GPS_DATA", request_id=uuid4())
+        with patch("backend.routes.gps_provider._utc_now", return_value=self.now):
+            reset_all_provider_tracking(payload, None, self.db, self.tech)
+
+        # The provider has advanced beyond its last pre-reset fix, but its
+        # timestamp still trails the server by two hours.
+        delayed_fix = self.now - timedelta(hours=2)
+        response = ingest_positions(SimpleNamespace(state=SimpleNamespace()), {
+            "uniqueId": "RESET-DEVICE", "latitude": self.stops[1].latitude,
+            "longitude": self.stops[1].longitude, "speed": 10,
+            "fixTime": delayed_fix.isoformat(), "attributes": {"ignition": True},
+        }, "test-token", self.db)
+
+        self.assertTrue(response["accepted"][0]["applied_to_current_state"])
+        self.db.refresh(self.trip)
+        self.assertFalse(self.trip.reset_waiting_for_start)
+        self.assertEqual(self.trip.current_route_stop_id, self.route_stops[1].id)
+        self.assertGreater(as_utc(self.trip.last_location_update), self.now)
+
     def test_fleet_reset_boundary_does_not_block_bus_deletion(self):
         payload = GPSProviderFleetReset(
             confirmation="RESET_ALL_GPS_DATA",
@@ -388,6 +436,24 @@ class TripResetTest(unittest.TestCase):
         self.db.refresh(self.trip)
         self.assertTrue(self.trip.reset_waiting_for_start)
         self.assertEqual(self.trip.current_stop_status,"Approaching")
+
+    def test_proven_clock_fallback_can_resume_reset_with_old_device_time(self):
+        self.reset()
+        received_at = datetime.now(timezone.utc)
+        _update_active_trip_from_vehicle(self.db, {
+            "latitude": self.stops[2].latitude,
+            "longitude": self.stops[2].longitude,
+            "speed_kmh": 10,
+            "accuracy": None,
+            "fix_time": received_at,
+            "raw_fix_time": self.old + timedelta(seconds=1),
+            "timestamp_basis": "receipt_clock_fallback",
+        }, self.bus.id, received_at)
+        self.db.commit()
+        self.db.refresh(self.trip)
+        self.assertFalse(self.trip.reset_waiting_for_start)
+        self.assertEqual(self.trip.current_route_stop_id, self.route_stops[2].id)
+        self.assertEqual(self.trip.route_direction, "reverse")
 
     def test_duplicate_and_obsolete_reset_requests_do_not_reset_twice(self):
         payload=self.payload()

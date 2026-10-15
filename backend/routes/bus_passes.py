@@ -15,7 +15,7 @@ from backend.database import get_db
 from backend.models import Bus, BusPass, PassIdentity, Route, Student, User
 from backend.schemas import BusPassIssue, BusPassUpdate
 from backend.security import require_management
-from backend.services.pass_credentials import locked_pass
+from backend.services.pass_credentials import assignment as pass_assignment, locked_pass
 from backend.routes.pass_validation import audit
 
 
@@ -69,14 +69,9 @@ def _effective_status(bus_pass: BusPass) -> str:
 
 
 def _assignment(student: Student, db: Session) -> tuple[Route | None, Bus | None]:
-    route = student.route or (
-        db.query(Route).filter(Route.bus_id == student.bus_id).first()
-        if student.bus_id else None
-    )
-    bus = db.get(Bus, route.bus_id) if route and route.bus_id else (
-        student.bus if route is None else None
-    )
-    return route, bus
+    # Use the same ambiguity rule as QR issuance. A bus with several routes
+    # needs an explicit student route, rather than an arbitrary first match.
+    return pass_assignment(student, db)
 
 
 def _serialize(student: Student, bus_pass: BusPass | None, db: Session) -> dict:
@@ -95,10 +90,11 @@ def _serialize(student: Student, bus_pass: BusPass | None, db: Session) -> dict:
             "student_code": student.student_code,
         },
         "transport": {
-            "bus_number": bus.bus_number if bus else None,
+            "bus_number": bus.bus_number if bus else (student.bus.bus_number if student.bus else None),
             "route_name": route.route_name if route else None,
             "boarding_stop": student.stop.stop_name if student.stop else None,
             "assigned": bool(route and bus),
+            "identity_ready": bool(identity and identity.photo_base64),
         },
         "bus_pass": (
             {

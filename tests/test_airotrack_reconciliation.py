@@ -107,10 +107,14 @@ class AirotrackReconciliationTest(unittest.TestCase):
                 response(11.0, newest_time),
                 response(12.0, newest_time),
             ]
+            receipt = now.astimezone(ZoneInfo("UTC"))
             with patch.dict(os.environ, {
                 "AIROTRACK_API_TOKEN": "test-token",
                 "AIROTRACK_CATCHUP_MAX_REQUESTS": "8",
-            }), patch("backend.services.airotrack._request_vehicle", side_effect=responses) as vendor_request:
+            }), patch("backend.services.airotrack._request_vehicle", side_effect=responses) as vendor_request, patch(
+                "backend.services.airotrack._utc_now",
+                side_effect=[receipt, receipt, receipt + timedelta(microseconds=1)],
+            ):
                 result = refresh_airotrack(database_session, bus_id=bus.id)
 
             state = database_session.query(BusGPSState).filter(BusGPSState.bus_id == bus.id).one()
@@ -119,8 +123,24 @@ class AirotrackReconciliationTest(unittest.TestCase):
             self.assertEqual(result["updated"][0]["provider_requests"], 3)
             self.assertEqual(result["updated"][0]["source_date"], newest_time.astimezone(ZoneInfo("UTC")).replace(microsecond=0))
             self.assertEqual(state.latitude, 11.0)
+            self.assertEqual(state.timestamp_basis, "receipt")
             self.assertEqual(database_session.query(ProviderGPSPosition).filter(ProviderGPSPosition.bus_id == bus.id).count(), 3)
             self.assertEqual(health.consecutive_errors, 0)
+
+            # A fresh BusTrack receipt must not stop the next poll from
+            # draining an Airotrack queue whose source fixes remain old.
+            follow_up = [
+                response(13.0, now - timedelta(minutes=18)),
+                response(14.0, now - timedelta(minutes=18)),
+            ]
+            with patch.dict(os.environ, {"AIROTRACK_API_TOKEN": "test-token"}), patch(
+                "backend.services.airotrack._request_vehicle", side_effect=follow_up,
+            ) as vendor_request:
+                next_result = refresh_airotrack(database_session, bus_id=bus.id)
+            database_session.refresh(state)
+            self.assertEqual(vendor_request.call_count, 2)
+            self.assertTrue(next_result["updated"][0]["catch_up"])
+            self.assertEqual(state.latitude, 13.0)
 
     def test_delayed_but_newer_fix_still_advances_provider_route_state(self) -> None:
         with self.session_factory() as database_session:

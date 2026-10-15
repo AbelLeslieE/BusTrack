@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -70,7 +71,10 @@ def _scoped_query(current_user: User, db: Session):
         driver = db.query(Driver).filter(Driver.user_id == current_user.id).first()
         if driver is None:
             raise HTTPException(status_code=403, detail="Driver profile not found.")
-        return query.filter(FleetNotification.driver_id == driver.id)
+        return query.filter(
+            FleetNotification.driver_id == driver.id,
+            FleetNotification.feedback_type != "document_expiry",
+        )
     raise HTTPException(status_code=403, detail="Notification access is not available for this role.")
 
 
@@ -110,22 +114,47 @@ def create_driver_feedback(
         raise HTTPException(status_code=403, detail="Driver profile not found.")
     trip = (
         db.query(LiveTrip)
-        .filter(LiveTrip.driver_id == driver.id, LiveTrip.ended_at.is_(None))
-        .order_by(LiveTrip.started_at.desc())
+        .filter(
+            LiveTrip.driver_id == driver.id,
+            LiveTrip.bus_id == driver.bus_id,
+            LiveTrip.status == "Running",
+            LiveTrip.ended_at.is_(None),
+        )
+        .order_by(LiveTrip.started_at.desc(), LiveTrip.id.desc())
         .first()
     )
+    if trip is not None:
+        trip_route = db.get(Route, trip.route_id)
+        trip_bus = db.get(Bus, trip.bus_id)
+        assigned_driver = trip_route.driver_id if trip_route and trip_route.driver_id else (trip_bus.driver_id if trip_bus else None)
+        if (trip_route is None or trip_route.status != "Active"
+                or trip_bus is None or trip_bus.status != "Active"
+                or trip_route.bus_id != driver.bus_id
+                or assigned_driver != driver.id):
+            trip = None
     # Feedback is available from the live-tracking workspace even before the
     # driver starts GPS. When a trip is running, its exact bus and route are
     # recorded; otherwise the driver's current central assignment is used.
     assigned_route = None
     if trip is None:
-        assigned_route = db.query(Route).filter(Route.driver_id == driver.id).first()
+        assigned_bus = db.get(Bus, driver.bus_id) if driver.bus_id else None
+        if assigned_bus and assigned_bus.status == "Active":
+            driver_match = Route.driver_id == driver.id
+            if assigned_bus.driver_id == driver.id:
+                driver_match = or_(driver_match, Route.driver_id.is_(None))
+            assigned_routes = db.query(Route).filter(
+                Route.bus_id == driver.bus_id,
+                Route.status == "Active",
+                driver_match,
+            ).limit(2).all()
+            assigned_route = assigned_routes[0] if len(assigned_routes) == 1 else None
 
     now = datetime.now(timezone.utc)
     recent_feedback = (
         db.query(FleetNotification)
         .filter(
             FleetNotification.driver_id == driver.id,
+            FleetNotification.feedback_type != "document_expiry",
             FleetNotification.created_at >= now - timedelta(seconds=10),
         )
         .first()

@@ -15,6 +15,7 @@ DEFAULT_CLOCK_RATE_TOLERANCE_SECONDS = 60
 DEFAULT_CLOCK_EPOCH_RECOVERY_STALE_SECONDS = 5 * 60
 
 DEVICE_TIME_BASIS = "device"
+RECEIPT_TIME_BASIS = "receipt"
 RECEIPT_CLOCK_FALLBACK_BASIS = "receipt_clock_fallback"
 MISSING_DEVICE_TIME_BASIS = "receipt_missing"
 
@@ -118,7 +119,7 @@ def effective_state_time(state) -> datetime | None:
     """Return the persisted time BusTrack may safely use for this snapshot."""
 
     basis = getattr(state, "timestamp_basis", DEVICE_TIME_BASIS)
-    if basis in {RECEIPT_CLOCK_FALLBACK_BASIS, MISSING_DEVICE_TIME_BASIS}:
+    if basis in {RECEIPT_TIME_BASIS, RECEIPT_CLOCK_FALLBACK_BASIS, MISSING_DEVICE_TIME_BASIS}:
         return (
             as_utc(getattr(state, "effective_time", None))
             or as_utc(getattr(state, "received_at", None))
@@ -136,12 +137,11 @@ def select_effective_observation_time(
     previous_state=None,
     previous_observation=None,
 ) -> tuple[datetime, str]:
-    """Choose a trusted ordering time without changing the raw device time.
+    """Use BusTrack receipt time for live state without changing device time.
 
-    A very old timestamp is treated as a clock-offset candidate only after a
-    second, strictly newer fix proves that device time and receipt time are
-    advancing at approximately the same rate. This rejects duplicates,
-    backward packets and fast replay of an old provider queue.
+    An implausible device clock still needs a second, normally advancing fix
+    before its coordinate can affect live state. Raw device time continues to
+    reject duplicate, backward and rapidly replayed provider observations.
     """
 
     received = as_utc(received_at)
@@ -157,7 +157,16 @@ def select_effective_observation_time(
         or age_seconds < -allowed_future_skew_seconds()
     )
     if not clock_is_implausible:
-        return fixed, DEVICE_TIME_BASIS
+        # Distinct provider fixes can arrive within one server clock tick.
+        # Preserve their raw order while keeping the live receipt clock
+        # strictly increasing by the smallest representable amount.
+        previous_fixed = as_utc(getattr(previous_state, "fix_time", None))
+        previous_effective = effective_state_time(previous_state) if previous_state is not None else None
+        if (previous_fixed is not None and fixed > previous_fixed
+                and previous_effective is not None and previous_effective >= received
+                and (previous_effective - received) <= timedelta(seconds=1)):
+            received = previous_effective + timedelta(microseconds=1)
+        return received, RECEIPT_TIME_BASIS
     comparison = previous_observation or previous_state
     if comparison is None:
         return fixed, DEVICE_TIME_BASIS

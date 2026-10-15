@@ -117,6 +117,19 @@ class ProviderGpsFreshnessTest(unittest.TestCase):
         self.assertEqual(payload["tracking_source"], "vehicle_gps_last_known")
         self.assertEqual((payload["latitude"], payload["longitude"]), (10.0, 76.0))
 
+    def test_bus_without_provider_contact_is_reported_as_no_data(self) -> None:
+        with self.session_factory() as database_session:
+            bus = Bus(bus_number="NO-DATA-01", registration_number="NO-DATA-REG", capacity=40,
+                      manufacturer="Test", model="Coach", year=2026, fuel_type="Diesel", status="Active")
+            database_session.add(bus)
+            database_session.commit()
+
+            result = get_provider_health(
+                response=Response(), bus_id=bus.id, provider=None,
+                db=database_session, _technician=SimpleNamespace(),
+            )
+            self.assertEqual(result["buses"][0]["health_status"], "no_data")
+
     def test_vendor_validity_flag_does_not_discard_a_usable_coordinate(self) -> None:
         with self.session_factory() as database_session:
             bus = Bus(bus_number="VALID-FLAG-01", registration_number="VALID-FLAG-REG", capacity=40, manufacturer="Test", model="Coach", year=2026, fuel_type="Diesel", status="Active", device_id="VALID-FLAG-DEVICE")
@@ -408,6 +421,7 @@ class ProviderGpsFreshnessTest(unittest.TestCase):
             trip.last_location_update = stale_time
             state.fix_time = stale_time
             state.received_at = stale_time
+            state.effective_time = stale_time
             database_session.commit()
             last_known = get_student_live_tracking(student_user, database_session)
             self.assertFalse(last_known["trip"]["telemetry"]["is_fresh"])
