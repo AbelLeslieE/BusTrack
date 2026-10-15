@@ -351,7 +351,10 @@ async def login_page() -> FileResponse:
 async def dashboard_page() -> FileResponse:
     """Return the protected SPA host; feature modules are loaded by the client router."""
 
-    return FileResponse(FRONTEND_DIR / "dashboard.html")
+    return FileResponse(
+        FRONTEND_DIR / "dashboard.html",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/student", include_in_schema=False)
