@@ -402,7 +402,7 @@ def initialize_database() -> None:
             if "must_change_password" not in user_columns:
                 connection.execute(text(
                     "ALTER TABLE users "
-                    "ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT 0"
+                    "ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT FALSE"
                 ))
             username_length = getattr(user_column_details["username"]["type"], "length", None)
             if engine.dialect.name == "postgresql" and username_length is not None and username_length < 100:
