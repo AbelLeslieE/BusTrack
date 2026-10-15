@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
-const asset = "/static/assets/images/logo.png?v=20261015logo1";
+const asset = "/static/assets/images/logo.png?v=20261015logo2";
 
 for (const path of [
     "frontend/common/sidebar.js",
@@ -18,6 +18,6 @@ assert.match(css, new RegExp(asset.replace(/[.?]/g, "\\$&")), "sidebar CSS must 
 assert.match(css, /\.brand-mark\s*\{[\s\S]*?font-size:\s*0\s*;/, "the legacy emoji must be hidden");
 
 const dashboard = read("frontend/dashboard.html");
-assert.match(dashboard, /sidebar\.css\?v=20261015logo1/, "dashboard must cache-bust the sidebar stylesheet");
+assert.match(dashboard, /sidebar\.css\?v=20261015logo2/, "dashboard must cache-bust the sidebar stylesheet");
 
 console.log("Sidebar logo frontend checks passed.");

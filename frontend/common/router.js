@@ -6,22 +6,22 @@ import { canonicalRole, ROLE_ADMIN, ROLE_DRIVER, ROLE_TECHNICIAN, ROLE_USER } fr
 import {
     createSidebar,
     setSidebarActive
-} from "./sidebar.js?v=20261015logo1";
+} from "./sidebar.js?v=20261015logo2";
 
 import {
     createDriverSidebar,
     setDriverSidebarActive
-} from "../modules/js/driverSidebar.js?v=20261015logo1";
+} from "../modules/js/driverSidebar.js?v=20261015logo2";
 
 import {
     createStudentSidebar,
     setStudentSidebarActive
-} from "../modules/js/studentSidebar.js?v=20261015logo1";
+} from "../modules/js/studentSidebar.js?v=20261015logo2";
 
 import {
     createTechnicianSidebar,
     setTechnicianSidebarActive
-} from "../modules/js/technicianSidebar.js?v=20261015logo1";
+} from "../modules/js/technicianSidebar.js?v=20261015logo2";
 
 
 import {
