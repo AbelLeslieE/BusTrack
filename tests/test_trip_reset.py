@@ -19,7 +19,7 @@ from sqlalchemy.orm import sessionmaker
 
 from backend.database import Base, get_db, _add_trip_reset_columns
 from backend.models import AuditEvent, Bus, Driver, Route, RouteStop, Stop, Student, User
-from backend.routes.gps import update_location, change_trip_direction
+from backend.routes.gps import update_location, change_trip_direction, _build_live_tracking
 from backend.routes.buses import delete_bus
 from backend.routes.gps_provider import (
     get_trip_reset_options, reset_provider_trip, ingest_positions,
@@ -114,7 +114,9 @@ class TripResetTest(unittest.TestCase):
         self.assertEqual(self.db.query(TripStopEvent).count(),1)
         self.assertEqual([s.sequence for s in self.route_stops],[1,2,3])
         self.assertEqual(self.db.query(AuditEvent).filter_by(action="trip_progression_reset").count(),1)
-        self.assertTrue(get_driver_tracking_source(self.driver_user,self.db)["reset_waiting_for_start"])
+        driver_source = get_driver_tracking_source(self.driver_user, self.db)
+        self.assertTrue(driver_source["reset_waiting_for_start"])
+        self.assertFalse(driver_source["fleet_reset_waiting"])
 
     def test_fleet_reset_deletes_only_gps_data_and_waits_for_a_new_fix(self):
         provider_position = ProviderGPSPosition(
@@ -143,6 +145,14 @@ class TripResetTest(unittest.TestCase):
         event.latitude = 10.01
         event.longitude = 76
         event.distance_meters = 3
+        historical_trip = LiveTrip(
+            driver_id=self.driver.id, bus_id=self.bus.id, route_id=self.route.id,
+            status="Stopped", started_at=self.old - timedelta(hours=1),
+            ended_at=self.old, current_latitude=10.02, current_longitude=76,
+            current_speed=5, last_location_update=self.old,
+            current_location_source="vehicle_gps",
+        )
+        self.db.add(historical_trip)
         self.db.commit()
 
         request_id = uuid4()
@@ -180,6 +190,18 @@ class TripResetTest(unittest.TestCase):
         self.assertTrue(self.trip.reset_waiting_for_start)
         self.assertIsNone(self.trip.current_latitude)
         self.assertIsNone(self.trip.last_location_update)
+        student_snapshot = get_student_live_tracking(self.user, self.db)
+        self.assertIsNone(student_snapshot["trip"]["latitude"])
+        self.assertIsNone(student_snapshot["trip"]["longitude"])
+        admin_snapshot = next(item for item in _build_live_tracking(self.db)
+                              if item["bus_id"] == self.bus.id)
+        self.assertIsNone(admin_snapshot["latitude"])
+        self.assertIsNone(admin_snapshot["longitude"])
+        self.assertIsNone(admin_snapshot["provider_gps"])
+        self.assertTrue(get_driver_tracking_source(self.driver_user, self.db)["fleet_reset_waiting"])
+        self.db.refresh(historical_trip)
+        self.assertIsNone(historical_trip.current_latitude)
+        self.assertIsNone(historical_trip.last_location_update)
 
         replay = ingest_positions(SimpleNamespace(state=SimpleNamespace()), {
             "uniqueId": "RESET-DEVICE",
@@ -278,6 +300,30 @@ class TripResetTest(unittest.TestCase):
             fresh_kingstrack = _store_kingstrack_position(self.db, self.bus, kingstrack_packet)
         self.assertTrue(fresh_kingstrack["applied"])
         self.assertEqual(self.db.query(GPSDataResetBoundary).count(), 0)
+
+    def test_fleet_reset_rejects_replay_newer_than_old_current_state(self):
+        retained_fix = self.old + timedelta(minutes=1)
+        self.db.add(ProviderGPSPosition(
+            bus_id=self.bus.id, external_device_id="RESET-DEVICE",
+            latitude=10.02, longitude=76, fix_time=retained_fix,
+            received_at=retained_fix, protocol="test", valid=False,
+            raw_payload="{}",
+        ))
+        self.db.commit()
+
+        with patch("backend.routes.gps_provider._utc_now", return_value=self.now):
+            reset_all_provider_tracking(GPSProviderFleetReset(
+                confirmation="RESET_ALL_GPS_DATA", request_id=uuid4(),
+            ), None, self.db, self.tech)
+
+        boundary = self.db.get(GPSDataResetBoundary, self.bus.id)
+        self.assertEqual(as_utc(boundary.previous_fix_time), retained_fix)
+        replay = ingest_positions(SimpleNamespace(state=SimpleNamespace()), {
+            "uniqueId": "RESET-DEVICE", "latitude": 10.02, "longitude": 76,
+            "fixTime": retained_fix.isoformat(), "attributes": {"ignition": True},
+        }, "test-token", self.db)
+        self.assertTrue(replay["ignored"][0]["reset_pending"])
+        self.assertEqual(self.db.query(BusGPSState).count(), 0)
 
     def test_fleet_reset_starts_every_active_route_without_an_existing_trip(self):
         second_bus = Bus(bus_number="RESET-2", registration_number="RESET-REG-2", device_id="RESET-DEVICE-2", capacity=40,
@@ -538,6 +584,40 @@ class TripResetTest(unittest.TestCase):
         self.assertFalse(self.trip.reset_waiting_for_start)
         self.assertEqual(self.trip.current_route_stop_id,self.route_stops[2].id)
         self.assertEqual(self.trip.route_direction,"reverse")
+
+    def test_concurrent_fleet_reset_retry_returns_first_result(self):
+        payload = GPSProviderFleetReset(
+            confirmation="RESET_ALL_GPS_DATA", request_id=uuid4(),
+        )
+        bus_id, technician_id = self.bus.id, self.tech.id
+        attempting, finished = Event(), Event()
+
+        def retry():
+            with self.sessions() as db:
+                attempting.set()
+                result = reset_all_provider_tracking(
+                    payload, None, db, db.get(User, technician_id),
+                )
+                finished.set()
+                return result
+
+        # The first request owns the same write lock it uses during a reset.
+        # A retry must wait, then read its committed idempotency result.
+        lock_tracking_bus(self.db, bus_id)
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(retry)
+            self.assertTrue(attempting.wait(5))
+            self.assertFalse(finished.wait(.15))
+            first_result = reset_all_provider_tracking(payload, None, self.db, self.tech)
+            retry_result = future.result(timeout=10)
+
+        self.assertFalse(first_result["already_applied"])
+        self.assertTrue(retry_result["already_applied"])
+        self.assertEqual(retry_result["request_id"], first_result["request_id"])
+        self.assertEqual(
+            self.db.query(AuditEvent).filter_by(action="fleet_gps_data_reset").count(),
+            1,
+        )
 
     def test_http_permission_and_validated_endpoint(self):
         app=FastAPI(); app.include_router(router)

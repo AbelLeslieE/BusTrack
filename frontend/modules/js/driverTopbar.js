@@ -48,22 +48,12 @@ export function createDriverTopbar(toggleSidebar) {
 
         </div>
 
-        <div class="search-box">
-
-            <i data-lucide="search"></i>
-
-            <input
-                type="text"
-                placeholder="Search..."
-            >
-
-        </div>
-
         <div class="topbar-actions">
 
             <button
                 class="icon-button notification-button"
-                type="button">
+                type="button"
+                aria-label="Notifications">
 
                 <i data-lucide="bell"></i>
 
@@ -73,7 +63,8 @@ export function createDriverTopbar(toggleSidebar) {
 
             <button
                 class="profile-button"
-                type="button">
+                type="button"
+                aria-label="Open profile">
 
                 <div class="avatar">
 

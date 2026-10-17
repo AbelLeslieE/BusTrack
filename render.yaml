@@ -74,3 +74,6 @@ services:
 
       - key: BOOTSTRAP_ADMIN_PASSWORD
         sync: false
+
+      - key: BUS_PASS_SIGNING_KEY_PEM
+        sync: false

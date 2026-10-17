@@ -27,17 +27,17 @@ import {
 import {
     createTopbar,
     setTopbarTitle
-} from "./topbar.js";
+} from "./topbar.js?v=20261017fix1";
 
 import {
     createDriverTopbar,
     setDriverTopbarTitle
-} from "../modules/js/driverTopbar.js";
+} from "../modules/js/driverTopbar.js?v=20261017fix1";
 
 import {
     createStudentTopbar,
     setStudentTopbarTitle
-} from "../modules/js/studentTopbar.js";
+} from "../modules/js/studentTopbar.js?v=20261017fix1";
 // ==========================================================
 // ADMIN MODULES
 // ==========================================================
@@ -51,7 +51,7 @@ const adminModules = {
 
     live_tracking: {
         title: "Live Tracking",
-        load: () => import("../modules/js/live_tracking.js?v=20261015c")
+        load: () => import("../modules/js/live_tracking.js?v=20261017reset4")
     },
 
     tripHistory: {
@@ -150,7 +150,7 @@ const driverModules = {
 
     driverTracking: {
         title: "Live Tracking",
-        load: () => import("../modules/js/driverTracking.js")
+        load: () => import("../modules/js/driverTracking.js?v=20261017reset4")
     },
 
     tripHistory: {
@@ -181,7 +181,7 @@ const driverModules = {
 const studentModules = {
     studentTracking: {
         title: "Live Tracking",
-        load: () => import("../modules/js/studentTracking.js")
+        load: () => import("../modules/js/studentTracking.js?v=20261017reset4")
     },
 
     busPass: {
@@ -213,7 +213,7 @@ const technicianModules = {
     },
     providerHealth: {
         title: "Provider Health",
-        load: () => import("../modules/js/providerHealth.js?v=20261015a")
+        load: () => import("../modules/js/providerHealth.js?v=20261017fix1")
     }
 };
 let shell;
@@ -485,6 +485,12 @@ function createShell(initialRoute) {
                 : createTopbar(
                     toggleSidebar
                 );
+  if (isTechnician) {
+      topbar.querySelector(".topbar-actions")?.remove();
+  } else {
+      topbar.querySelector(".notification-button")?.addEventListener("click", () => navigate("notifications"));
+      topbar.querySelector(".profile-button")?.addEventListener("click", () => navigate("profile"));
+  }
   const sidebarBackdrop = document.createElement("button");
   sidebarBackdrop.type = "button";
   sidebarBackdrop.className = "sidebar-backdrop";

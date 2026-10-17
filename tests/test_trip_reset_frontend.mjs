@@ -13,6 +13,92 @@ function portal(name, globals = {}) {
     return context;
 }
 
+test('admin map removes old marker when a reset trip has no coordinates', () => {
+    const removed = [];
+    const cancelled = [];
+    const context = portal('adminTrackingService', {
+        cancelAnimationFrame: id => cancelled.push(id),
+    });
+    const oldMarker = {id: 1};
+    const activeMarker = {id: 2};
+    context.markerLayer = {removeLayer: marker => removed.push(marker)};
+    context.oldMarker = oldMarker;
+    context.activeMarker = activeMarker;
+    vm.runInContext(`
+        fleetMarkerLayer = markerLayer;
+        markers.set(1, oldMarker);
+        markers.set(2, activeMarker);
+        markerAnimations.set('1', 10);
+        roadMotions.set('1', {frame: 20});
+        previousBusPositions.set('1', {latitude: 10, longitude: 76});
+        selectedBusId = 1;
+        followSelectedBus = true;
+        pruneFleetMarkers([
+            {bus_id: 1, latitude: null, longitude: null},
+            {bus_id: 2, latitude: 10.1, longitude: 76.1}
+        ]);
+    `, context);
+    assert.deepEqual(removed, [oldMarker]);
+    assert.deepEqual(cancelled, [10, 20]);
+    assert.equal(vm.runInContext('markers.has(1)', context), false);
+    assert.equal(vm.runInContext('markers.has(2)', context), true);
+    assert.equal(vm.runInContext('selectedBusId', context), null);
+});
+
+test('student map removes old marker when reset clears GPS coordinates', () => {
+    const removed = [];
+    const cancelled = [];
+    const context = portal('studentTracking', {
+        cancelAnimationFrame: id => cancelled.push(id),
+    });
+    context.testMap = {removeLayer: marker => removed.push(marker)};
+    context.testMarker = {id: 'old-bus'};
+    vm.runInContext(`
+        state.map = testMap;
+        state.busMarker = testMarker;
+        state.busTargetLocation = {latitude: 10, longitude: 76};
+        state.busMotion.frame = 30;
+        state.liveTrip = {id: 7, latitude: null, longitude: null};
+        updateBusPosition();
+    `, context);
+    assert.deepEqual(removed, [context.testMarker]);
+    assert.deepEqual(cancelled, [30]);
+    assert.equal(vm.runInContext('state.busMarker', context), null);
+    assert.equal(vm.runInContext('state.busTargetLocation', context), null);
+});
+
+test('driver map removes old marker when fleet reset has no new vehicle fix', () => {
+    const removed = [];
+    const cancelled = [];
+    const elements = {};
+    const context = portal('trackingService', {
+        document: {getElementById: id => elements[id] ??= {classList: {toggle() {}}, textContent: ''}},
+        window: {clearTimeout() {}},
+        cancelAnimationFrame: id => cancelled.push(id),
+    });
+    context.testMap = {removeLayer: marker => removed.push(marker)};
+    context.testMarker = {id: 'old-driver-bus'};
+    vm.runInContext(`
+        map = testMap;
+        marker = testMarker;
+        markerMotion.frame = 40;
+        markerTargetLocation = {latitude: 10, longitude: 76};
+        currentTripId = null;
+        currentResetVersion = 0;
+        tracking = false;
+        updateDirectionControls = () => {};
+        showRunningTripStatus = () => {};
+        applyTrackingSource({active_trip_id: 7, reset_version: 1,
+            fleet_reset_waiting: true,
+            reset_waiting_for_start: true, tracking_source: 'vehicle_gps_offline',
+            vehicle: null, route_direction: 'forward'});
+    `, context);
+    assert.deepEqual(removed, [context.testMarker]);
+    assert.deepEqual(cancelled, [40]);
+    assert.equal(vm.runInContext('marker', context), null);
+    assert.equal(elements.latitude.textContent, '—');
+});
+
 test('reset dialog previews both starts, submits once and retains its retry identity', async () => {
     let form, selectionHandler, release;
     const requests = [];

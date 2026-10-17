@@ -14,7 +14,7 @@ if (!profile) {
 // Import the role-sensitive router only after the server session has refreshed
 // localStorage. Otherwise a previous account's cached role can build the wrong
 // sidebar when a technician opens or reloads a bookmarked module.
-const { loadModule } = await import("/static/common/router.js?v=20261015logo2");
+const { loadModule } = await import("/static/common/router.js?v=20261017reset4");
 
 const role = canonicalRole(profile.role);
 let moduleName;
@@ -25,7 +25,7 @@ switch (role) {
         break;
     case ROLE_DRIVER:
         if (!window.location.hash) window.location.hash = "driverDashboard";
-        moduleName = "driverDashboard";
+        moduleName = window.location.hash.slice(1);
         break;
     case ROLE_USER:
         if (profile.must_change_password) {

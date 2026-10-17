@@ -767,6 +767,23 @@ function applyTrackingSource(source) {
         && Number.isFinite(source.vehicle.latitude)
         && Number.isFinite(source.vehicle.longitude)
     );
+    if (source.fleet_reset_waiting && !hasVehiclePosition) {
+        // A fleet reset removes the provider fix but leaves the route session
+        // running. Do not continue showing its pre-reset driver-map marker.
+        if (markerMotion.frame != null) cancelAnimationFrame(markerMotion.frame);
+        markerMotion.frame = null;
+        markerMotion.target = null;
+        markerMotion.heading = null;
+        markerTargetLocation = null;
+        if (marker && map) map.removeLayer(marker);
+        marker = null;
+        lastPublishedLocation = null;
+        setText("latitude", "—");
+        setText("longitude", "—");
+        setText("speed", "—");
+        setText("accuracy", "—");
+        setText("lastUpdate", "Waiting for update");
+    }
     const sourceDirection = source.route_direction;
     const directionChangedAtTerminal = Boolean(
         tracking

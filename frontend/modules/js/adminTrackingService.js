@@ -288,6 +288,31 @@ function clearFleetMarkers() {
     );
 
 }
+
+function pruneFleetMarkers(trips) {
+    const positionedBusIds = new Set(trips
+        .filter(trip => trip.latitude != null && trip.longitude != null)
+        .map(trip => String(trip.bus_id)));
+
+    markers.forEach((marker, busId) => {
+        const busKey = String(busId);
+        if (positionedBusIds.has(busKey)) return;
+        fleetMarkerLayer?.removeLayer(marker);
+        const animationId = markerAnimations.get(busKey);
+        if (animationId != null) cancelAnimationFrame(animationId);
+        markerAnimations.delete(busKey);
+        const roadMotion = roadMotions.get(busKey);
+        if (roadMotion?.frame != null) cancelAnimationFrame(roadMotion.frame);
+        roadMotions.delete(busKey);
+        previousBusPositions.delete(busKey);
+        busHeadings.delete(busKey);
+        markers.delete(busId);
+        if (selectedBusId !== null && String(selectedBusId) === busKey) {
+            selectedBusId = null;
+            followSelectedBus = false;
+        }
+    });
+}
 /* ==========================================================
    BUS MARKER ICON
 ========================================================== */
@@ -1645,85 +1670,9 @@ function updateFleet(trips, buses = []) {
     );
 
 
-    /* ======================================================
-       REMOVE INACTIVE BUS MARKERS
-    ====================================================== */
-
-    markers.forEach(
-
-        (marker, busId) => {
-
-            if (
-                !activeBusIds.has(
-                    String(busId)
-                )
-            ) {
-
-                console.log(
-                    "Removing inactive bus marker:",
-                    busId
-                );
-
-
-                if (fleetMarkerLayer) {
-
-                    fleetMarkerLayer.removeLayer(
-                        marker
-                    );
-
-                }
-
-                /*
-                    Stop any animation belonging to this bus.
-                */
-                const animationId =
-                    markerAnimations.get(
-                        String(busId)
-                    );
-
-                if (animationId) {
-
-                    cancelAnimationFrame(
-                        animationId
-                    );
-
-                    markerAnimations.delete(
-                        String(busId)
-                    );
-
-                }
-
-                /*
-                    If the removed bus was selected,
-                    clear the follow state.
-                */
-                if (
-                    selectedBusId !== null &&
-                    String(selectedBusId) === String(busId)
-                ) {
-
-                    selectedBusId = null;
-
-                    followSelectedBus = false;
-
-                }
-
-                markers.delete(
-                    busId
-                );
-                previousBusPositions.delete(
-                    String(busId)
-                );
-
-                busHeadings.delete(
-                    String(busId)
-                );
-
-            }
-
-        }
-
-    );
+    // A reset keeps a trip running while clearing its coordinates. Remove its
+    // old map marker even though the bus is still present in this snapshot.
+    pruneFleetMarkers(trips);
 
 
     /* ======================================================
@@ -1793,8 +1742,12 @@ function updateFleet(trips, buses = []) {
         const gpsStatus = gpsFreshness?.is_fresh === false
             ? "GPS signal stale"
             : (providerGPS ? ignitionLabel : (isActiveTrip ? "Driver tracking" : "Awaiting GPS"));
-        const statusLabel = isActiveTrip ? (trip.status ?? "Running") : gpsStatus;
-        const statusClass = gpsFreshness?.is_fresh === false
+        const statusLabel = trip.reset_waiting_for_start
+            ? "Waiting for GPS after reset"
+            : isActiveTrip ? (trip.status ?? "Running") : gpsStatus;
+        const statusClass = trip.reset_waiting_for_start
+            ? "off"
+            : gpsFreshness?.is_fresh === false
             ? "stale"
             : providerGPS?.ignition === false
                 ? "off"

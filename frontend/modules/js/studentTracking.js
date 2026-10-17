@@ -2451,26 +2451,34 @@ function renderMapObjects() {
 
 function updateBusPosition() {
 
-    /*
-     * The map and live trip must both exist.
-     */
-    if (
-        !state.map ||
-        !state.liveTrip
-    ) {
-
+    if (!state.map) return;
+    // A fleet reset clears coordinates while the route session remains live.
+    // Remove the old marker instead of leaving it on the map or turning null
+    // into the valid number zero.
+    const rawLatitude = state.liveTrip?.latitude;
+    const rawLongitude = state.liveTrip?.longitude;
+    if (rawLatitude == null || rawLongitude == null ||
+        !Number.isFinite(Number(rawLatitude)) ||
+        !Number.isFinite(Number(rawLongitude))) {
+        if (state.busMotion.frame != null) cancelAnimationFrame(state.busMotion.frame);
+        state.busMotion.frame = null;
+        state.busMotion.heading = null;
+        state.busMotion.target = null;
+        state.busMotion.stageDistance = null;
+        state.busTargetLocation = null;
+        if (state.busMarker) state.map.removeLayer(state.busMarker);
+        state.busMarker = null;
         return;
-
     }
 
     const latitude =
         Number(
-            state.liveTrip.latitude
+            rawLatitude
         );
 
     const longitude =
         Number(
-            state.liveTrip.longitude
+            rawLongitude
         );
 
     /*

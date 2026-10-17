@@ -22,7 +22,6 @@ export function createTopbar(onMenuToggle) {
       <div><p class="section-kicker">Fleet command center</p><h1 id="page-title">Overview</h1></div>
     </div>
     <div class="topbar-actions">
-      <label class="search-box"><span aria-hidden="true">⌕</span><input type="search" placeholder="Search fleet"></label>
       <button class="icon-button notification-button" type="button" aria-label="Notifications">♧<span></span></button>
       <button class="profile-button" type="button" aria-label="Open profile"><span class="avatar">${escapeHtml(initials)}</span><span class="profile-copy"><strong>${escapeHtml(name)}</strong><small>${roleLabel(profile.role)}</small></span><span aria-hidden="true">⌄</span></button>
     </div>`;

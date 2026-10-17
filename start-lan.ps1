@@ -19,6 +19,7 @@ $lanAddress = $lanAddresses | Select-Object -First 1 -ExpandProperty IPAddress
 if ($lanAddress) {
     Write-Host "\nOpen this address on a phone connected to the same Wi-Fi:"
     Write-Host "  http://${lanAddress}:$Port/\n" -ForegroundColor Green
+    Write-Warning "Phone GPS tracking and camera scanning require HTTPS. Use .\start-lan-https.ps1 for those features."
 } else {
     Write-Warning "Could not determine a LAN IPv4 address. Run ipconfig and use your Wi-Fi IPv4 address."
 }

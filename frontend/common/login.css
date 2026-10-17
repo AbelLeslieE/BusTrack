@@ -583,48 +583,10 @@ body::before{
 
 }
 
-.remember{
-
-    display:flex;
-
-    align-items:center;
-
-    gap:10px;
-
-    font-size:.90rem;
-
+.login-help{
+    margin:0;
     color:var(--muted);
-
-    cursor:pointer;
-
-}
-
-.remember input{
-
-    width:16px;
-
-    height:16px;
-
-    accent-color:#4FD1FF;
-
-}
-
-.login-options a{
-
-    color:#7DD3FC;
-
-    text-decoration:none;
-
     font-size:.88rem;
-
-    transition:.3s;
-
-}
-
-.login-options a:hover{
-
-    color:white;
-
 }
 
 

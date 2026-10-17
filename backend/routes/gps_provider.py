@@ -21,7 +21,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request, Response, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
-from sqlalchemy import or_
+from sqlalchemy import or_, text
 from sqlalchemy.orm import Session
 
 from backend.database import SessionLocal, get_db
@@ -1478,6 +1478,17 @@ def reset_all_provider_tracking(
     """
 
     request_id = str(payload.request_id)
+    # A timed-out browser request may be retried while its first transaction is
+    # still running. Serialize fleet resets before checking the request ID so
+    # the retry sees the committed result instead of applying the reset twice.
+    dialect = db.get_bind().dialect.name
+    if dialect == "sqlite":
+        connection = db.connection()
+        if not connection.connection.driver_connection.in_transaction:
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
+    elif dialect == "postgresql":
+        db.execute(text("SELECT pg_advisory_xact_lock(424252911)"))
+
     existing_operation = db.get(GPSDataResetOperation, request_id)
     if existing_operation is not None:
         result = json.loads(existing_operation.result_json)
@@ -1510,30 +1521,52 @@ def reset_all_provider_tracking(
     previous_fix_times: dict[int, datetime | None] = {}
     for bus in buses:
         state = states.get(bus.id)
-        previous_fix_time = state.fix_time if state is not None else None
-        if previous_fix_time is None:
-            latest = db.query(ProviderGPSPosition).filter(
-                ProviderGPSPosition.bus_id == bus.id,
-                ProviderGPSPosition.fix_time.is_not(None),
-            ).order_by(
-                ProviderGPSPosition.fix_time.desc(),
-                ProviderGPSPosition.received_at.desc(),
-                ProviderGPSPosition.id.desc(),
-            ).first()
-            previous_fix_time = latest.fix_time if latest is not None else None
-        if previous_fix_time is None and bus.id in prior_boundaries:
-            previous_fix_time = prior_boundaries[bus.id].previous_fix_time
-        previous_fix_times[bus.id] = previous_fix_time
+        # A retained packet can be newer than the current state when it was
+        # rejected for some other reason. Use the greatest trustworthy device
+        # time so replaying any pre-reset packet cannot restore old tracking.
+        latest = db.query(ProviderGPSPosition).filter(
+            ProviderGPSPosition.bus_id == bus.id,
+            ProviderGPSPosition.fix_time.is_not(None),
+            ProviderGPSPosition.quarantine_reason.is_(None),
+        ).order_by(
+            ProviderGPSPosition.fix_time.desc(),
+            ProviderGPSPosition.received_at.desc(),
+            ProviderGPSPosition.id.desc(),
+        ).first()
+        candidates = [
+            state.fix_time if state is not None else None,
+            latest.fix_time if latest is not None else None,
+            prior_boundaries[bus.id].previous_fix_time if bus.id in prior_boundaries else None,
+        ]
+        previous_fix_times[bus.id] = max(
+            (value for value in candidates if value is not None),
+            key=_normalized_datetime,
+            default=None,
+        )
 
-    all_trips = db.query(LiveTrip).order_by(LiveTrip.id).all()
+    # Clear coordinate snapshots in one SQL statement. Loading every completed
+    # trip into the ORM made a fleet reset grow with the full trip archive and
+    # could outlast the browser's reset timeout.
+    db.query(LiveTrip).filter(or_(
+        LiveTrip.current_latitude.is_not(None),
+        LiveTrip.current_longitude.is_not(None),
+        LiveTrip.current_speed.is_not(None),
+        LiveTrip.current_accuracy.is_not(None),
+        LiveTrip.last_location_update.is_not(None),
+        LiveTrip.current_location_source.is_not(None),
+    )).update({
+        LiveTrip.current_latitude: None,
+        LiveTrip.current_longitude: None,
+        LiveTrip.current_speed: None,
+        LiveTrip.current_accuracy: None,
+        LiveTrip.last_location_update: None,
+        LiveTrip.current_location_source: None,
+    }, synchronize_session=False)
+    running_trips = db.query(LiveTrip).filter(
+        LiveTrip.status == "Running", LiveTrip.ended_at.is_(None),
+    ).order_by(LiveTrip.id).populate_existing().all()
     trips_by_bus: dict[int, list[LiveTrip]] = {}
-    for trip in all_trips:
-        trip.current_latitude = None
-        trip.current_longitude = None
-        trip.current_speed = None
-        trip.current_accuracy = None
-        trip.last_location_update = None
-        trip.current_location_source = None
+    for trip in running_trips:
         trips_by_bus.setdefault(trip.bus_id, []).append(trip)
 
     reset_trip_count = 0
@@ -1839,6 +1872,11 @@ def get_driver_tracking_source(current_user: User = Depends(require_driver), db:
         LiveTrip.status == "Running",
         LiveTrip.ended_at.is_(None),
     ).order_by(LiveTrip.started_at.desc()).first()
+    fleet_reset_waiting = bool(
+        active_trip and active_trip.reset_waiting_for_start
+        and active_trip.reset_request_id
+        and db.get(GPSDataResetOperation, active_trip.reset_request_id) is not None
+    )
     vehicle = _serialize_state(state, db.get(Bus, driver.bus_id)) if state else None
     vehicle_is_primary = bool(
         vehicle
@@ -1851,6 +1889,7 @@ def get_driver_tracking_source(current_user: User = Depends(require_driver), db:
                     if state.ignition is True
                     else "Vehicle GPS parked heartbeat is current and accepted for route progression."
                 ), "vehicle": vehicle,
+                "fleet_reset_waiting": fleet_reset_waiting,
                 **reset_metadata(active_trip),
             "route_direction": active_trip.route_direction if active_trip else None,
                 "active_trip_id": active_trip.id if active_trip else None}
@@ -1873,6 +1912,7 @@ def get_driver_tracking_source(current_user: User = Depends(require_driver), db:
             "mobile_tracking_allowed": True,
             "reason": "Phone GPS fallback is live; vehicle GPS will take over when it reports.",
             "vehicle": vehicle,
+            "fleet_reset_waiting": fleet_reset_waiting,
             **reset_metadata(active_trip),
             "route_direction": active_trip.route_direction,
             "active_trip_id": active_trip.id,
@@ -1888,6 +1928,7 @@ def get_driver_tracking_source(current_user: User = Depends(require_driver), db:
                 if active_trip
                 else "Vehicle GPS is unavailable; waiting for the module to report."
             ), "vehicle": vehicle,
+            "fleet_reset_waiting": fleet_reset_waiting,
             **reset_metadata(active_trip),
             "route_direction": active_trip.route_direction if active_trip else None,
             "active_trip_id": active_trip.id if active_trip else None}

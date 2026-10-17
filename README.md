@@ -40,6 +40,11 @@ networks (or add an inbound TCP rule for port 8000), then restart the helper.
 Avoid exposing this development server on public Wi-Fi; it has no HTTPS and is
 intended only for your private local network.
 
+For driver phone GPS tracking or bus-pass camera scanning, use
+`.\start-lan-https.ps1` instead. Install and trust the local certificate on the
+phone as the helper describes, then open its `https://` address. Browsers block
+location and camera access from the plain HTTP LAN address.
+
 ## First administrator and secure sign-in
 
 Before signing in for the first time, create an administrator without placing a password in source code or shell history:
@@ -61,6 +66,11 @@ If the development SQLite database is deleted, the server will recreate its tabl
 For production, set `APP_ENV=production`, `DATABASE_URL` to PostgreSQL, and a random `JWT_SECRET_KEY` of at least 32 characters. Configure `BOOTSTRAP_ADMIN_PASSWORD` only through the hosting provider's secret store if a first administrator must be created at startup. See `.env.example`; never commit a real secret or use a default password. For an existing SQLite installation, follow the verified [SQLite-to-PostgreSQL cutover](docs/postgresql-cutover.md) rather than manually copying database files.
 
 ### Render deployment
+
+Set `BUS_PASS_SIGNING_KEY_PEM` in Render's Environment page before using live
+student bus passes or driver QR verification. Generate the key outside this
+repository as described in [secure bus passes](docs/secure-bus-passes.md), and
+use the same key for every application instance.
 
 The included `render.yaml` provisions PostgreSQL and has Render generate a persistent 256-bit `JWT_SECRET_KEY` for a **new** Blueprint deployment. For an existing Render service, set `JWT_SECRET_KEY` manually in **Environment** to a random value of at least 32 characters, then redeploy; Render does not overwrite an existing empty secret when a Blueprint is updated. Before the first successful deployment, also set `BOOTSTRAP_ADMIN_PASSWORD` to a unique 12–72 character password in the same Environment page. The first administrator uses username `admin` unless `BOOTSTRAP_ADMIN_USERNAME` is set. Keep both values in Render's secret store and never add them to the repository.
 

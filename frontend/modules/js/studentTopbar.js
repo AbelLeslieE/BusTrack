@@ -73,20 +73,6 @@ export function createStudentTopbar(toggleSidebar) {
         <div class="topbar-actions">
 
 
-            <label class="search-box">
-
-                <span aria-hidden="true">
-                    ⌕
-                </span>
-
-                <input
-                    type="search"
-                    placeholder="Search buses, routes or stops..."
-                    aria-label="Search buses, routes or stops"
-                >
-
-            </label>
-
 
             <!-- ==========================================
                  NOTIFICATIONS

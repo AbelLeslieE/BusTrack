@@ -13,6 +13,7 @@ const state = {
     positionHasMore: false,
     loading: true,
     refreshing: false,
+    pullingProviders: false,
     resettingAll: false,
     changingDirectionBusId: null,
     resettingBusId: null,
@@ -23,11 +24,22 @@ const state = {
 let page = null;
 let refreshTimer = null;
 let visibilityRefreshHandler = null;
+let activeRefreshController = null;
 const PROVIDER_HEALTH_REFRESH_MS = 60_000;
 const PROVIDER_HEALTH_JITTER_MS = 5_000;
 const PROVIDER_POSITION_PAGE_SIZES = [10, 25, 50];
 const PROVIDER_HEALTH_REQUEST_TIMEOUT_MS = 30_000;
 const FLEET_RESET_TIMEOUT_MS = 90_000;
+
+function resetRequestId() {
+    if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+    // randomUUID is unavailable on HTTP LAN pages, but getRandomValues works there.
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
 
 function formatDate(value) {
     if (!value) return "Never";
@@ -220,7 +232,7 @@ function renderPage() {
         : `<tr><td colspan="8" class="tech-empty">No provider coordinates are retained for this filter yet.</td></tr>`;
 
     page.innerHTML = `<section class="tech-page provider-health-page">
-        <header class="tech-hero provider-health-hero"><div><p class="tech-eyebrow">GPS PROVIDER OBSERVABILITY</p><h1>Provider Health</h1><p>Compare Airotrack and Kingstrack responses, device timestamps, BusTrack receipt times, and route usage.</p></div><div class="provider-health-actions"><button class="tech-button danger" id="provider-reset-all" type="button" ${state.refreshing || state.resettingAll ? "disabled" : ""}>${state.resettingAll ? "Resetting…" : "Reset all tracking"}</button><button class="tech-button primary" id="provider-pull-now" type="button" ${state.refreshing || state.resettingAll ? "disabled" : ""}>${state.refreshing ? "Fetching…" : "↻ Fetch providers now"}</button></div></header>
+        <header class="tech-hero provider-health-hero"><div><p class="tech-eyebrow">GPS PROVIDER OBSERVABILITY</p><h1>Provider Health</h1><p>Compare Airotrack and Kingstrack responses, device timestamps, BusTrack receipt times, and route usage.</p></div><div class="provider-health-actions"><button class="tech-button danger" id="provider-reset-all" type="button" ${state.resettingAll || state.pullingProviders ? "disabled" : ""}>${state.resettingAll ? "Resetting…" : "Reset all tracking"}</button><button class="tech-button primary" id="provider-pull-now" type="button" ${state.refreshing || state.resettingAll ? "disabled" : ""}>${state.refreshing ? "Fetching…" : "↻ Fetch providers now"}</button></div></header>
         ${state.lastRefreshError ? `<p class="provider-page-error">${escapeHtml(state.lastRefreshError)}</p>` : ""}
         <section class="tech-stat-grid provider-stat-grid">
             ${summaryCard("Healthy", counts.healthy || 0, "fresh provider coordinates", "healthy")}
@@ -280,8 +292,8 @@ function bindEvents() {
 }
 
 function openResetAllDialog() {
-    if (state.resettingAll) return;
-    const requestId = crypto.randomUUID();
+    if (state.resettingAll || state.pullingProviders) return;
+    const requestId = resetRequestId();
     let submitting = false;
     Modal.form({
         eyebrow: "DESTRUCTIVE GPS RESET",
@@ -309,6 +321,11 @@ function openResetAllDialog() {
                 return;
             }
             submitting = true;
+            // A health request started before the reset can otherwise repaint
+            // its old GPS snapshot while the destructive request is running.
+            state.refreshRequestId++;
+            activeRefreshController?.abort();
+            state.refreshing = false;
             state.resettingAll = true;
             if (confirmation) confirmation.disabled = true;
             renderPage();
@@ -325,10 +342,21 @@ function openResetAllDialog() {
                 });
                 Modal.close();
                 state.positionPage = 1;
+                // Do not keep displaying the coordinates that the server has
+                // just cleared while the independent health read catches up.
+                state.health = null;
+                state.positions = [];
+                state.positionTotal = 0;
+                state.positionHasMore = false;
+                state.loading = true;
+                renderPage();
                 const routesWithoutStops = result.routes_without_stops?.length || 0;
+                const clearedBuses = Number(result.buses_waiting_for_new_gps);
+                const clearedSummary = Number.isFinite(clearedBuses)
+                    ? `${clearedBuses} bus${clearedBuses === 1 ? "" : "es"} cleared. ` : "";
                 Modal.success({
                     title: "Fleet tracking reset",
-                    subtitle: `${result.active_routes_reset_outbound} active route${result.active_routes_reset_outbound === 1 ? " is" : "s are"} outbound and waiting for new GPS data.${routesWithoutStops ? ` ${routesWithoutStops} active route${routesWithoutStops === 1 ? " has" : "s have"} no stops and could not be restarted.` : ""}`,
+                    subtitle: `${clearedSummary}${result.active_routes_reset_outbound} active route${result.active_routes_reset_outbound === 1 ? " is" : "s are"} outbound and waiting for new GPS data.${routesWithoutStops ? ` ${routesWithoutStops} active route${routesWithoutStops === 1 ? " has" : "s have"} no stops and could not be restarted.` : ""} Fresh fixes from providers will appear automatically after the reset.`,
                 });
                 // Health is a separate read request. Its latency must not
                 // keep the reset button busy or delay the success notice.
@@ -357,7 +385,7 @@ async function openResetDialog(busId) {
     try {
         const options = await request(`/integrations/gps/provider-health/buses/${busId}/reset-options`, { cache: "no-store" });
         if (!page) return;
-        const requestId = crypto.randomUUID();
+        const requestId = resetRequestId();
         let submitting = false;
         let direction = "forward";
         Modal.form({
@@ -454,9 +482,12 @@ function showRawPosition(id) {
 }
 
 async function refreshData({ preserveError = false, force = false } = {}) {
+    if (state.resettingAll && !force) return;
     if (state.refreshing && !force) return;
+    if (force) activeRefreshController?.abort();
     const requestId = ++state.refreshRequestId;
     const controller = new AbortController();
+    activeRefreshController = controller;
     const timeoutId = window.setTimeout(() => controller.abort(), PROVIDER_HEALTH_REQUEST_TIMEOUT_MS);
     state.refreshing = true;
     if (!preserveError) state.lastRefreshError = "";
@@ -501,6 +532,7 @@ async function refreshData({ preserveError = false, force = false } = {}) {
         }
     } finally {
         window.clearTimeout(timeoutId);
+        if (activeRefreshController === controller) activeRefreshController = null;
         if (requestId !== state.refreshRequestId) return;
         state.loading = false;
         state.refreshing = false;
@@ -509,7 +541,8 @@ async function refreshData({ preserveError = false, force = false } = {}) {
 }
 
 async function pullProviderNow() {
-    if (state.refreshing) return;
+    if (state.refreshing || state.resettingAll) return;
+    state.pullingProviders = true;
     state.refreshing = true;
     state.lastRefreshError = "";
     renderPage();
@@ -527,6 +560,7 @@ async function pullProviderNow() {
     } catch (error) {
         providerNotice = `Provider fetch failed: ${error.message}`;
     } finally {
+        state.pullingProviders = false;
         state.refreshing = false;
         state.lastRefreshError = providerNotice;
         await refreshData({ preserveError: true });

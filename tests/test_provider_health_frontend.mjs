@@ -22,7 +22,7 @@ function portal(request, overrides = {}) {
         URLSearchParams,
         window: overrides.window || {setInterval() {}, clearInterval() {}, setTimeout() {}, clearTimeout() {}},
         document: overrides.document || {},
-        crypto: {randomUUID: () => 'test'},
+        crypto: overrides.crypto || {randomUUID: () => 'test'},
         AbortController,
     });
     vm.runInContext(source, context);
@@ -30,6 +30,17 @@ function portal(request, overrides = {}) {
     vm.runInContext('page = testPage;', context);
     return {context, page};
 }
+
+test('fleet reset opens on HTTP LAN pages without crypto.randomUUID', async () => {
+    let formOptions;
+    const {context} = portal(async () => ({}), {
+        crypto: {getRandomValues(bytes) { bytes.fill(0); return bytes; }},
+        Modal: {form(options) { formOptions = options; }},
+    });
+    vm.runInContext('openResetAllDialog()', context);
+    assert.match(formOptions.title, /Reset all fleet tracking/);
+    assert.equal(vm.runInContext('resetRequestId()', context), '00000000-0000-4000-8000-000000000000');
+});
 
 
 test('provider health clearly labels and filters Kingstrack independently', async () => {
@@ -75,6 +86,26 @@ test('manual refresh uses the combined providers endpoint and selected source', 
 
     assert.ok(requests.some(path => path.includes('/providers/refresh?provider=airotrack')));
     assert.ok(requests.every(path => !path.includes('/airotrack/refresh')));
+});
+
+test('fleet reset cannot overlap a manual provider pull', async () => {
+    let finishPull;
+    let formOpened = false;
+    const {context, page} = portal(async path => {
+        if (path.includes('/providers/refresh')) {
+            return new Promise(resolve => { finishPull = () => resolve({errors: []}); });
+        }
+        if (path.includes('/positions')) return {positions: [], total: 0};
+        return {counts: {}, buses: []};
+    }, {Modal: {form() { formOpened = true; }}});
+    vm.runInContext('state.loading = false; state.health = {counts: {}, buses: []};', context);
+    const pull = vm.runInContext('pullProviderNow()', context);
+    const resetButton = page.innerHTML.match(/id="provider-reset-all"[^>]*>/)?.[0];
+    assert.match(resetButton, /disabled/);
+    vm.runInContext('openResetAllDialog()', context);
+    assert.equal(formOpened, false);
+    finishPull();
+    await pull;
 });
 
 
@@ -246,8 +277,43 @@ test('fleet reset reports success even when the following health read is slow', 
 
     assert.match(notices[0].title, /Fleet tracking reset/);
     assert.equal(vm.runInContext('state.resettingAll', context), false);
-    assert.match(page.innerHTML, /Reset all tracking/);
-    assert.doesNotMatch(page.innerHTML, /Resetting…/);
+    assert.match(page.innerHTML, /Loading provider health/);
+    assert.doesNotMatch(page.innerHTML, /STALE|Resetting…/);
+});
+
+test('fleet reset stays available during a slow health read and ignores its old snapshot', async () => {
+    let releaseOldHealth;
+    let healthReads = 0;
+    let formOptions;
+    const confirmation = {value: 'RESET', disabled: false, focus() {}};
+    const {context, page} = portal(async path => {
+        if (path.endsWith('/reset-all')) {
+            return {buses_waiting_for_new_gps: 2, active_routes_reset_outbound: 2};
+        }
+        if (path.includes('/positions')) return {positions: [], total: 0};
+        healthReads++;
+        if (healthReads === 1) {
+            return new Promise(resolve => { releaseOldHealth = resolve; });
+        }
+        return {counts: {no_data: 2}, buses: []};
+    }, {
+        document: {getElementById: id => id === 'provider-reset-all-confirm'
+            ? confirmation : {textContent: ''}},
+        Modal: {form(options) { formOptions = options; }, close() {}, success() {}},
+    });
+    vm.runInContext('state.loading = false; state.health = {counts: {}, buses: []};', context);
+    const oldRefresh = vm.runInContext('refreshData()', context);
+    vm.runInContext('renderPage()', context);
+    assert.match(page.innerHTML, /id="provider-reset-all"[^>]*>/);
+    assert.doesNotMatch(page.innerHTML.match(/id="provider-reset-all"[^>]*>/)[0], /disabled/);
+
+    vm.runInContext('openResetAllDialog()', context);
+    await formOptions.onSubmit();
+    releaseOldHealth({counts: {healthy: 1}, buses: [{bus_number: 'STALE'}]});
+    await oldRefresh;
+    await new Promise(resolve => setImmediate(resolve));
+    assert.doesNotMatch(page.innerHTML, /STALE/);
+    assert.equal(vm.runInContext('state.health.counts.no_data', context), 2);
 });
 
 test('timed-out fleet reset clears busy state and retains its retry ID', async () => {

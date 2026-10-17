@@ -20,7 +20,7 @@ import {
 
     initializeTrackingSource
 
-} from "./trackingService.js";
+} from "./trackingService.js?v=20261017reset4";
 export function render() {
 
     const page = document.createElement("div");
