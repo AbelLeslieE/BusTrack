@@ -28,7 +28,9 @@ services:
         value: 480
 
       - key: BACKGROUND_JOBS_ENABLED
-        value: true
+        # Cloud Run's GCP worker is the sole polling/retention worker after cutover.
+        # Keep the legacy Render service from writing a second Neon history.
+        value: false
 
       - key: STATIC_ASSET_CACHE_SECONDS
         value: 3600
