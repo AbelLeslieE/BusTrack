@@ -1,20 +1,24 @@
 # BusTrack on Google Cloud Run
 
-This deployment keeps the application and frontend in one container, stores
-state in Neon PostgreSQL, and separates public request handling from
-the singleton background loops. It does not change route, stop, GPS, or portal
-business logic.
+The application and frontend remain on GCP Cloud Run. Production state is now
+in GCP Cloud SQL PostgreSQL; only the database connection changed from Neon.
+Public requests and singleton background loops remain separate. The cutover
+did not change route, stop, GPS, or portal business logic.
 
 ## Architecture
 
 - `bustrack-web`: public Cloud Run service, autoscaled, background jobs off.
 - `bustrack-worker`: internal Cloud Run service, exactly one continuously
   allocated instance, background jobs on.
-- Neon PostgreSQL: the only production data store.
+- Cloud SQL PostgreSQL instance `bustrack-production:us-west1:bustrack-postgres`:
+  the production data store, with backups and point-in-time recovery enabled.
 - Secret Manager: database URL, JWT secret, bus-pass private key, bootstrap
   administrator password, and optional GPS-provider credentials.
-- Cloud Logging/Monitoring: Cloud Run platform telemetry; Neon provides its own
-  database monitoring and backups.
+- Cloud Logging/Monitoring and Cloud SQL monitoring/backups.
+
+The legacy Render service still has a Neon connection for rollback, but its
+background jobs are disabled. Do not enable another GPS poller or point a
+production Cloud Run revision at Secret Manager database URL version `1`.
 
 Cloud Run terminates HTTPS and replaces the VM/Nginx/process-manager portion of
 the original checklist. A load balancer/static IP is only needed if the college
@@ -47,16 +51,12 @@ to GCP; create separate Secret Manager values for the target project.
 
 ## Before deployment
 
-1. Select the project, region, budget, notification contacts, production domain,
-   Neon plan, and recovery objectives with the college IT owner.
-2. Create a Neon PostgreSQL database and store its connection string in the
-   `bustrack-database-url` Secret Manager secret. Use Neon’s **direct**
-   connection string with `sslmode=require`; startup compatibility migrations
-   use a session-level PostgreSQL advisory lock, which is not safe through
-   Neon’s transaction pooler. Do not put the URL in GitHub
-   variables or source files. Cloud Run uses its normal outbound internet path,
-   so no Cloud SQL attachment or VPC connector is required for Neon.
-   The preparation script below enables required APIs, creates the `bustrack`
+1. Confirm the project, region, budget, notification contacts, production domain,
+   and recovery objectives with the college IT owner.
+2. Keep the Cloud SQL instance attachment and Secret Manager
+   `bustrack-database-url:2` binding together. Version `1` is the retired Neon
+   connection for rollback only. Do not put either URL in GitHub variables or
+   source files. The preparation script below enables required APIs, creates the `bustrack`
    Artifact Registry repository if absent, and grants its detected Cloud Build
    service account image-push access.
 3. Create these Secret Manager secrets and add their values without placing
@@ -67,15 +67,16 @@ to GCP; create separate Secret Manager values for the target project.
    - `bustrack-bus-pass-signing-key` (the existing Ed25519 private PEM)
    - `bustrack-bootstrap-admin-password` (12-72 characters)
 
-   Confirm the Neon connection string includes `sslmode=require` and URL-encode
-   any special characters in the database password.
+   The active Cloud SQL URL uses the Unix socket at
+   `/cloudsql/bustrack-production:us-west1:bustrack-postgres`. URL-encode any
+   special characters in database passwords.
 
    Add provider secrets only when staging has passed. Typical optional bindings
    are `AIROTRACK_API_TOKEN=bustrack-airotrack-api-token:1` and
    `KINGSTRACK_ACCOUNTS=bustrack-kingstrack-accounts:1`.
 
-4. Import existing data with a reviewed database migration. Do not point both
-   the old host and this worker at live provider credentials simultaneously.
+4. The October 24 cutover imported the existing data. Never run the initial
+   import over the live database. Keep only the GCP worker polling providers.
 5. Run the complete automated test suite and a PostgreSQL staging smoke test.
 
 ## Build and deploy
@@ -148,23 +149,22 @@ $image = "asia-south1-docker.pkg.dev/PROJECT_ID/bustrack/bustrack:$tag"
 Review changes first with `-WhatIf`, then deploy:
 
 ```powershell
-./deploy/gcp/deploy-cloud-run.ps1 -ProjectId PROJECT_ID -Image $image -ExternalDatabase -WhatIf
-./deploy/gcp/deploy-cloud-run.ps1 -ProjectId PROJECT_ID -Image $image -ExternalDatabase
+./deploy/gcp/deploy-cloud-run.ps1 -ProjectId bustrack-production -Region us-west1 -Image $image -CloudSqlInstance 'bustrack-production:us-west1:bustrack-postgres' -DatabaseSecretVersion 2 -WhatIf
+./deploy/gcp/deploy-cloud-run.ps1 -ProjectId bustrack-production -Region us-west1 -Image $image -CloudSqlInstance 'bustrack-production:us-west1:bustrack-postgres' -DatabaseSecretVersion 2
 ```
 
-The script pins required secrets to version 1 by default. When a secret is
-rotated, pass the corresponding `-...SecretVersion` parameter explicitly and
-redeploy; it never binds a production service to the mutable `latest` alias.
+The script's default database secret version is still `1` for older deployments.
+Always pass `-DatabaseSecretVersion 2` for this production project. When a
+secret is rotated, pass the corresponding `-...SecretVersion` parameter
+explicitly and redeploy; never use the mutable `latest` alias.
 Both Cloud Run services use second-generation execution and instance-based CPU
 allocation for their health probes. The worker keeps one instance running, so
 review its continuous compute cost before deployment; the web service may
 scale to zero with the default `WebMinInstances=0`.
 
-Neon’s backup, branching, retention, and point-in-time recovery settings must
-be configured in the Neon project. The runtime service account receives only
-log-writer, monitoring-writer, and per-secret accessor roles when
-`-ExternalDatabase` is used. Human IAM, billing roles, and DNS permissions
-remain an IT-owner decision.
+The Cloud Run runtime service account needs `roles/cloudsql.client` and access
+to its required secrets. Human IAM, billing roles, and DNS permissions remain
+an IT-owner decision.
 
 ## Cutover verification
 
@@ -194,12 +194,12 @@ service URL whenever possible.
 
 Create an HTTPS uptime check for `/health` and alert on failure. Also create
 alerts for Cloud Run 5xx rate, latency, and instance saturation, and configure
-Neon alerts for database health, connections, compute, and storage. Configure
+Cloud SQL alerts for database health, connections, CPU, and storage. Configure
 a billing budget with email/Pub/Sub notifications; a budget alert is not a hard
 spending cap.
 
 Backups are not considered complete until a restore drill succeeds. Restore a
-Neon branch or backup into an isolated staging database, bind a staging
+Cloud SQL backup into an isolated staging database, bind a staging
 revision to its database URL, run this verifier and the route/GPS checks,
 record the recovery time, and delete the drill resources only after sign-off.
 
@@ -212,7 +212,7 @@ is still recommended before complex future schema changes.
 ## Items that source code cannot complete
 
 The production domain/DNS, college IAM and 2FA, firewall/source-IP policy,
-Neon plan and recovery settings, notification channels, billing limit, live data migration,
+Cloud SQL recovery settings, notification channels, billing limit,
 MVD payload contract, and MVD end-to-end test require the relevant owners and
 credentials. Do not mark those checklist items complete until they are verified
 in the target project.
