@@ -108,13 +108,20 @@ on the deployer service account.
 Add these GitHub Actions **Variables** to the `production` environment:
 
 - `GCP_PROJECT_ID` — Google Cloud project ID
-- `GCP_REGION` — for example `asia-south1`
+- `GCP_REGION` — `us-west1` for the current BusTrack deployment
 - `GCP_WORKLOAD_IDENTITY_PROVIDER` — full provider resource name
 - `GCP_DEPLOYER_SERVICE_ACCOUNT` — deployer service-account email
 - `GCP_ARTIFACT_REPOSITORY` — for example `bustrack`
 - `GCP_IMAGE_NAME` — for example `bustrack`
 - `GCP_DATABASE_SECRET`, `GCP_JWT_SECRET`, `GCP_BUS_PASS_SECRET`,
   `GCP_BOOTSTRAP_ADMIN_SECRET` — Secret Manager secret names
+
+The production workflow is pinned to Cloud SQL instance
+`bustrack-production:us-west1:bustrack-postgres` and database secret version
+`2`. Version `1` remains the Neon rollback connection and must not be selected
+for normal deployments. The Cloud Run runtime service account has
+`roles/cloudsql.client`; `-SkipProjectSetup` does not grant that role in a new
+project. Review the workflow and migration state before changing either pin.
 
 Optional provider credentials remain configured as Secret Manager bindings;
 set `GCP_OPTIONAL_SECRET_BINDINGS` as an environment variable using the format
