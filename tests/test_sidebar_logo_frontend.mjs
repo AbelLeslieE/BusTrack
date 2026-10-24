@@ -19,5 +19,10 @@ assert.match(css, /\.brand-mark\s*\{[\s\S]*?font-size:\s*0\s*;/, "the legacy emo
 
 const dashboard = read("frontend/dashboard.html");
 assert.match(dashboard, /sidebar\.css\?v=20261015logo2/, "dashboard must cache-bust the sidebar stylesheet");
+assert.match(dashboard, /class="startup-loader__mark"[^>]*><img src="\/static\/assets\/images\/logo\.png\?v=20261015logo2"/, "startup screen must use the bus logo");
+assert.doesNotMatch(dashboard, /class="startup-loader__mark"[^>]*>BT</, "startup screen must not show the legacy BT mark");
+
+const login = read("frontend/login.html");
+assert.match(login, /<img src="\/static\/assets\/images\/logo\.png\?v=20261015logo2" alt="BusTrack logo">/, "login screen must use the bus logo");
 
 console.log("Sidebar logo frontend checks passed.");

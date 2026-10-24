@@ -28,17 +28,15 @@
       .startup-loader__mark {
         display: grid;
         place-items: center;
-        width: 64px;
-        height: 64px;
+        width: 80px;
+        height: 80px;
         margin: 0 auto 24px;
         border: 1px solid rgba(110, 231, 255, .5);
         border-radius: 18px;
-        background: linear-gradient(135deg, #1688c1, #604fbe);
         box-shadow: 0 12px 34px rgba(2, 12, 31, .35);
-        font-size: 22px;
-        font-weight: 800;
-        letter-spacing: -.04em;
+        overflow: hidden;
       }
+      .startup-loader__mark img { display: block; width: 100%; height: 100%; object-fit: cover; }
       .startup-loader__name { margin: 0; font-size: clamp(24px, 7vw, 30px); font-weight: 750; }
       .startup-loader__spinner {
         display: block;
@@ -91,7 +89,7 @@
   <body>
     <div id="startup-loader" class="startup-loader" role="status" aria-live="polite">
       <div class="startup-loader__content">
-        <div class="startup-loader__mark" aria-hidden="true">BT</div>
+        <div class="startup-loader__mark" aria-hidden="true"><img src="/static/assets/images/logo.png?v=20261015logo2" alt=""></div>
         <p class="startup-loader__name">BusTrack</p>
         <span class="startup-loader__spinner" aria-hidden="true"></span>
         <p class="startup-loader__message">Loading your workspace…</p>
