@@ -16,9 +16,10 @@ did not change route, stop, GPS, or portal business logic.
   administrator password, and optional GPS-provider credentials.
 - Cloud Logging/Monitoring and Cloud SQL monitoring/backups.
 
-The legacy Render service still has a Neon connection for rollback, but its
-background jobs are disabled. Do not enable another GPS poller or point a
-production Cloud Run revision at Secret Manager database URL version `1`.
+The legacy Render service still has a Neon connection for rollback, but it is
+suspended and its background jobs are disabled. Do not enable another GPS
+poller or point a production Cloud Run revision at Secret Manager database URL
+version `1`.
 
 Cloud Run terminates HTTPS and replaces the VM/Nginx/process-manager portion of
 the original checklist. A load balancer/static IP is only needed if the college
