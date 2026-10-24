@@ -70,11 +70,12 @@ jobs:
             -Region $env:REGION `
             -Image $image `
             -DatabaseSecret $env:DATABASE_SECRET `
+            -DatabaseSecretVersion 2 `
+            -CloudSqlInstance 'bustrack-production:us-west1:bustrack-postgres' `
             -JwtSecret $env:JWT_SECRET `
             -BusPassSecret $env:BUS_PASS_SECRET `
             -BootstrapAdminSecret $env:BOOTSTRAP_ADMIN_SECRET `
             -OptionalSecretBindings $optional `
-            -ExternalDatabase `
             -SkipProjectSetup
 
       - name: Verify public service
