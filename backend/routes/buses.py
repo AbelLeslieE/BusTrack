@@ -92,6 +92,25 @@ router = APIRouter(
 )
 
 
+def get_student_counts_by_bus_id(db: Session) -> dict[int, int]:
+    """Count students against their route's bus, with a legacy bus fallback."""
+
+    assigned_bus_id = case(
+        (Student.route_id.isnot(None), Route.bus_id),
+        else_=Student.bus_id,
+    )
+    return {
+        bus_id: int(student_count)
+        for bus_id, student_count in (
+            db.query(assigned_bus_id, func.count(Student.id))
+            .outerjoin(Route, Student.route_id == Route.id)
+            .filter(assigned_bus_id.isnot(None))
+            .group_by(assigned_bus_id)
+            .all()
+        )
+    }
+
+
 BUS_EXPORT_HEADERS = [
     "Index",
     "Bus Number",
@@ -122,20 +141,7 @@ def get_buses(
             else []
         )
     }
-    assigned_bus_id = case(
-        (Student.route_id.isnot(None), Route.bus_id),
-        else_=Student.bus_id,
-    )
-    student_counts_by_bus_id = {
-        bus_id: int(student_count)
-        for bus_id, student_count in (
-            db.query(assigned_bus_id, func.count(Student.id))
-            .outerjoin(Route, Student.route_id == Route.id)
-            .filter(assigned_bus_id.isnot(None))
-            .group_by(assigned_bus_id)
-            .all()
-        )
-    }
+    student_counts_by_bus_id = get_student_counts_by_bus_id(db)
 
     return [
 
@@ -378,7 +384,12 @@ def get_bus(
             status_code=404,
             detail="Bus not found.",
         )
-    return build_bus_response(bus, db)
+    student_counts_by_bus_id = get_student_counts_by_bus_id(db)
+    return build_bus_response(
+        bus,
+        db,
+        student_counts_by_bus_id=student_counts_by_bus_id,
+    )
 
     
 

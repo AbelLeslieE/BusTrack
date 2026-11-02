@@ -180,7 +180,11 @@ export function openBusDetails(bus, selectedDocument = null) {
         }
     });
     Modal.open({eyebrow:"Fleet management",title:bus.bus_number,subtitle:`${capacity || "—"} seats · ${studentCount} students assigned`,size:"lg",content:root,
-        actions:[{text:"Close",style:"secondary",close:true}],onClose:()=>{requestId++;},onOpen:()=>{
+        actions:[{text:"Close",style:"secondary",close:true}],onClose:()=>{
+            requestId++;
+            document.querySelector(".modal.bus-details-modal")?.classList.remove("bus-details-modal");
+        },onOpen:()=>{
+            root.closest(".modal")?.classList.add("bus-details-modal");
             root.closest(".modal").scrollTop = 0;
             root.closest(".modal-body").scrollTop = 0;
             tab(Boolean(selectedDocument));

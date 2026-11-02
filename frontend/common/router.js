@@ -330,7 +330,7 @@ function applyModuleStyles(moduleName) {
 
     const styles = [loadStylesheet(
         "active-module-styles",
-        `/static/modules/css/${styleModuleName}.css?v=20261102busstudents`
+        `/static/modules/css/${styleModuleName}.css?v=20261102glasspanels`
     )];
 
     // Driver shared styles

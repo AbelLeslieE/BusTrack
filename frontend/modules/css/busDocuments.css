@@ -4,6 +4,23 @@
     overflow-wrap: anywhere;
 }
 
+/* Bring this dialog in line with the translucent page-heading surfaces. */
+.modal.bus-details-modal {
+    border-color: rgba(255, 255, 255, .12);
+    background: linear-gradient(135deg, rgba(20, 34, 58, .45), rgba(8, 18, 35, .3));
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, .18), 0 0 20px rgba(79, 209, 255, .05);
+}
+
+.modal.bus-details-modal .modal-header {
+    background: linear-gradient(112deg, rgba(7, 31, 62, .34), rgba(55, 55, 120, .22));
+}
+
+.modal.bus-details-modal .modal-footer {
+    background: rgba(4, 18, 40, .12);
+}
+
 .bus-document-tabs {
     display: flex;
     gap: 8px;
@@ -11,7 +28,9 @@
     padding: 5px;
     border: 1px solid rgba(137, 176, 219, .12);
     border-radius: 14px;
-    background: rgba(5, 16, 34, .48);
+    background: rgba(173, 211, 244, .055);
+    -webkit-backdrop-filter: blur(18px) saturate(145%);
+    backdrop-filter: blur(18px) saturate(145%);
 }
 
 .bus-documents button {
@@ -65,13 +84,15 @@
     padding: 17px 19px;
     border: 1px solid rgba(137, 176, 219, .16);
     border-radius: 16px;
-    background: linear-gradient(145deg, rgba(19, 42, 72, .72), rgba(11, 25, 47, .76));
-    box-shadow: inset 0 1px rgba(255,255,255,.035);
+    background: linear-gradient(135deg, rgba(20, 34, 58, .4), rgba(8, 18, 35, .24));
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    box-shadow: inset 0 1px rgba(255,255,255,.12), 0 10px 26px rgba(0, 8, 25, .1);
 }
 
 .bus-overview-load {
-    border-color: rgba(75, 194, 235, .28);
-    background: linear-gradient(145deg, rgba(24, 76, 111, .5), rgba(12, 33, 59, .85));
+    border-color: rgba(112, 218, 255, .28);
+    background: linear-gradient(135deg, rgba(61, 173, 217, .26), rgba(107, 99, 194, .2));
 }
 
 .bus-overview-stat-heading {
@@ -135,7 +156,7 @@
     height: 5px;
     overflow: hidden;
     border-radius: 999px;
-    background: rgba(5, 17, 34, .8);
+    background: rgba(3, 18, 39, .3);
 }
 .bus-load-track span {
     display: block;
@@ -184,7 +205,10 @@
     padding: 14px 16px;
     border: 1px solid rgba(137,176,219,.12);
     border-radius: 13px;
-    background: rgba(7, 19, 39, .42);
+    background: linear-gradient(135deg, rgba(20, 34, 58, .32), rgba(8, 18, 35, .2));
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    box-shadow: inset 0 1px rgba(255,255,255,.1);
 }
 .bus-overview-detail dt {
     margin-bottom: 7px;
