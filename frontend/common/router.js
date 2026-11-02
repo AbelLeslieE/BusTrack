@@ -265,9 +265,6 @@ function createFallback(title, message) {
 }
 
 const pendingStyleLoads = new Map();
-const fleetGlassModules = new Set([
-    "tripHistory", "buses", "routes", "assignments", "stops", "drivers", "students"
-]);
 
 function loadStylesheet(id, href) {
     const pending = pendingStyleLoads.get(id);
@@ -335,13 +332,6 @@ function applyModuleStyles(moduleName) {
         "active-module-styles",
         `/static/modules/css/${styleModuleName}.css?v=20261102topbarglass`
     )];
-
-    if (isAdmin && fleetGlassModules.has(moduleName)) {
-        styles.push(loadStylesheet(
-            "fleet-glass-style",
-            "/static/modules/css/fleetGlass.css?v=20261102topbarglass"
-        ));
-    }
 
     // Driver shared styles
     if (isDriver) {
