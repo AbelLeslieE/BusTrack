@@ -43,7 +43,7 @@ jobs:
         env:
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          gcloud beta builds submit \
+          gcloud --quiet beta builds submit \
             --project "$PROJECT_ID" \
             --region "$REGION" \
             --config deploy/gcp/cloudbuild.yaml \
