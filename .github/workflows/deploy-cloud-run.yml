@@ -97,6 +97,8 @@ jobs:
       - name: Verify public service
         shell: pwsh
         run: |
+          $service = gcloud run services describe bustrack-web --project $env:PROJECT_ID --region $env:REGION --format json | ConvertFrom-Json
+          Write-Host "Cloud Run revision: $($service.status.latestReadyRevisionName); image: $($service.spec.template.spec.containers[0].image)"
           $url = gcloud run services describe bustrack-web --project $env:PROJECT_ID --region $env:REGION --format 'value(status.url)'
           if ($LASTEXITCODE -ne 0 -or -not $url) { throw 'Could not read the deployed service URL.' }
           ./deploy/gcp/verify-deployment.ps1 -BaseUrl $url.Trim()

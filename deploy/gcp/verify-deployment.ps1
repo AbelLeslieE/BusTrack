@@ -39,8 +39,15 @@ function Assert-AssetContains {
     )
 
     $response = Invoke-WebRequest -Uri "$BaseUrl$Path" -Method Get -SkipHttpErrorCheck
-    if ([int]$response.StatusCode -ne 200 -or -not $response.Content.Contains($ExpectedText)) {
-        throw "$Path did not serve the expected release asset."
+    $content = if ($response.Content -is [byte[]]) {
+        [System.Text.Encoding]::UTF8.GetString($response.Content)
+    } else {
+        [string]$response.Content
+    }
+    if ([int]$response.StatusCode -ne 200 -or -not $content.Contains($ExpectedText)) {
+        $references = [regex]::Matches($content, 'fleetGlass\.css[^"''\s<]*|layout\.css[^"''\s<]*|clamp\([^)]*\)') |
+            Select-Object -First 8 | ForEach-Object { $_.Value }
+        throw "$Path did not serve the expected release asset (HTTP $($response.StatusCode), $($content.Length) characters; found: $($references -join ', '))."
     }
     Write-Host "PASS $Path -> current release asset"
 }
