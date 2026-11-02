@@ -341,6 +341,7 @@ class BusResponse(BaseModel):
 
     route: str | None
     device_id: str | None
+    student_count: int = 0
 
     created_at: datetime
     updated_at: datetime

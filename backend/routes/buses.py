@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook, load_workbook
 from pydantic import ValidationError
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from backend.database import get_db
@@ -40,6 +41,7 @@ def build_bus_response(
     bus: Bus,
     db: Session,
     drivers_by_id: dict[int, Driver] | None = None,
+    student_counts_by_bus_id: dict[int, int] | None = None,
 ) -> BusResponse:
 
     driver_name = None
@@ -75,6 +77,7 @@ def build_bus_response(
 
         route=bus.route,
         device_id=bus.device_id,
+        student_count=(student_counts_by_bus_id or {}).get(bus.id, 0),
 
         created_at=bus.created_at,
         updated_at=bus.updated_at,
@@ -119,10 +122,24 @@ def get_buses(
             else []
         )
     }
+    assigned_bus_id = case(
+        (Student.route_id.isnot(None), Route.bus_id),
+        else_=Student.bus_id,
+    )
+    student_counts_by_bus_id = {
+        bus_id: int(student_count)
+        for bus_id, student_count in (
+            db.query(assigned_bus_id, func.count(Student.id))
+            .outerjoin(Route, Student.route_id == Route.id)
+            .filter(assigned_bus_id.isnot(None))
+            .group_by(assigned_bus_id)
+            .all()
+        )
+    }
 
     return [
 
-        build_bus_response(bus, db, drivers_by_id)
+        build_bus_response(bus, db, drivers_by_id, student_counts_by_bus_id)
 
         for bus in buses
 

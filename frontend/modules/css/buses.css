@@ -1271,6 +1271,20 @@
 
 }
 
+.bus-student-count{
+    display:inline-grid;
+    min-width:40px;
+    min-height:34px;
+    place-items:center;
+    padding:0 10px;
+    border:1px solid rgba(79,209,255,.28);
+    border-radius:11px;
+    background:rgba(79,209,255,.1);
+    color:#c9f4ff;
+    font-weight:800;
+    font-variant-numeric:tabular-nums;
+}
+
 .fleet-data-table tbody tr{
 
     transition:.25s;
