@@ -12,10 +12,28 @@
 
     <link rel="icon" type="image/png" href="/static/assets/images/logo.png?v=20261015logo2">
 
-    <link rel="stylesheet" href="/static/common/login.css?v=20261017fix1">
+    <link rel="preload" as="image" href="/static/assets/images/portal-background.png">
+    <link rel="preload" as="style" href="/static/common/login.css?v=20261102splash1">
+    <script defer src="/static/common/loginSplash.js?v=20261102splash1"></script>
+    <style>
+        .login-splash{position:fixed;inset:0;z-index:20000;display:grid;place-items:center;padding:24px;background:linear-gradient(145deg,#06111f,#0b1d36 55%,#102a48);opacity:1;transition:opacity .25s ease}
+        .login-splash.is-ready{opacity:0;pointer-events:none}
+        .login-splash__content{display:flex;flex-direction:column;align-items:center;gap:26px}
+        .login-splash__content img{display:block;width:clamp(160px,32vw,220px);height:clamp(160px,32vw,220px);object-fit:cover;border:2px solid rgba(110,231,255,.72);border-radius:32px;box-shadow:0 20px 56px rgba(0,0,0,.5),0 0 36px rgba(79,209,255,.25)}
+        .login-splash__spinner{width:42px;height:42px;border:3px solid rgba(255,255,255,.18);border-top-color:#4fd1ff;border-right-color:#9e84ff;border-radius:50%;animation:login-splash-spin .85s linear infinite}
+        @keyframes login-splash-spin{to{transform:rotate(360deg)}}
+        @media(prefers-reduced-motion:reduce){.login-splash,.login-splash__spinner{transition:none;animation:none}}
+    </style>
 </head>
 
 <body>
+
+    <div id="login-splash" class="login-splash" role="status" aria-label="Loading sign-in screen">
+        <div class="login-splash__content">
+            <img src="/static/assets/images/logo.png?v=20261015logo2" alt="BusTrack logo">
+            <span class="login-splash__spinner" aria-hidden="true"></span>
+        </div>
+    </div>
 
     <main class="login-container">
 
