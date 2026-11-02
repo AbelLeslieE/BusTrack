@@ -349,7 +349,8 @@ class RouteStopIntegrityTest(unittest.TestCase):
             self.assertEqual(route_result[0].driver_name, "Batch Driver")
             self.assertEqual(route_result[0].bus_number, bus.bus_number)
             self.assertEqual(route_result[0].total_stops, 3)
-            self.assertLessEqual(bus_statement_count, 2)
+            # The bus list also batches assigned-student counts in one query.
+            self.assertLessEqual(bus_statement_count, 3)
             self.assertLessEqual(route_statement_count, 4)
 
     def test_stop_payloads_validate_geofence_bounds_and_keep_codes_optional(self) -> None:
