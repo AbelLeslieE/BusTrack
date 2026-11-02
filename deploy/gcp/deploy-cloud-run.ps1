@@ -166,6 +166,14 @@ Invoke-Gcloud run deploy $WebServiceName `
     --deploy-health-check `
     --quiet
 
+# An existing explicit traffic target can leave the freshly created web
+# revision idle even when gcloud reports a successful deployment.
+Invoke-Gcloud run services update-traffic $WebServiceName `
+    --project $ProjectId `
+    --region $Region `
+    --to-revisions "${WebServiceName}-${revisionSuffix}=100" `
+    --quiet
+
 # One continuously allocated instance owns polling/reminders. The service is
 # internal-only because browsers and GPS providers must use the web service.
 Invoke-Gcloud run deploy $WorkerServiceName `
