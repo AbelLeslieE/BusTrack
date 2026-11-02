@@ -27,6 +27,18 @@ services:
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
         value: 480
 
+      - key: GOOGLE_OAUTH_ALLOWED_DOMAIN
+        value: sahardaya.ac.in
+
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
+
+      - key: GOOGLE_OAUTH_REDIRECT_URI
+        sync: false
+
       - key: BACKGROUND_JOBS_ENABLED
         # Cloud Run's GCP worker is the sole polling/retention worker after cutover.
         # Keep the legacy Render service from writing a second Neon history.

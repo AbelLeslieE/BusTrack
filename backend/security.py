@@ -163,6 +163,9 @@ class RequestSecurityMiddleware:
         # 20 seconds, so this isolated webhook has a fleet-sized allowance.
         self.gps_ingest_limiter = _SlidingWindowLimiter(2_000, 60)
         self.login_limiter = _SlidingWindowLimiter(10, 60)
+        # A Google signup uses four short requests. Keep a separate allowance
+        # so students behind the same college NAT do not consume login slots.
+        self.google_signup_limiter = _SlidingWindowLimiter(60, 60)
         self.upload_limiter = _SlidingWindowLimiter(12, 60)
 
     @staticmethod
@@ -270,6 +273,8 @@ class RequestSecurityMiddleware:
                 limiter = self.gps_ingest_limiter
             elif path == "/api/auth/login":
                 limiter = self.login_limiter
+            elif path.startswith("/api/auth/google/"):
+                limiter = self.google_signup_limiter
             elif path.endswith("/import") or path.endswith("/preview") or is_document_upload:
                 limiter = self.upload_limiter
             if not limiter.allow(client_key):

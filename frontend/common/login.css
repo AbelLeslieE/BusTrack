@@ -84,6 +84,136 @@ body{
 
 }
 
+[hidden]{
+    display:none !important;
+}
+
+/* Google verifies the college address; BusTrack still owns the credentials. */
+.auth-divider{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    margin:24px 0 16px;
+    color:rgba(255,255,255,.55);
+    font-size:.78rem;
+    font-weight:700;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+}
+
+.auth-divider::before,
+.auth-divider::after{
+    content:"";
+    flex:1;
+    height:1px;
+    background:rgba(255,255,255,.14);
+}
+
+.google-signup-button{
+    min-height:56px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:12px;
+    padding:0 20px;
+    border:1px solid rgba(255,255,255,.22);
+    border-radius:18px;
+    background:rgba(255,255,255,.94);
+    color:#172033;
+    font-weight:700;
+    text-decoration:none;
+    transition:transform .2s ease, background .2s ease, box-shadow .2s ease;
+}
+
+.google-signup-button:hover{
+    transform:translateY(-1px);
+    background:#fff;
+    box-shadow:0 12px 30px rgba(0,0,0,.24);
+}
+
+.google-signup-button:focus-visible{
+    outline:3px solid rgba(125,211,252,.65);
+    outline-offset:3px;
+}
+
+.google-signup-button svg{
+    width:22px;
+    height:22px;
+    flex:0 0 auto;
+}
+
+.google-signup-help{
+    margin-top:12px;
+    color:var(--muted);
+    font-size:.82rem;
+    line-height:1.5;
+    text-align:center;
+}
+
+.signup-card{
+    max-width:520px;
+}
+
+.signup-header{
+    margin-bottom:22px;
+}
+
+#google-signup-form{
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+}
+
+.form-group small{
+    margin:-5px 4px 0;
+    color:var(--muted);
+    font-size:.78rem;
+    line-height:1.45;
+}
+
+.verified-identity{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+    margin-bottom:20px;
+    padding:14px 16px;
+    border:1px solid rgba(52,168,83,.32);
+    border-radius:16px;
+    background:rgba(52,168,83,.1);
+}
+
+.verified-identity span{
+    color:#86efac;
+    font-size:.76rem;
+    font-weight:700;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+}
+
+.verified-identity strong{
+    overflow-wrap:anywhere;
+    font-size:.94rem;
+}
+
+.signup-loading{
+    padding:18px 0;
+    color:var(--muted);
+    text-align:center;
+}
+
+.signup-cancel{
+    display:block;
+    margin-top:18px;
+    color:#7dd3fc;
+    font-size:.88rem;
+    text-align:center;
+    text-decoration:none;
+}
+
+.signup-cancel:hover{
+    text-decoration:underline;
+}
+
 
 /* ==========================================================
    PAGE BACKGROUND
@@ -534,7 +664,8 @@ body::before{
 
 }
 
-#toggle-password{
+#toggle-password,
+#toggle-signup-password{
 
     position:absolute;
 
@@ -560,7 +691,8 @@ body::before{
 
 }
 
-#toggle-password:hover{
+#toggle-password:hover,
+#toggle-signup-password:hover{
 
     color:#ffffff;
 

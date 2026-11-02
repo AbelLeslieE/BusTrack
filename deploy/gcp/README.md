@@ -67,13 +67,25 @@ to GCP; create separate Secret Manager values for the target project.
    - `bustrack-jwt-secret` (at least 32 random characters)
    - `bustrack-bus-pass-signing-key` (the existing Ed25519 private PEM)
    - `bustrack-bootstrap-admin-password` (12-72 characters)
+   - `bustrack-google-oauth-client-id`
+   - `bustrack-google-oauth-client-secret`
+   - `bustrack-google-oauth-redirect-uri`
 
    The active Cloud SQL URL uses the Unix socket at
    `/cloudsql/bustrack-production:us-west1:bustrack-postgres`. URL-encode any
    special characters in database passwords.
 
-   Add provider secrets only when staging has passed. Typical optional bindings
-   are `AIROTRACK_API_TOKEN=bustrack-airotrack-api-token:1` and
+   In Google Cloud Console, create an OAuth 2.0 **Web application** and add the
+   exact public callback URL as an authorised redirect URI:
+   `https://YOUR_PUBLIC_HOST/api/auth/google/callback`. Configure the OAuth
+   consent screen for the Sahardaya Workspace organisation. Bind the three
+   values above through `GCP_OPTIONAL_SECRET_BINDINGS` as
+   `GOOGLE_OAUTH_CLIENT_ID=bustrack-google-oauth-client-id:1`,
+   `GOOGLE_OAUTH_CLIENT_SECRET=bustrack-google-oauth-client-secret:1`, and
+   `GOOGLE_OAUTH_REDIRECT_URI=bustrack-google-oauth-redirect-uri:1`.
+
+   Add provider secrets only when staging has passed. Other typical optional
+   bindings are `AIROTRACK_API_TOKEN=bustrack-airotrack-api-token:1` and
    `KINGSTRACK_ACCOUNTS=bustrack-kingstrack-accounts:1`.
 
 4. The October 24 cutover imported the existing data. Never run the initial

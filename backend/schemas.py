@@ -63,6 +63,17 @@ class PasswordChangeRequest(BaseModel):
 
     current_password: str = Field(min_length=1, max_length=72)
     new_password: str = Field(min_length=12, max_length=72)
+
+
+class GoogleSignupComplete(BaseModel):
+    """Credentials selected after Google verifies a college email address."""
+
+    username: str = Field(
+        min_length=3,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9_.-]+$",
+    )
+    password: str = Field(min_length=12, max_length=72)
 # ==========================================================
 # USER SCHEMAS
 # ==========================================================
