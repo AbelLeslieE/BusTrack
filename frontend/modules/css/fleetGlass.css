@@ -23,11 +23,11 @@
     .modal.bus-details-modal .bus-overview-detail,
     .modal.bus-details-modal .bus-document-card
 ) {
-    background: linear-gradient(135deg, rgba(15, 25, 45, .18), rgba(15, 25, 45, .08));
-    border-color: rgba(255, 255, 255, .1);
-    -webkit-backdrop-filter: blur(16px);
-    backdrop-filter: blur(16px);
-    box-shadow: 0 18px 45px rgba(0, 0, 0, .18), inset 0 1px rgba(255, 255, 255, .05);
+    background: linear-gradient(135deg, rgba(131, 185, 225, .28), rgba(111, 142, 204, .18)) !important;
+    border-color: rgba(221, 241, 255, .25) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(145%) !important;
+    backdrop-filter: blur(24px) saturate(145%) !important;
+    box-shadow: 0 18px 45px rgba(0, 0, 0, .15), inset 0 1px rgba(255, 255, 255, .18) !important;
 }
 
 /* Keep inner controls legible while their enclosing panel shows the backdrop. */
@@ -37,5 +37,10 @@
     .history-page .history-summary-stat,
     .history-page .history-event
 ) {
-    background: linear-gradient(135deg, rgba(15, 25, 45, .27), rgba(15, 25, 45, .14));
+    background: linear-gradient(135deg, rgba(98, 157, 204, .26), rgba(83, 116, 180, .18)) !important;
+}
+
+.history-page .history-bus.is-selected {
+    background: linear-gradient(135deg, rgba(50, 170, 226, .4), rgba(102, 90, 198, .3)) !important;
+    border-color: rgba(114, 221, 255, .7) !important;
 }
