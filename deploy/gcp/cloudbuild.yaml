@@ -35,4 +35,4 @@ substitutions:
   _TAG: latest
 
 options:
-  logging: CLOUD_LOGGING_ONLY
+  logging: LEGACY
