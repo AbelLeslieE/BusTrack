@@ -6,6 +6,7 @@ and GPS-token plaintext values are deliberately excluded.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import random
 import time
@@ -110,7 +111,8 @@ class RequestAuditMiddleware:
         finally:
             duration_ms = int((time.perf_counter() - started) * 1000)
             if self._should_save(method=method, status_code=response_status):
-                self._save(
+                await asyncio.to_thread(
+                    self._save,
                     scope,
                     method=method,
                     path=path,

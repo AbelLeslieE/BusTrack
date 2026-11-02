@@ -7,6 +7,7 @@ import asyncio
 import os
 from pathlib import Path
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 from uuid import uuid4
@@ -62,6 +63,40 @@ class RequestOptimizationTest(unittest.TestCase):
         ):
             full_middleware = RequestAuditMiddleware(_unused_app)
         self.assertTrue(full_middleware._should_save(method="GET", status_code=200))
+
+    def test_slow_audit_write_does_not_block_other_requests(self) -> None:
+        started = threading.Event()
+        release = threading.Event()
+
+        async def app(_scope, _receive, send):
+            await send({"type": "http.response.start", "status": 200, "headers": []})
+            await send({"type": "http.response.body", "body": b"ok"})
+
+        def slow_save(*_args, **_kwargs):
+            started.set()
+            release.wait(timeout=2)
+
+        middleware = RequestAuditMiddleware(app)
+        scope = {"type": "http", "method": "POST", "path": "/api/test", "client": ("127.0.0.1", 1)}
+
+        async def check():
+            loop = asyncio.get_running_loop()
+            before = loop.time()
+            task = asyncio.create_task(middleware(scope, lambda: None, lambda _message: asyncio.sleep(0)))
+            self.assertTrue(await asyncio.to_thread(started.wait, 1))
+            elapsed = loop.time() - before
+            release.set()
+            await task
+            return elapsed
+
+        timer = threading.Timer(2, release.set)
+        timer.start()
+        try:
+            with patch.object(middleware, "_save", side_effect=slow_save):
+                self.assertLess(asyncio.run(check()), 1)
+        finally:
+            release.set()
+            timer.cancel()
 
     def test_background_jobs_can_be_disabled_only_by_explicit_setting(self) -> None:
         with patch.dict(os.environ, {}, clear=True):

@@ -126,6 +126,8 @@ $commonEnvironment = @(
     "FORWARDED_ALLOW_IPS=*",
     "STATIC_ASSET_CACHE_SECONDS=3600",
     "ACCESS_TOKEN_EXPIRE_MINUTES=480",
+    "DATABASE_POOL_SIZE=8",
+    "DATABASE_MAX_OVERFLOW=4",
     "GOOGLE_OAUTH_ALLOWED_DOMAIN=sahardaya.ac.in",
     "TELEMETRY_RETENTION_ENABLED=true",
     "REQUEST_AUDIT_SUCCESS_GET_SAMPLE_RATE=0.01",
@@ -135,11 +137,16 @@ $commonEnvironment = @(
     "ADMIN_LIVE_STREAM_ENABLED=true"
 ) -join ','
 
+# Cloud Run can retain a ready revision when only a mutable image tag changes.
+# A unique suffix makes every release pull and serve its newly built image.
+$revisionSuffix = "r$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())-$((Get-Random -Maximum 10000).ToString('0000'))"
+
 Invoke-Gcloud run deploy $WebServiceName `
     --project $ProjectId `
     --region $Region `
     --platform managed `
     --image $Image `
+    --revision-suffix $revisionSuffix `
     --execution-environment gen2 `
     --port 8080 `
     --service-account $serviceAccountEmail `
@@ -148,7 +155,7 @@ Invoke-Gcloud run deploy $WebServiceName `
     --set-env-vars "$commonEnvironment,BACKGROUND_JOBS_ENABLED=false" `
     --cpu 1 `
     --memory 512Mi `
-    --concurrency 80 `
+    --concurrency 12 `
     --timeout 3600 `
     --min-instances $WebMinInstances `
     --max-instances $WebMaxInstances `
@@ -166,6 +173,7 @@ Invoke-Gcloud run deploy $WorkerServiceName `
     --region $Region `
     --platform managed `
     --image $Image `
+    --revision-suffix $revisionSuffix `
     --execution-environment gen2 `
     --port 8080 `
     --service-account $serviceAccountEmail `
