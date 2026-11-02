@@ -15,12 +15,44 @@ export function openBusDetails(bus, selectedDocument = null) {
     const root = document.createElement("div");
     root.className = "bus-documents";
     const endpoint = `/api/buses/${bus.id}/documents`;
+    const studentCount = Number.isFinite(Number(bus.student_count)) ? Number(bus.student_count) : 0;
+    const capacity = Number.isFinite(Number(bus.capacity)) ? Number(bus.capacity) : 0;
+    const loadPercent = capacity ? Math.min(100, Math.round(studentCount / capacity * 100)) : 0;
+    const status = bus.status || "Unknown";
+    const statusClass = {Active:"active", Maintenance:"maintenance", Inactive:"inactive"}[status] || "unknown";
+    const details = [
+        ["Registration", bus.registration_number || "Not entered"],
+        ["Vehicle", [bus.manufacturer, bus.model].filter(Boolean).join(" ") || "Not entered"],
+        ["Fuel type", bus.fuel_type || "Not entered"],
+        ["Assigned route", bus.route || "Not assigned"],
+        ["Driver", bus.driver_name || "Not assigned"],
+        ["GPS device", bus.device_id || "Not assigned"],
+    ];
     let documents = [], requestId = 0;
     root.innerHTML = `<div class="bus-document-tabs" role="tablist" aria-label="Bus details">
         <button type="button" role="tab" id="bus-overview-tab" aria-controls="bus-overview-panel">Overview</button>
         <button type="button" role="tab" id="bus-documents-tab" aria-controls="bus-documents-panel">Documents &amp; Compliance</button>
-        </div><section id="bus-overview-panel" role="tabpanel" aria-labelledby="bus-overview-tab" class="detail-list">
-        ${[["Registration",bus.registration_number],["Capacity",bus.capacity],["Vehicle",`${bus.manufacturer || ""} ${bus.model || ""} (${bus.year || "—"})`],["Fuel",bus.fuel_type],["Status",bus.status],["Route",bus.route],["Driver",bus.driver_name],["GPS Device",bus.device_id]].map(([label,value])=>`<p><strong>${label}:</strong> ${escapeHtml(value ?? "Not assigned")}</p>`).join("")}
+        </div><section id="bus-overview-panel" role="tabpanel" aria-labelledby="bus-overview-tab" class="bus-overview">
+        <div class="bus-overview-stats" aria-label="Bus capacity and status">
+            <article class="bus-overview-stat bus-overview-load">
+                <div class="bus-overview-stat-heading"><span>Students assigned</span><span class="bus-overview-stat-icon" aria-hidden="true">↗</span></div>
+                <strong>${studentCount}<span> / ${capacity || "—"}</span></strong>
+                <div class="bus-load-track" role="progressbar" aria-label="Bus capacity used" aria-valuemin="0" aria-valuemax="${capacity}" aria-valuenow="${Math.min(studentCount, capacity)}"><span style="width:${loadPercent}%"></span></div>
+                <small>${capacity ? `${loadPercent}% of seat capacity` : "Seat capacity not set"}</small>
+            </article>
+            <article class="bus-overview-stat">
+                <div class="bus-overview-stat-heading"><span>Seat capacity</span><span class="bus-overview-stat-icon" aria-hidden="true">▦</span></div>
+                <strong>${capacity || "—"}</strong>
+                <small>registered seats</small>
+            </article>
+            <article class="bus-overview-stat">
+                <div class="bus-overview-stat-heading"><span>Bus status</span><span class="bus-status-dot ${statusClass}" aria-hidden="true"></span></div>
+                <strong class="bus-status-value ${statusClass}">${escapeHtml(status)}</strong>
+                <small>current fleet status</small>
+            </article>
+        </div>
+        <div class="bus-overview-section-heading"><div><span>BUS PROFILE</span><h3>Vehicle details</h3></div><span class="bus-year-chip">${escapeHtml(bus.year || "Year not set")}</span></div>
+        <dl class="bus-overview-grid">${details.map(([label,value])=>`<div class="bus-overview-detail"><dt>${label}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl>
         </section><section id="bus-documents-panel" role="tabpanel" aria-labelledby="bus-documents-tab" hidden>
         <p class="bus-document-note">All document details, dates and files are optional. Missing or expired documents do not affect bus tracking or trips.</p>
         <div class="bus-document-message" role="status"></div><div class="bus-document-content"></div></section>`;
@@ -147,7 +179,7 @@ export function openBusDetails(bus, selectedDocument = null) {
             finally { button.disabled=false; }
         }
     });
-    Modal.open({eyebrow:"Fleet management",title:bus.bus_number,subtitle:bus.registration_number,size:"lg",content:root,
+    Modal.open({eyebrow:"Fleet management",title:bus.bus_number,subtitle:`${capacity || "—"} seats · ${studentCount} students assigned`,size:"lg",content:root,
         actions:[{text:"Close",style:"secondary",close:true}],onClose:()=>{requestId++;},onOpen:()=>{
             root.closest(".modal").scrollTop = 0;
             root.closest(".modal-body").scrollTop = 0;
