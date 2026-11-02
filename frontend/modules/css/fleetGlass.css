@@ -1,0 +1,41 @@
+/* Match the administrator topbar's light glass across fleet pages. */
+:is(
+    .history-page .portal-header,
+    .history-page .history-section,
+    .history-page .history-controls,
+    .history-page .history-bus,
+    .history-page .history-summary-stat,
+    .history-page .history-event,
+    .buses-page .glass-card,
+    .buses-page .stat-card,
+    .routes-page .glass-card,
+    .routes-page .stat-card,
+    .assignments-page .glass-card,
+    .assignments-page .assignment-card,
+    .assignments-page .assignments-summary,
+    .stops-page .glass-panel,
+    .stops-page .stat-card,
+    .driver-module .glass-card,
+    .students-page .glass-card,
+    .modal.bus-details-modal,
+    .modal.bus-details-modal .bus-document-tabs,
+    .modal.bus-details-modal .bus-overview-stat,
+    .modal.bus-details-modal .bus-overview-detail,
+    .modal.bus-details-modal .bus-document-card
+) {
+    background: linear-gradient(135deg, rgba(15, 25, 45, .18), rgba(15, 25, 45, .08));
+    border-color: rgba(255, 255, 255, .1);
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+    box-shadow: 0 18px 45px rgba(0, 0, 0, .18), inset 0 1px rgba(255, 255, 255, .05);
+}
+
+/* Keep inner controls legible while their enclosing panel shows the backdrop. */
+:is(
+    .history-page .history-controls,
+    .history-page .history-bus,
+    .history-page .history-summary-stat,
+    .history-page .history-event
+) {
+    background: linear-gradient(135deg, rgba(15, 25, 45, .27), rgba(15, 25, 45, .14));
+}
