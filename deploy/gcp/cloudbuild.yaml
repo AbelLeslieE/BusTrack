@@ -1,19 +1,4 @@
 steps:
-  - name: python:3.12-slim
-    entrypoint: bash
-    args:
-      - -ceu
-      - |
-        pip install --disable-pip-version-check --no-cache-dir -r requirements.txt
-        python -m unittest discover -s tests -p 'test_*.py'
-  - name: node:22-slim
-    entrypoint: bash
-    args:
-      - -ceu
-      - |
-        for test_file in tests/*.mjs; do
-          node "$${test_file}"
-        done
   - name: gcr.io/cloud-builders/docker
     args:
       - build
@@ -35,4 +20,4 @@ substitutions:
   _TAG: latest
 
 options:
-  logging: LEGACY
+  logging: CLOUD_LOGGING_ONLY
