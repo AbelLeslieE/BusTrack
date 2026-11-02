@@ -501,7 +501,7 @@ function renderStatistics(){
 
         <section class="statistics-grid">
 
-            <div class="stat-card">
+            <div class="stat-card glass-panel">
 
                 <span class="stat-title">
 
@@ -517,7 +517,7 @@ function renderStatistics(){
 
             </div>
 
-            <div class="stat-card">
+            <div class="stat-card glass-panel">
 
                 <span class="stat-title">
 
@@ -533,7 +533,7 @@ function renderStatistics(){
 
             </div>
 
-            <div class="stat-card">
+            <div class="stat-card glass-panel">
 
                 <span class="stat-title">
 
@@ -549,7 +549,7 @@ function renderStatistics(){
 
             </div>
 
-            <div class="stat-card">
+            <div class="stat-card glass-panel">
 
                 <span class="stat-title">
 

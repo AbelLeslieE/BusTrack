@@ -73,6 +73,44 @@ def create_access_token(
     return jwt.encode(payload, _get_secret_key(), algorithm=JWT_ALGORITHM)
 
 
+def create_temporary_token(token_type: str, claims: dict, expires_in_minutes: int = 10) -> str:
+    """Create a signed, short-lived token for a server-controlled browser flow.
+
+    Temporary tokens use the same protected signing key but a distinct token
+    type, so they can never be accepted as BusTrack access tokens.
+    """
+
+    if not token_type or token_type == "access":
+        raise ValueError("A non-access temporary token type is required.")
+    now = datetime.now(timezone.utc)
+    payload = {
+        **claims,
+        "iat": now,
+        "exp": now + timedelta(minutes=expires_in_minutes),
+        "iss": JWT_ISSUER,
+        "aud": JWT_AUDIENCE,
+        "typ": token_type,
+    }
+    return jwt.encode(payload, _get_secret_key(), algorithm=JWT_ALGORITHM)
+
+
+def decode_temporary_token(token: str, expected_type: str) -> dict:
+    """Validate and return a temporary token with an exact purpose."""
+
+    if not expected_type or expected_type == "access":
+        raise ValueError("A non-access temporary token type is required.")
+    payload = jwt.decode(
+        token,
+        _get_secret_key(),
+        algorithms=[JWT_ALGORITHM],
+        issuer=JWT_ISSUER,
+        audience=JWT_AUDIENCE,
+    )
+    if payload.get("typ") != expected_type:
+        raise JWTError("Invalid token type.")
+    return payload
+
+
 def get_token_identity(token: str) -> tuple[str, int, str | None]:
     """Return the subject, session version, and optional session ID."""
 

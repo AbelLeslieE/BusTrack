@@ -9,7 +9,7 @@ Bus Tracker is a FastAPI and vanilla-JavaScript fleet-management application for
 - **Backend:** FastAPI (Python)
 - **Database:** SQLite for development and PostgreSQL for production
 - **ORM:** SQLAlchemy
-- **Authentication:** JWT with Passlib and python-jose
+- **Authentication:** Google Workspace verification for student signup, then JWT sessions with Passlib and python-jose
 - **Frontend:** HTML5, CSS3, and Vanilla JavaScript ES Modules
 - **Maps and routing:** Leaflet.js, OpenStreetMap, OSRM, and Nominatim
 - **Bus-pass scanning:** Short-lived Ed25519 QR credentials with a vendored browser scanner
@@ -54,6 +54,16 @@ python database/init_database.py --username your-admin-name
 ```
 
 The setup command securely prompts for a 12–72 character password and stores only its bcrypt hash with a unique salt. The login page receives a short-lived JWT in an HttpOnly, SameSite session cookie. The browser does not persist the JSON bearer token; that response field remains available only for non-browser API compatibility. The dashboard verifies the server session before it loads, and logout revokes the session and clears the browser cookie.
+
+New students can choose **Sign up with Google** and verify an account in the
+`sahardaya.ac.in` Google Workspace organisation. Google handles the email and
+password check; BusTrack then asks the verified student to create a local
+username and password. Later sign-ins continue through the same JWT session
+flow described above. Configure `GOOGLE_OAUTH_CLIENT_ID`,
+`GOOGLE_OAUTH_CLIENT_SECRET`, and the exact public
+`GOOGLE_OAUTH_REDIRECT_URI` ending in `/api/auth/google/callback`; see
+`.env.example` and the [GCP runbook](deploy/gcp/README.md). The client secret
+must stay in the deployment secret store.
 
 To rotate an existing administrator password (including an older development account), run:
 

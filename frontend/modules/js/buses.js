@@ -720,6 +720,7 @@ function renderTable() {
                             <th>Bus</th>
                             <th>Registration</th>
                             <th>Capacity</th>
+                            <th>Students</th>
                             <th>Driver</th>
                             <th>Route</th>
                             <th>Status</th>
@@ -794,6 +795,14 @@ function renderTableRows() {
             <td>
 
                 ${formatValue(bus.capacity)}
+
+            </td>
+
+            <td>
+
+                <span class="bus-student-count" title="Students currently assigned to this bus">
+                    ${Number.isFinite(Number(bus.student_count)) ? Number(bus.student_count) : 0}
+                </span>
 
             </td>
 
@@ -887,7 +896,7 @@ function renderEmptyState() {
 
         <tr>
 
-            <td colspan="7">
+            <td colspan="8">
 
                 <div class="empty-state">
 

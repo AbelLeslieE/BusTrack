@@ -32,11 +32,28 @@ function Invoke-Check {
     Write-Host "PASS $Path -> HTTP $statusCode"
 }
 
+function Assert-AssetContains {
+    param(
+        [string]$Path,
+        [string]$ExpectedText
+    )
+
+    $response = Invoke-WebRequest -Uri "$BaseUrl$Path" -Method Get -SkipHttpErrorCheck
+    if ([int]$response.StatusCode -ne 200 -or -not $response.Content.Contains($ExpectedText)) {
+        throw "$Path did not serve the expected release asset."
+    }
+    Write-Host "PASS $Path -> current release asset"
+}
+
 Invoke-Check -Path "/health" -ExpectedStatuses @(200)
 Invoke-Check -Path "/ready" -ExpectedStatuses @(200)
 Invoke-Check -Path "/" -ExpectedStatuses @(200)
 Invoke-Check -Path "/docs" -ExpectedStatuses @(404)
 Invoke-Check -Path "/openapi.json" -ExpectedStatuses @(404)
 Invoke-Check -Path "/api/routes" -ExpectedStatuses @(401, 403)
+Assert-AssetContains -Path "/dashboard" -ExpectedText "fleetGlass.css?v=20261102fleetglass2"
+Assert-AssetContains -Path "/dashboard" -ExpectedText "clamp(180px, 26vw, 240px)"
+Assert-AssetContains -Path "/static/modules/css/fleetGlass.css?v=20261102fleetglass2" -ExpectedText "rgba(131, 185, 225, .28)"
+Assert-AssetContains -Path "/static/common/layout.css?v=20261102loader2" -ExpectedText ".page-loader__logo"
 
 Write-Host "Read-only deployment verification passed."

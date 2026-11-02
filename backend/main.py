@@ -347,6 +347,16 @@ async def login_page() -> FileResponse:
     return FileResponse(FRONTEND_DIR / "login.html")
 
 
+@app.get("/google-signup", include_in_schema=False)
+async def google_signup_page() -> FileResponse:
+    """Return credential setup after Google verifies a Sahardaya account."""
+
+    return FileResponse(
+        FRONTEND_DIR / "google-signup.html",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @app.get("/dashboard", include_in_schema=False)
 async def dashboard_page() -> FileResponse:
     """Return the protected SPA host; feature modules are loaded by the client router."""

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create student account | BusTrack</title>
+    <link rel="icon" type="image/png" href="/static/assets/images/logo.png?v=20261015logo2">
+    <link rel="stylesheet" href="/static/common/login.css?v=20261102splash1">
+</head>
+<body>
+    <main class="login-container">
+        <section class="login-card signup-card">
+            <div class="glass-overlay"></div>
+            <div class="login-logo">
+                <img src="/static/assets/images/logo.png?v=20261015logo2" alt="BusTrack logo">
+                <h1>Bus<span>Track</span></h1>
+                <p>Student account setup</p>
+            </div>
+
+            <div class="login-header signup-header">
+                <h2>Create your login</h2>
+                <p>Google has verified your Sahardaya account. Choose the credentials you will use for BusTrack.</p>
+            </div>
+
+            <div id="verified-identity" class="verified-identity" hidden>
+                <span>Verified by Google</span>
+                <strong id="verified-email"></strong>
+            </div>
+
+            <form id="google-signup-form" hidden>
+                <div class="form-group">
+                    <label for="signup-username">Create username</label>
+                    <input id="signup-username" name="username" type="text"
+                           minlength="3" maxlength="64" pattern="[A-Za-z0-9_.-]+"
+                           autocomplete="username" required>
+                    <small>Use letters, numbers, dots, dashes, or underscores.</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="signup-password">Create password</label>
+                    <div class="password-wrapper">
+                        <input id="signup-password" name="password" type="password"
+                               minlength="12" maxlength="72" autocomplete="new-password" required>
+                        <button id="toggle-signup-password" type="button">Show</button>
+                    </div>
+                    <small>Use 12+ characters with uppercase, lowercase, a number, and a symbol.</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="signup-password-confirm">Confirm password</label>
+                    <input id="signup-password-confirm" type="password"
+                           minlength="12" maxlength="72" autocomplete="new-password" required>
+                </div>
+
+                <p id="signup-message" class="login-message" aria-live="polite"></p>
+                <button class="login-button" type="submit">Create student account</button>
+            </form>
+
+            <div id="signup-loading" class="signup-loading" aria-live="polite">Checking your verified email…</div>
+            <a class="signup-cancel" href="/">Back to sign in</a>
+        </section>
+    </main>
+    <script type="module" src="/static/common/googleSignup.js?v=20261102google1"></script>
+</body>
+</html>

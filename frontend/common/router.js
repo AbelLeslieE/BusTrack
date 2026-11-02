@@ -86,7 +86,7 @@ const adminModules = {
 
     students: {
         title: "Students",
-        load: () => import("../modules/js/students.js?v=20261102topbarglass")
+        load: () => import("../modules/js/students.js?v=20261015d")
     },
 
     busPasses: {
@@ -330,7 +330,7 @@ function applyModuleStyles(moduleName) {
 
     const styles = [loadStylesheet(
         "active-module-styles",
-        `/static/modules/css/${styleModuleName}.css?v=20261015d`
+        `/static/modules/css/${styleModuleName}.css?v=20261102topbarglass`
     )];
 
     // Driver shared styles

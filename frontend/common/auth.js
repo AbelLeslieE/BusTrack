@@ -187,6 +187,26 @@ const passwordInput = document.querySelector("#password");
 const toggleButton = document.querySelector("#toggle-password");
 const form = document.querySelector("#login-form");
 const message = document.querySelector("#login-message");
+const usernameInput = document.querySelector("#username");
+
+const loginParameters = new URLSearchParams(window.location.search);
+const googleError = loginParameters.get("google_error");
+if (googleError && message) {
+  const googleMessages = {
+    cancelled: "Google signup was cancelled.",
+    wrong_domain: "Use a verified @sahardaya.ac.in Google account.",
+    email_not_verified: "Google could not verify that email address.",
+    not_configured: "Google signup is not available yet. Contact the transport administrator.",
+    google_failed: "Google verification could not be completed. Please try again.",
+  };
+  message.textContent = googleMessages[googleError] || googleMessages.google_failed;
+  window.history.replaceState({}, document.title, window.location.pathname);
+} else if (loginParameters.get("signup") === "complete" && message) {
+  const createdUsername = loginParameters.get("username") || "";
+  if (usernameInput && createdUsername) usernameInput.value = createdUsername;
+  message.textContent = "Your account is ready. Sign in with your new password.";
+  window.history.replaceState({}, document.title, window.location.pathname);
+}
 
 toggleButton?.addEventListener("click", () => {
   const showPassword = passwordInput.type === "password";
@@ -199,7 +219,7 @@ form?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const submitButton = form.querySelector("button[type='submit']");
   const formData = new URLSearchParams({
-    username: document.querySelector("#username").value.trim(),
+    username: usernameInput.value.trim(),
     password: passwordInput.value,
   });
   message.textContent = "Signing in…";

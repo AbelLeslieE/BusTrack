@@ -168,6 +168,16 @@
 
 }
 
+.page-loader__logo{
+    display:block;
+    width:clamp(150px, 22vw, 220px);
+    height:clamp(150px, 22vw, 220px);
+    object-fit:cover;
+    border:2px solid rgba(110,231,255,.6);
+    border-radius:28px;
+    box-shadow:0 18px 48px rgba(0,0,0,.42), 0 0 32px rgba(79,209,255,.2);
+}
+
 .loader-orbit{
 
     width:56px;
@@ -189,6 +199,7 @@
 @media (max-width:520px){
     .page-loader{ gap:14px; font-size:14px; }
     .loader-orbit{ width:46px; height:46px; }
+    .page-loader__logo{ width:160px; height:160px; border-radius:24px; }
 }
 
 @media (prefers-reduced-motion:reduce){
