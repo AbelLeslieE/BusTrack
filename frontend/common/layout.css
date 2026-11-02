@@ -170,8 +170,8 @@
 
 .page-loader__logo{
     display:block;
-    width:clamp(120px, 20vw, 176px);
-    height:clamp(120px, 20vw, 176px);
+    width:clamp(150px, 22vw, 220px);
+    height:clamp(150px, 22vw, 220px);
     object-fit:cover;
     border:2px solid rgba(110,231,255,.6);
     border-radius:28px;
@@ -199,7 +199,7 @@
 @media (max-width:520px){
     .page-loader{ gap:14px; font-size:14px; }
     .loader-orbit{ width:46px; height:46px; }
-    .page-loader__logo{ width:140px; height:140px; border-radius:24px; }
+    .page-loader__logo{ width:160px; height:160px; border-radius:24px; }
 }
 
 @media (prefers-reduced-motion:reduce){
