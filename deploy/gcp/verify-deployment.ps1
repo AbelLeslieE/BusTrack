@@ -54,10 +54,11 @@ function Assert-AssetContains {
 
 function Assert-GoogleSignupConfigured {
     $path = "/api/auth/google/signup"
+    $nullDevice = if ($IsWindows) { "NUL" } else { "/dev/null" }
     $result = @(& curl `
         --silent `
         --show-error `
-        --output /dev/null `
+        --output $nullDevice `
         --write-out "%{http_code}`n%{redirect_url}" `
         "$BaseUrl$path")
     if ($LASTEXITCODE -ne 0 -or $result.Count -lt 2) {
@@ -91,13 +92,15 @@ Assert-AssetContains -Path "/static/common/login.css?v=20261103route1" -Expected
 Assert-AssetContains -Path "/google-signup" -ExpectedText "googleSignup.js?v=20261103errors1"
 Assert-AssetContains -Path "/static/common/googleSignup.js?v=20261103errors1" -ExpectedText "Spaces are not allowed"
 Assert-AssetContains -Path "/dashboard" -ExpectedText "fleetGlass.css?v=20261103fleetglass7"
-Assert-AssetContains -Path "/dashboard" -ExpectedText "bootstrap.js?v=20261103providerdelay1"
+Assert-AssetContains -Path "/dashboard" -ExpectedText "bootstrap.js?v=20261103authors1"
 Assert-AssetContains -Path "/dashboard" -ExpectedText "clamp(180px, 26vw, 240px)"
 Assert-AssetContains -Path "/static/modules/css/fleetGlass.css?v=20261103fleetglass7" -ExpectedText ".modal:has(#official-pass-name)"
-Assert-AssetContains -Path "/static/common/bootstrap.js?v=20261103providerdelay1" -ExpectedText "router.js?v=20261103providerdelay1"
+Assert-AssetContains -Path "/static/common/bootstrap.js?v=20261103authors1" -ExpectedText "router.js?v=20261103authors1"
 Assert-AssetContains -Path "/static/common/router.js?v=20261103providerdelay1" -ExpectedText "studentTracking.js?v=20261103providerdelay1"
 Assert-AssetContains -Path "/static/modules/js/studentTracking.js?v=20261103providerdelay1" -ExpectedText "LAST GPS RECEIVED"
 Assert-AssetContains -Path "/static/modules/css/studentTracking.css?v=20261103providerdelay1" -ExpectedText ".student-tracking-delay-card.is-delayed"
 Assert-AssetContains -Path "/static/common/layout.css?v=20261102loader2" -ExpectedText ".page-loader__logo"
+Assert-AssetContains -Path "/authors" -ExpectedText "Meet the Creators | BusTrack"
+Assert-AssetContains -Path "/authors" -ExpectedText "KL 03 AA 2007"
 
 Write-Host "Read-only deployment verification passed."
