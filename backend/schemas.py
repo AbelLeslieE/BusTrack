@@ -411,6 +411,10 @@ class DriverResponse(BaseModel):
 
     bus_id: int | None
 
+    # Derived from the authoritative Route.driver_id relationship. The legacy
+    # bus_id mirror is insufficient when a route has a driver but no bus yet.
+    is_assigned: bool = False
+
     created_at: datetime
 
     updated_at: datetime

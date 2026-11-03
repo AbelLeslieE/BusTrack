@@ -126,7 +126,7 @@ async function loadDrivers() {
 
     try {
 
-        const response = await fetch(API.DRIVERS);
+        const response = await fetch(API.DRIVERS, { cache: "no-store" });
 
         if (!response.ok) {
 
@@ -1693,14 +1693,20 @@ function calculateStatistics() {
 
     state.statistics.total = state.drivers.length;
 
+    const isAssigned = driver =>
+        driver.is_assigned === true ||
+        (driver.is_assigned == null && driver.bus_id != null);
+
     state.statistics.available =
         state.drivers.filter(
-            d => d.status === DRIVER_STATUS.AVAILABLE
+            driver =>
+                driver.status === DRIVER_STATUS.AVAILABLE &&
+                !isAssigned(driver)
         ).length;
 
     state.statistics.onDuty =
         state.drivers.filter(
-            d => d.status === DRIVER_STATUS.ON_DUTY
+            isAssigned
         ).length;
 
     state.statistics.offDuty =
@@ -1715,7 +1721,9 @@ function calculateStatistics() {
 
     const today = new Date();
 
-    const next30 = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const next30 = new Date(today);
 
     next30.setDate(today.getDate() + 30);
 
@@ -1728,7 +1736,27 @@ function calculateStatistics() {
 
             }
 
-            const expiry = new Date(driver.license_expiry);
+            const dateParts = String(driver.license_expiry)
+                .slice(0, 10)
+                .split("-")
+                .map(Number);
+
+            if (
+                dateParts.length !== 3 ||
+                dateParts.some(part => !Number.isInteger(part))
+            ) {
+                return false;
+            }
+
+            const expiry = new Date(
+                dateParts[0],
+                dateParts[1] - 1,
+                dateParts[2]
+            );
+
+            if (Number.isNaN(expiry.getTime())) {
+                return false;
+            }
 
             return expiry >= today &&
                    expiry <= next30;

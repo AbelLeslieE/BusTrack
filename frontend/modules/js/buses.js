@@ -348,7 +348,7 @@ function renderHero() {
 
                 <p class="hero-description">
 
-                    Manage, monitor and organize every school bus from one
+                    Manage, monitor and organize every college bus from one
                     premium fleet dashboard.
 
                 </p>
@@ -693,7 +693,7 @@ function renderTable() {
 
                     <h2 class="table-title">
 
-                        School Buses
+                        College Buses
 
                     </h2>
 
@@ -1122,7 +1122,7 @@ ${skipped}`
 
                 title: "Add Bus",
 
-                subtitle: "Register a new school bus to the fleet.",
+                subtitle: "Register a new college bus to the fleet.",
 
                 size: "lg",
 

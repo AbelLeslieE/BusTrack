@@ -23,6 +23,13 @@ router = APIRouter(
 )
 
 
+def _driver_response(driver: Driver, *, is_assigned: bool) -> DriverResponse:
+    """Serialize a driver with its current authoritative assignment state."""
+    return DriverResponse.model_validate(driver).model_copy(
+        update={"is_assigned": is_assigned}
+    )
+
+
 def _driver_portal_data(driver: Driver, db: Session) -> dict:
     """Safely build the authenticated driver's own workspace data."""
 
@@ -109,7 +116,23 @@ def get_drivers(
     _current_user = Depends(require_management),
 ):
     """Return all drivers."""
-    return db.query(Driver).order_by(Driver.driver_code).all()
+    drivers = db.query(Driver).order_by(Driver.driver_code).all()
+    assigned_driver_ids = {
+        driver_id
+        for (driver_id,) in (
+            db.query(Route.driver_id)
+            .filter(Route.driver_id.is_not(None))
+            .distinct()
+            .all()
+        )
+    }
+    return [
+        _driver_response(
+            driver,
+            is_assigned=driver.id in assigned_driver_ids,
+        )
+        for driver in drivers
+    ]
 
 
 
@@ -135,7 +158,11 @@ def get_driver(
             detail="Driver not found.",
         )
 
-    return driver
+    is_assigned = (
+        db.query(Route.id).filter(Route.driver_id == driver.id).first()
+        is not None
+    )
+    return _driver_response(driver, is_assigned=is_assigned)
 
 
 @router.put("/{driver_id}", response_model=DriverResponse)
@@ -181,7 +208,11 @@ def update_driver(
     db.commit()
     db.refresh(existing)
 
-    return existing
+    is_assigned = (
+        db.query(Route.id).filter(Route.driver_id == existing.id).first()
+        is not None
+    )
+    return _driver_response(existing, is_assigned=is_assigned)
 
 
 @router.delete("/{driver_id}")
