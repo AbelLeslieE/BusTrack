@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { Script } from "node:vm";
 
@@ -39,6 +40,9 @@ assert.deepEqual(
 );
 const login = read("frontend/login.html");
 const backend = read("backend/main.py");
+const security = read("backend/security.py");
+const studentSidebar = read("frontend/modules/js/studentSidebar.js");
+const scriptHash = createHash("sha256").update(script, "utf8").digest("base64");
 
 assert.match(page, /The people behind/);
 assert.match(page, /Abel Leslie E/);
@@ -52,12 +56,20 @@ assert.match(page, /id="creators"/);
 assert.match(page, /id="journey"/);
 assert.match(styles, /@media \(max-width: 700px\)/);
 assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
+assert.match(page, /class="authors-no-js authors-full-motion"/);
+assert.match(script, /bustrack-authors-motion-v2/);
 assert.match(styles, /authors-route-flow/);
 assert.match(styles, /\.authors-campus-frame > img[\s\S]*?object-position: center/);
 assert.match(script, /IntersectionObserver/);
 assert.match(script, /pointermove/);
 assert.match(script, /dataTiltStrength|dataset\.tiltStrength/);
 assert.match(login, /href="\/authors"/);
+assert.match(studentSidebar, /href="\/authors"/);
+assert.match(studentSidebar, /Meet the creators/);
 assert.match(backend, /@app\.get\("\/authors"/);
+assert.ok(
+  security.includes(`'sha256-${scriptHash}'`),
+  "The Cloud Run CSP must authorize the exact embedded animation script",
+);
 
 console.log("Standalone author page, embedded assets, and JavaScript checks passed.");

@@ -213,6 +213,20 @@ export function createStudentSidebar(
 
 
             <!-- ==========================================
+                 MEET THE CREATORS
+            =========================================== -->
+
+            <a
+                class="nav-item"
+                href="/authors">
+
+                <span class="nav-icon" aria-hidden="true">✦</span>
+                <span>Meet the creators</span>
+
+            </a>
+
+
+            <!-- ==========================================
                  SETTINGS
             =========================================== -->
 

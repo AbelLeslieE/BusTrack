@@ -76,6 +76,23 @@ function Assert-GoogleSignupConfigured {
     Write-Host "PASS $path -> Google OAuth authorization"
 }
 
+function Assert-AuthorsAnimationPolicy {
+    $path = "/authors"
+    $response = Invoke-WebRequest -Uri "$BaseUrl$path" -Method Get -SkipHttpErrorCheck
+    $content = [string]$response.Content
+    $script = [regex]::Match($content, '<script>([\s\S]*?)</script>')
+    if ([int]$response.StatusCode -ne 200 -or -not $script.Success) {
+        throw "$path did not serve its embedded animation script."
+    }
+    $scriptBytes = [System.Text.Encoding]::UTF8.GetBytes($script.Groups[1].Value)
+    $scriptHash = [Convert]::ToBase64String([System.Security.Cryptography.SHA256]::HashData($scriptBytes))
+    $policy = [string]($response.Headers["Content-Security-Policy"] -join ", ")
+    if (-not $policy.Contains("'sha256-$scriptHash'")) {
+        throw "$path CSP did not authorize its embedded animation script."
+    }
+    Write-Host "PASS $path -> embedded animations authorized by CSP"
+}
+
 Invoke-Check -Path "/health" -ExpectedStatuses @(200)
 Invoke-Check -Path "/ready" -ExpectedStatuses @(200)
 Invoke-Check -Path "/" -ExpectedStatuses @(200)
@@ -92,15 +109,18 @@ Assert-AssetContains -Path "/static/common/login.css?v=20261103route1" -Expected
 Assert-AssetContains -Path "/google-signup" -ExpectedText "googleSignup.js?v=20261103errors1"
 Assert-AssetContains -Path "/static/common/googleSignup.js?v=20261103errors1" -ExpectedText "Spaces are not allowed"
 Assert-AssetContains -Path "/dashboard" -ExpectedText "fleetGlass.css?v=20261103fleetglass7"
-Assert-AssetContains -Path "/dashboard" -ExpectedText "bootstrap.js?v=20261103authors1"
+Assert-AssetContains -Path "/dashboard" -ExpectedText "bootstrap.js?v=20261103authors2"
 Assert-AssetContains -Path "/dashboard" -ExpectedText "clamp(180px, 26vw, 240px)"
 Assert-AssetContains -Path "/static/modules/css/fleetGlass.css?v=20261103fleetglass7" -ExpectedText ".modal:has(#official-pass-name)"
-Assert-AssetContains -Path "/static/common/bootstrap.js?v=20261103authors1" -ExpectedText "router.js?v=20261103authors1"
+Assert-AssetContains -Path "/static/common/bootstrap.js?v=20261103authors2" -ExpectedText "router.js?v=20261103authors2"
+Assert-AssetContains -Path "/static/common/router.js?v=20261103authors2" -ExpectedText "studentSidebar.js?v=20261103authors2"
+Assert-AssetContains -Path "/static/modules/js/studentSidebar.js?v=20261103authors2" -ExpectedText "Meet the creators"
 Assert-AssetContains -Path "/static/common/router.js?v=20261103providerdelay1" -ExpectedText "studentTracking.js?v=20261103providerdelay1"
 Assert-AssetContains -Path "/static/modules/js/studentTracking.js?v=20261103providerdelay1" -ExpectedText "LAST GPS RECEIVED"
 Assert-AssetContains -Path "/static/modules/css/studentTracking.css?v=20261103providerdelay1" -ExpectedText ".student-tracking-delay-card.is-delayed"
 Assert-AssetContains -Path "/static/common/layout.css?v=20261102loader2" -ExpectedText ".page-loader__logo"
 Assert-AssetContains -Path "/authors" -ExpectedText "Meet the Creators | BusTrack"
 Assert-AssetContains -Path "/authors" -ExpectedText "KL 03 AA 2007"
+Assert-AuthorsAnimationPolicy
 
 Write-Host "Read-only deployment verification passed."

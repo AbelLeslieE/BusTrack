@@ -196,10 +196,16 @@ class RequestSecurityMiddleware:
         # loads the bundled assets from jsDelivr, so it needs a narrowly scoped
         # policy that differs from the application UI policy below.
         is_api_docs = path in {"/docs", "/redoc"}
+        is_authors_page = path == "/authors"
         script_src = (
             b"script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
             if is_api_docs
-            else b"script-src 'self' https://unpkg.com; "
+            else (
+                b"script-src 'self' 'sha256-f5qOvoNSKKgBu6diP53Y96Cs9LJ8Vz0T4aYNahToo9s=' "
+                b"https://unpkg.com; "
+                if is_authors_page
+                else b"script-src 'self' https://unpkg.com; "
+            )
         )
         style_src = (
             b"style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "

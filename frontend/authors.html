@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" class="authors-no-js">
+<html lang="en" class="authors-no-js authors-full-motion">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -1744,33 +1744,39 @@ a:focus-visible, button:focus-visible { outline: 2px solid #8ff6ff; outline-offs
 .authors-motion-paused .authors-section::before, .authors-motion-paused .authors-section::after,
 .authors-motion-paused .authors-timeline::before { scale: 1; }
 @media (prefers-reduced-motion: reduce) {
-  html {
+  html:not(.authors-full-motion) {
     scroll-behavior: auto;
   }
 
-  *,
-  *::before,
-  *::after {
+  html:not(.authors-full-motion) *,
+  html:not(.authors-full-motion) *::before,
+  html:not(.authors-full-motion) *::after {
     animation-duration: .001ms !important;
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
     transition-duration: .001ms !important;
   }
 
-  .authors-js .authors-reveal {
+  html:not(.authors-full-motion).authors-js .authors-reveal {
     opacity: 1;
     transform: none;
     translate: none;
   }
 
-  [data-tilt] {
+  html:not(.authors-full-motion) [data-tilt] {
     transform: none;
   }
-  .authors-hero-visual, .authors-js .authors-hero-visual.is-visible { translate: none; }
-  .authors-hero-copy > *, .authors-section-title h2, .authors-skill-list span { animation: none !important; opacity: 1; }
-  .authors-particles, body::after { display: none; }
-  .authors-js .authors-reveal.authors-build { opacity: 1; scale: 1; translate: none; }
-  .authors-section::before, .authors-section::after, .authors-timeline::before { scale: 1; }
+  html:not(.authors-full-motion) .authors-hero-visual,
+  html:not(.authors-full-motion).authors-js .authors-hero-visual.is-visible { translate: none; }
+  html:not(.authors-full-motion) .authors-hero-copy > *,
+  html:not(.authors-full-motion) .authors-section-title h2,
+  html:not(.authors-full-motion) .authors-skill-list span { animation: none !important; opacity: 1; }
+  html:not(.authors-full-motion) .authors-particles,
+  html:not(.authors-full-motion) body::after { display: none; }
+  html:not(.authors-full-motion).authors-js .authors-reveal.authors-build { opacity: 1; scale: 1; translate: none; }
+  html:not(.authors-full-motion) .authors-section::before,
+  html:not(.authors-full-motion) .authors-section::after,
+  html:not(.authors-full-motion) .authors-timeline::before { scale: 1; }
 }
   </style>
 </head>
@@ -2009,7 +2015,6 @@ a:focus-visible, button:focus-visible { outline: 2px solid #8ff6ff; outline-offs
 (() => {
   "use strict";
   const root = document.documentElement;
-  const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
   const finePointer = matchMedia("(hover: hover) and (pointer: fine)");
   const compactScreen = matchMedia("(max-width: 700px)");
   const reveals = [...document.querySelectorAll(".authors-reveal")];
@@ -2024,8 +2029,8 @@ a:focus-visible, button:focus-visible { outline: 2px solid #8ff6ff; outline-offs
   const counterFrames = new Map();
   const counted = new WeakSet();
   let paused = false;
-  try { paused = localStorage.getItem("bustrack-authors-motion") === "paused"; } catch {}
-  const canAnimate = () => !paused && !reducedMotion.matches && !document.hidden;
+  try { paused = localStorage.getItem("bustrack-authors-motion-v2") === "paused"; } catch {}
+  const canAnimate = () => !paused && !document.hidden;
 
   // Stops and the traveler use one SVG coordinate system, at every screen size.
   const routePath = document.querySelector("#authors-route-path");
@@ -2102,7 +2107,7 @@ a:focus-visible, button:focus-visible { outline: 2px solid #8ff6ff; outline-offs
   };
   const updateBuild = () => {
     if (layoutDirty) measureBuildLayout();
-    const enabled = !paused && !reducedMotion.matches;
+    const enabled = !paused;
     const distance = Math.max(140, Math.min(innerHeight * .4, 340));
     buildItems.forEach((item) => {
       const { top, fromX, fromY, stagger } = buildLayout.get(item);
@@ -2239,22 +2244,21 @@ a:focus-visible, button:focus-visible { outline: 2px solid #8ff6ff; outline-offs
     });
   };
   const syncMotion = () => {
-    root.classList.toggle("authors-motion-paused", paused || reducedMotion.matches);
+    root.classList.toggle("authors-motion-paused", paused);
     root.classList.toggle("authors-page-hidden", document.hidden);
     if (motionToggle) {
-      const stopped = paused || reducedMotion.matches;
+      const stopped = paused;
       motionToggle.setAttribute("aria-pressed", String(stopped));
-      const label = reducedMotion.matches ? "Animations reduced by your device setting" : stopped ? "Play animations" : "Pause animations";
+      const label = stopped ? "Play animations" : "Pause animations";
       motionToggle.setAttribute("aria-label", label);
       motionToggle.title = label;
       motionToggle.querySelector("span").textContent = stopped ? "▷" : "Ⅱ";
-      motionToggle.disabled = reducedMotion.matches;
     }
     if (!canAnimate()) {
       finishCounters();
       resetPointers();
     }
-    if (paused || reducedMotion.matches) {
+    if (paused) {
       reveals.forEach((item) => item.classList.add("is-visible"));
     }
     syncRouteMotion();
@@ -2262,10 +2266,9 @@ a:focus-visible, button:focus-visible { outline: 2px solid #8ff6ff; outline-offs
   };
   motionToggle?.addEventListener("click", () => {
     paused = !paused;
-    try { localStorage.setItem("bustrack-authors-motion", paused ? "paused" : "playing"); } catch {}
+    try { localStorage.setItem("bustrack-authors-motion-v2", paused ? "paused" : "playing"); } catch {}
     syncMotion();
   });
-  reducedMotion.addEventListener("change", syncMotion);
   finePointer.addEventListener("change", resetPointers);
   document.addEventListener("visibilitychange", syncMotion);
 
@@ -2318,7 +2321,7 @@ a:focus-visible, button:focus-visible { outline: 2px solid #8ff6ff; outline-offs
   const buildParticles = () => {
     if (!particleLayer) return;
     particleLayer.replaceChildren();
-    if (reducedMotion.matches || compactScreen.matches) return;
+    if (compactScreen.matches) return;
     const fragment = document.createDocumentFragment();
     for (let index = 0; index < 22; index += 1) {
       const particle = document.createElement("span");
@@ -2331,7 +2334,6 @@ a:focus-visible, button:focus-visible { outline: 2px solid #8ff6ff; outline-offs
     particleLayer.appendChild(fragment);
   };
   compactScreen.addEventListener("change", buildParticles);
-  reducedMotion.addEventListener("change", buildParticles);
 
   document.querySelectorAll(".authors-button").forEach((button) => {
     button.addEventListener("pointerdown", (event) => {

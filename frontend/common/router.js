@@ -16,7 +16,7 @@ import {
 import {
     createStudentSidebar,
     setStudentSidebarActive
-} from "../modules/js/studentSidebar.js?v=20261015logo2";
+} from "../modules/js/studentSidebar.js?v=20261103authors2";
 
 import {
     createTechnicianSidebar,
