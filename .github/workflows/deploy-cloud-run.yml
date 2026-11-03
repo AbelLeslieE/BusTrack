@@ -81,11 +81,6 @@ jobs:
           if ($env:OPTIONAL_SECRET_BINDINGS) {
             $optional = $env:OPTIONAL_SECRET_BINDINGS -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }
           }
-          $optional += @(
-            'GOOGLE_OAUTH_CLIENT_ID=bustrack-google-oauth-client-id:1',
-            'GOOGLE_OAUTH_CLIENT_SECRET=bustrack-google-oauth-client-secret:1',
-            'GOOGLE_OAUTH_REDIRECT_URI=bustrack-google-oauth-redirect-uri:1'
-          )
           $optional = $optional | Sort-Object -Unique
           ./deploy/gcp/deploy-cloud-run.ps1 `
             -ProjectId $env:PROJECT_ID `

@@ -25,6 +25,15 @@ param(
     [string]$BootstrapAdminSecret = "bustrack-bootstrap-admin-password",
     [ValidateRange(1, 2147483647)]
     [int]$BootstrapAdminSecretVersion = 1,
+    [string]$GoogleOAuthClientIdSecret = "bustrack-google-oauth-client-id",
+    [ValidateRange(1, 2147483647)]
+    [int]$GoogleOAuthClientIdSecretVersion = 1,
+    [string]$GoogleOAuthClientSecret = "bustrack-google-oauth-client-secret",
+    [ValidateRange(1, 2147483647)]
+    [int]$GoogleOAuthClientSecretVersion = 1,
+    [string]$GoogleOAuthRedirectUriSecret = "bustrack-google-oauth-redirect-uri",
+    [ValidateRange(1, 2147483647)]
+    [int]$GoogleOAuthRedirectUriSecretVersion = 1,
     [string[]]$OptionalSecretBindings = @(),
     [switch]$SkipProjectSetup,
     [ValidateRange(0, 20)]
@@ -61,7 +70,10 @@ $requiredSecrets = @(
     $DatabaseSecret,
     $JwtSecret,
     $BusPassSecret,
-    $BootstrapAdminSecret
+    $BootstrapAdminSecret,
+    $GoogleOAuthClientIdSecret,
+    $GoogleOAuthClientSecret,
+    $GoogleOAuthRedirectUriSecret
 )
 
 foreach ($binding in $OptionalSecretBindings) {
@@ -103,7 +115,10 @@ $secretBindings = @(
     "DATABASE_URL=$DatabaseSecret`:$DatabaseSecretVersion",
     "JWT_SECRET_KEY=$JwtSecret`:$JwtSecretVersion",
     "BUS_PASS_SIGNING_KEY_PEM=$BusPassSecret`:$BusPassSecretVersion",
-    "BOOTSTRAP_ADMIN_PASSWORD=$BootstrapAdminSecret`:$BootstrapAdminSecretVersion"
+    "BOOTSTRAP_ADMIN_PASSWORD=$BootstrapAdminSecret`:$BootstrapAdminSecretVersion",
+    "GOOGLE_OAUTH_CLIENT_ID=$GoogleOAuthClientIdSecret`:$GoogleOAuthClientIdSecretVersion",
+    "GOOGLE_OAUTH_CLIENT_SECRET=$GoogleOAuthClientSecret`:$GoogleOAuthClientSecretVersion",
+    "GOOGLE_OAUTH_REDIRECT_URI=$GoogleOAuthRedirectUriSecret`:$GoogleOAuthRedirectUriSecretVersion"
 )
 $secretBindings += $OptionalSecretBindings | ForEach-Object {
     $parts = $_ -split '=', 2
