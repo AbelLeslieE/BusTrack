@@ -67,6 +67,29 @@ test('student map removes old marker when reset clears GPS coordinates', () => {
     assert.equal(vm.runInContext('state.busTargetLocation', context), null);
 });
 
+test('student GPS delay shows only the age of the last received location', () => {
+    const context = portal('studentTracking');
+    vm.runInContext(`state.liveTrip = {telemetry: {
+        last_seen_seconds: 12,
+        provider_delivery_delay_seconds: 7200,
+        is_fresh: true,
+        clock_error: false
+    }};`, context);
+    assert.equal(vm.runInContext('gpsProviderDelayText()', context), '12 seconds ago');
+    assert.equal(vm.runInContext('gpsProviderDelayState()', context), 'is-healthy');
+
+    vm.runInContext('state.liveTrip.telemetry.last_seen_seconds = 75;', context);
+    assert.equal(vm.runInContext('gpsProviderDelayText()', context), '1 min 15 sec ago');
+    assert.equal(vm.runInContext('gpsProviderDelayState()', context), 'is-delayed');
+
+    vm.runInContext('state.liveTrip.telemetry.last_seen_seconds = 181;', context);
+    assert.equal(vm.runInContext('gpsProviderDelayState()', context), 'is-offline');
+
+    vm.runInContext('state.liveTrip.telemetry.last_seen_seconds = null;', context);
+    assert.equal(vm.runInContext('gpsProviderDelayText()', context), 'No GPS received');
+    assert.equal(vm.runInContext('gpsProviderDelayState()', context), 'is-waiting');
+});
+
 test('driver map removes old marker when fleet reset has no new vehicle fix', () => {
     const removed = [];
     const cancelled = [];

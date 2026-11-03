@@ -181,7 +181,7 @@ const driverModules = {
 const studentModules = {
     studentTracking: {
         title: "Live Tracking",
-        load: () => import("../modules/js/studentTracking.js?v=20261017reset4")
+        load: () => import("../modules/js/studentTracking.js?v=20261103providerdelay1")
     },
 
     busPass: {
@@ -330,7 +330,7 @@ function applyModuleStyles(moduleName) {
 
     const styles = [loadStylesheet(
         "active-module-styles",
-        `/static/modules/css/${styleModuleName}.css?v=20261102topbarglass`
+        `/static/modules/css/${styleModuleName}.css?v=20261103providerdelay1`
     )];
 
     // Driver shared styles

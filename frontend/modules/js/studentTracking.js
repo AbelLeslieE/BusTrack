@@ -376,6 +376,59 @@ function trackingSourceLabel() {
 
 }
 
+function formatGpsDuration(value) {
+
+    if (value === null || value === undefined || value === "") return null;
+
+    const seconds = Number(value);
+
+    if (!Number.isFinite(seconds) || seconds < 0) return null;
+    if (seconds < 5) return "Under 5 seconds";
+    if (seconds < 60) return `${Math.round(seconds)} seconds`;
+
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = Math.round(seconds % 60);
+    if (minutes < 60) {
+        return remainingSeconds
+            ? `${minutes} min ${remainingSeconds} sec`
+            : `${minutes} min`;
+    }
+
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return remainingMinutes
+        ? `${hours} hr ${remainingMinutes} min`
+        : `${hours} hr`;
+
+}
+
+function gpsProviderDelayText() {
+
+    const telemetry = getTelemetry();
+
+    if (telemetry.clock_error) return "GPS time error";
+
+    const lastSeen = formatGpsDuration(telemetry.last_seen_seconds);
+    return lastSeen ? `${lastSeen} ago` : "No GPS received";
+
+}
+
+function gpsProviderDelayState() {
+
+    const telemetry = getTelemetry();
+    const rawAge = telemetry.last_seen_seconds;
+    const age = rawAge === null || rawAge === undefined || rawAge === ""
+        ? Number.NaN
+        : Number(rawAge);
+
+    if (telemetry.clock_error) return "is-error";
+    if (!Number.isFinite(age) || age < 0) return "is-waiting";
+    if (age <= 30) return "is-healthy";
+    if (age <= 180) return "is-delayed";
+    return "is-offline";
+
+}
+
 function vehicleTravelStatus() {
 
     const telemetry = getTelemetry();
@@ -3883,6 +3936,25 @@ function renderTrackingSummary() {
 
                 ${escapeHTML(
                     trackingSourceLabel()
+                )}
+
+            </strong>
+
+        </div>
+
+
+        <div
+            class="student-tracking-summary-card student-tracking-delay-card ${gpsProviderDelayState()}"
+        >
+
+            <span>
+                LAST GPS RECEIVED
+            </span>
+
+            <strong>
+
+                ${escapeHTML(
+                    gpsProviderDelayText()
                 )}
 
             </strong>

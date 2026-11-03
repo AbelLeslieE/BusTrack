@@ -349,6 +349,57 @@
 
 }
 
+.student-tracking-delay-card {
+    position: relative;
+    overflow: hidden;
+}
+
+.student-tracking-delay-card::after {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #8294ad;
+    box-shadow: 0 0 0 4px rgba(130, 148, 173, .12);
+    content: "";
+}
+
+.student-tracking-delay-card.is-healthy {
+    border-color: rgba(86, 230, 164, .32);
+    background: linear-gradient(145deg, rgba(24, 91, 77, .64), rgba(8, 38, 43, .78));
+}
+
+.student-tracking-delay-card.is-healthy::after {
+    background: #65efae;
+    box-shadow: 0 0 0 4px rgba(101, 239, 174, .14), 0 0 14px rgba(101, 239, 174, .5);
+}
+
+.student-tracking-delay-card.is-delayed {
+    border-color: rgba(255, 202, 103, .34);
+    background: linear-gradient(145deg, rgba(99, 73, 26, .66), rgba(49, 35, 18, .8));
+}
+
+.student-tracking-delay-card.is-delayed::after {
+    background: #ffd078;
+    box-shadow: 0 0 0 4px rgba(255, 208, 120, .14), 0 0 14px rgba(255, 208, 120, .42);
+}
+
+.student-tracking-delay-card:is(.is-offline, .is-error) {
+    border-color: rgba(255, 125, 143, .34);
+    background: linear-gradient(145deg, rgba(100, 40, 57, .66), rgba(49, 24, 36, .8));
+}
+
+.student-tracking-delay-card:is(.is-offline, .is-error)::after {
+    background: #ff8295;
+    box-shadow: 0 0 0 4px rgba(255, 130, 149, .14), 0 0 14px rgba(255, 130, 149, .4);
+}
+
+.student-tracking-delay-card strong {
+    padding-right: 12px;
+}
+
 
 /* ==========================================================
    CURRENT / NEXT STOP CARDS
