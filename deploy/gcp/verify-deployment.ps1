@@ -54,11 +54,21 @@ function Assert-AssetContains {
 
 function Assert-GoogleSignupConfigured {
     $path = "/api/auth/google/signup"
-    $response = Invoke-WebRequest `
-        -Uri "$BaseUrl$path" `
-        -Method Get `
-        -MaximumRedirection 0 `
-        -SkipHttpErrorCheck
+    try {
+        $response = Invoke-WebRequest `
+            -Uri "$BaseUrl$path" `
+            -Method Get `
+            -MaximumRedirection 0 `
+            -SkipHttpErrorCheck
+    }
+    catch {
+        if ($_.Exception.Response) {
+            $response = $_.Exception.Response
+        }
+        else {
+            throw
+        }
+    }
     $statusCode = [int]$response.StatusCode
     $location = [string]$response.Headers.Location
     if ($statusCode -ne 302 -or $location -notmatch '^https://accounts\.google\.com/o/oauth2/v2/auth\?') {
