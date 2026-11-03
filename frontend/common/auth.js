@@ -196,6 +196,7 @@ if (googleError && message) {
     cancelled: "Google signup was cancelled.",
     wrong_domain: "Use a verified @sahrdaya.ac.in Google account.",
     email_not_verified: "Google could not verify that email address.",
+    account_exists: "An account already exists for this Google email. Sign in with your username and password.",
     not_configured: "Google signup is not available yet. Contact the transport administrator.",
     google_failed: "Google verification could not be completed. Please try again.",
   };

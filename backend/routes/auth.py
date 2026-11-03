@@ -259,6 +259,7 @@ def google_signup_start(request: Request) -> RedirectResponse:
 @router.get("/google/callback", name="google_signup_callback")
 def google_signup_callback(
     request: Request,
+    database_session: DatabaseSession,
     code: str | None = None,
     state: str | None = None,
     error: str | None = None,
@@ -294,6 +295,20 @@ def google_signup_callback(
             raise ValueError("Google identity is missing a subject.")
     except (JWTError, OSError, ValueError, RuntimeError, json.JSONDecodeError):
         return _google_error_redirect("google_failed")
+
+    existing_account = (
+        database_session.query(User)
+        .filter(func.lower(User.email) == email)
+        .first()
+    )
+    claimable_imported_student = (
+        existing_account is not None
+        and canonical_role(existing_account.role) == ROLE_USER
+        and existing_account.must_change_password
+        and existing_account.status == "Active"
+    )
+    if existing_account is not None and not claimable_imported_student:
+        return _google_error_redirect("account_exists")
 
     full_name = _student_name(identity.get("name"), email)
     signup_token = create_temporary_token(

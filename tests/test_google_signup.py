@@ -105,11 +105,13 @@ class GoogleSignupTest(unittest.TestCase):
             "name": "Abel Student",
         }
         state, flow_cookie = self._begin_google_flow()
-        callback = google_signup_callback(
-            self._request("/api/auth/google/callback", {GOOGLE_OAUTH_COOKIE: flow_cookie}),
-            code="one-time-code",
-            state=state,
-        )
+        with self.session_factory() as database_session:
+            callback = google_signup_callback(
+                self._request("/api/auth/google/callback", {GOOGLE_OAUTH_COOKIE: flow_cookie}),
+                database_session,
+                code="one-time-code",
+                state=state,
+            )
         self.assertEqual(callback.status_code, 303)
         self.assertEqual(callback.headers["location"], "/google-signup")
 
@@ -143,13 +145,49 @@ class GoogleSignupTest(unittest.TestCase):
             "name": "Outside User",
         }
         state, flow_cookie = self._begin_google_flow()
-        callback = google_signup_callback(
-            self._request("/api/auth/google/callback", {GOOGLE_OAUTH_COOKIE: flow_cookie}),
-            code="one-time-code",
-            state=state,
-        )
+        with self.session_factory() as database_session:
+            callback = google_signup_callback(
+                self._request("/api/auth/google/callback", {GOOGLE_OAUTH_COOKIE: flow_cookie}),
+                database_session,
+                code="one-time-code",
+                state=state,
+            )
         self.assertEqual(callback.status_code, 303)
         self.assertEqual(callback.headers["location"], "/?google_error=wrong_domain")
+        self.assertIn(self._response_cookie(callback, GOOGLE_SIGNUP_COOKIE), {None, ""})
+
+    @patch("backend.routes.auth._fetch_google_identity")
+    def test_existing_google_account_returns_to_login_with_clear_message(self, fetch_identity) -> None:
+        fetch_identity.return_value = {
+            "sub": "existing-google-user",
+            "email": "existing@sahrdaya.ac.in",
+            "email_verified": True,
+            "hd": "sahrdaya.ac.in",
+            "name": "Existing Student",
+        }
+        with self.session_factory() as database_session:
+            database_session.add(User(
+                username="existing.student",
+                email="existing@sahrdaya.ac.in",
+                full_name="Existing Student",
+                password_hash=get_password_hash("ExistingPassword12!"),
+                role="User",
+                status="Active",
+                must_change_password=False,
+            ))
+            database_session.commit()
+
+        state, flow_cookie = self._begin_google_flow()
+        with self.session_factory() as database_session:
+            callback = google_signup_callback(
+                self._request("/api/auth/google/callback", {GOOGLE_OAUTH_COOKIE: flow_cookie}),
+                database_session,
+                code="one-time-code",
+                state=state,
+            )
+
+        self.assertEqual(callback.status_code, 303)
+        self.assertEqual(callback.headers["location"], "/?google_error=account_exists")
         self.assertIn(self._response_cookie(callback, GOOGLE_SIGNUP_COOKIE), {None, ""})
 
     def test_verified_email_can_claim_only_an_imported_student_account(self) -> None:
