@@ -19,12 +19,26 @@ const backdropReady = new Promise((resolve) => {
   if (image.complete) resolve();
 });
 
+const pageReady = new Promise((resolve) => {
+  if (document.readyState === "complete") {
+    resolve();
+    return;
+  }
+  window.addEventListener("load", resolve, { once: true });
+});
+
+const fontsReady = document.fonts?.ready?.catch(() => undefined) ?? Promise.resolve();
+
+const nextPaint = () => new Promise((resolve) => {
+  window.requestAnimationFrame(() => window.requestAnimationFrame(resolve));
+});
+
 const releaseSplash = () => {
   if (!splash) return;
   splash.classList.add("is-ready");
   window.setTimeout(() => splash.remove(), 300);
 };
 
-void Promise.all([stylesheetReady, backdropReady]).then(releaseSplash);
-// Keep sign-in usable when an image host is unusually slow or unavailable.
-window.setTimeout(releaseSplash, 5000);
+void Promise.all([stylesheetReady, backdropReady, pageReady, fontsReady])
+  .then(nextPaint)
+  .then(releaseSplash);

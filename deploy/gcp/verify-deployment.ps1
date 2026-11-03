@@ -82,10 +82,10 @@ Invoke-Check -Path "/docs" -ExpectedStatuses @(404)
 Invoke-Check -Path "/openapi.json" -ExpectedStatuses @(404)
 Invoke-Check -Path "/api/routes" -ExpectedStatuses @(401, 403)
 Assert-GoogleSignupConfigured
-Assert-AssetContains -Path "/" -ExpectedText "loginSplash.js?v=20261103compact1"
+Assert-AssetContains -Path "/" -ExpectedText "loginSplash.js?v=20261103fullready1"
 Assert-AssetContains -Path "/" -ExpectedText "auth.js?v=20261103google2"
 Assert-AssetContains -Path "/static/common/auth.js?v=20261103google2" -ExpectedText "account_exists"
-Assert-AssetContains -Path "/static/common/loginSplash.js?v=20261103compact1" -ExpectedText "login.css?v=20261103compact1"
+Assert-AssetContains -Path "/static/common/loginSplash.js?v=20261103fullready1" -ExpectedText "window.addEventListener(\"load\""
 Assert-AssetContains -Path "/static/common/login.css?v=20261103compact1" -ExpectedText "scrollbar-width:none"
 Assert-AssetContains -Path "/dashboard" -ExpectedText "fleetGlass.css?v=20261103fleetglass3"
 Assert-AssetContains -Path "/dashboard" -ExpectedText "clamp(180px, 26vw, 240px)"
