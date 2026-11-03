@@ -54,23 +54,17 @@ function Assert-AssetContains {
 
 function Assert-GoogleSignupConfigured {
     $path = "/api/auth/google/signup"
-    try {
-        $response = Invoke-WebRequest `
-            -Uri "$BaseUrl$path" `
-            -Method Get `
-            -MaximumRedirection 0 `
-            -SkipHttpErrorCheck
+    $result = @(& curl `
+        --silent `
+        --show-error `
+        --output /dev/null `
+        --write-out "%{http_code}`n%{redirect_url}" `
+        "$BaseUrl$path")
+    if ($LASTEXITCODE -ne 0 -or $result.Count -lt 2) {
+        throw "$path could not be checked for its Google OAuth redirect."
     }
-    catch {
-        if ($_.Exception.Response) {
-            $response = $_.Exception.Response
-        }
-        else {
-            throw
-        }
-    }
-    $statusCode = [int]$response.StatusCode
-    $location = [string]$response.Headers.Location
+    $statusCode = [int]$result[0]
+    $location = [string]$result[1]
     if ($statusCode -ne 302 -or $location -notmatch '^https://accounts\.google\.com/o/oauth2/v2/auth\?') {
         throw "$path is not configured for Google OAuth (HTTP $statusCode; redirect: $location)."
     }
