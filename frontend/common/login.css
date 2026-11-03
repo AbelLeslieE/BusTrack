@@ -67,6 +67,22 @@ html{
 
     font-size:16px;
 
+    scrollbar-width:none;
+
+    -ms-overflow-style:none;
+
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+.login-card::-webkit-scrollbar{
+
+    display:none;
+
+    width:0;
+
+    height:0;
+
 }
 
 .login-splash{
@@ -135,10 +151,10 @@ body{
 .auth-divider{
     display:flex;
     align-items:center;
-    gap:14px;
-    margin:24px 0 16px;
+    gap:12px;
+    margin:16px 0 12px;
     color:rgba(255,255,255,.55);
-    font-size:.78rem;
+    font-size:.7rem;
     font-weight:700;
     letter-spacing:.08em;
     text-transform:uppercase;
@@ -153,14 +169,14 @@ body{
 }
 
 .google-signup-button{
-    min-height:56px;
+    min-height:50px;
     display:flex;
     align-items:center;
     justify-content:center;
     gap:12px;
     padding:0 20px;
     border:1px solid rgba(255,255,255,.22);
-    border-radius:18px;
+    border-radius:14px;
     background:rgba(255,255,255,.94);
     color:#172033;
     font-weight:700;
@@ -186,10 +202,10 @@ body{
 }
 
 .google-signup-help{
-    margin-top:12px;
+    margin-top:8px;
     color:var(--muted);
-    font-size:.82rem;
-    line-height:1.5;
+    font-size:.76rem;
+    line-height:1.35;
     text-align:center;
 }
 
@@ -268,6 +284,10 @@ body{
 
     overflow-x:hidden;
     overflow-y:auto;
+
+    scrollbar-width:none;
+
+    -ms-overflow-style:none;
 
     font-family:"Inter",sans-serif;
 
@@ -349,7 +369,7 @@ body::before{
 
     align-items:center;
 
-    padding:clamp(20px,4vw,80px);
+    padding:clamp(16px,3vw,48px);
 
     position:relative;
 
@@ -363,15 +383,26 @@ body::before{
 
     position:relative;
 
-    max-width:470px;
+    width:min(400px,100%);
+
+    max-width:400px;
+
+    max-height:calc(100dvh - 32px);
+
+    padding:clamp(20px,2vw,30px);
+
+    overflow-x:hidden;
+
+    overflow-y:auto;
+
+    overscroll-behavior:contain;
+
+    scrollbar-width:none;
+
+    -ms-overflow-style:none;
 
 
-    width:min(460px,100%);
-
-    padding:clamp(24px,2vw,42px);
-
-
-    border-radius:34px;
+    border-radius:28px;
 
     background:
 
@@ -488,19 +519,19 @@ body::before{
 
     align-items:center;
 
-    gap:10px;
+    gap:6px;
 
-    margin-bottom:20px;
+    margin-bottom:14px;
 
 }
 
 .login-logo img{
 
-    width:92px;
+    width:68px;
 
-    height:92px;
+    height:68px;
 
-    border-radius:24px;
+    border-radius:18px;
 
     object-fit:cover;
 
@@ -510,7 +541,7 @@ body::before{
 
 .login-logo h1{
 
-    font-size:3rem;
+    font-size:2.3rem;
 
 }
 
@@ -530,7 +561,7 @@ body::before{
 
     color:var(--muted);
 
-    font-size:.95rem;
+    font-size:.82rem;
 
 }
 
@@ -541,17 +572,17 @@ body::before{
 
 .login-header{
 
-    margin-bottom:34px;
+    margin-bottom:20px;
 
 }
 
 .login-header h2{
 
-    font-size:2rem;
+    font-size:1.65rem;
 
     font-weight:700;
 
-    margin-bottom:10px;
+    margin-bottom:6px;
 
 }
 
@@ -559,7 +590,9 @@ body::before{
 
     color:var(--muted);
 
-    line-height:1.7;
+    font-size:.9rem;
+
+    line-height:1.45;
 
 }
 
@@ -574,7 +607,7 @@ body::before{
 
     flex-direction:column;
 
-    gap:18px;
+    gap:13px;
 
 
 }
@@ -585,7 +618,7 @@ body::before{
 
     flex-direction:column;
 
-    gap:12px;
+    gap:7px;
 
 }
 
@@ -610,7 +643,7 @@ body::before{
 
     color:rgba(255,255,255,.92);
 
-    font-size:.92rem;
+    font-size:.84rem;
 
     font-weight:600;
 
@@ -624,9 +657,9 @@ body::before{
 
     width:100%;
 
-    height:58px;
+    height:48px;
 
-    padding:0 20px;
+    padding:0 16px;
 
     font-size:.95rem;
 
@@ -642,7 +675,7 @@ body::before{
 
         1px solid rgba(255,255,255,.10);
 
-    border-radius:18px;
+    border-radius:14px;
 
     outline:none;
 
@@ -761,7 +794,9 @@ body::before{
 .login-help{
     margin:0;
     color:var(--muted);
-    font-size:.88rem;
+    font-size:.78rem;
+
+    line-height:1.35;
 }
 
 
@@ -771,13 +806,19 @@ body::before{
 
 .login-message{
 
-    min-height:20px;
+    min-height:0;
 
     font-size:.90rem;
 
     color:#FFD166;
 
     line-height:1.5;
+
+}
+
+.login-message:empty{
+
+    display:none;
 
 }
 
@@ -792,11 +833,11 @@ body::before{
 
     overflow:hidden;
 
-    height:60px;
+    height:50px;
 
     border:none;
 
-    border-radius:18px;
+    border-radius:14px;
 
     cursor:pointer;
 
@@ -1064,7 +1105,7 @@ body::before{
 
     transform:
 
-        translateY(-8px);
+        translateY(-4px);
 
     border-color:
 
@@ -1329,13 +1370,13 @@ body::before{
 
         justify-content:center;
 
-        padding:40px;
+        padding:24px;
 
     }
 
     .login-card{
 
-        max-width:480px;
+        max-width:400px;
 
     }
 
@@ -1359,7 +1400,7 @@ body::before{
 
         align-items:center;
 
-        padding:20px;
+        padding:16px;
 
     }
 
@@ -1367,23 +1408,25 @@ body::before{
 
         width:100%;
 
-        max-width:420px;
+        max-width:400px;
 
-        padding:28px;
+        max-height:calc(100dvh - 32px);
 
-        border-radius:26px;
+        padding:24px;
+
+        border-radius:24px;
 
     }
 
     .login-logo h1{
 
-        font-size:2.2rem;
+        font-size:2.1rem;
 
     }
 
     .login-header h2{
 
-        font-size:1.7rem;
+        font-size:1.55rem;
 
     }
 
@@ -1404,7 +1447,8 @@ body::before{
     }
 
     .login-card{
-        padding:24px 20px;
+        max-height:calc(100dvh - 24px);
+        padding:20px 18px;
         border-radius:22px;
     }
 
@@ -1414,7 +1458,7 @@ body::before{
     }
 
     .login-logo{
-        margin-bottom:24px;
+        margin-bottom:12px;
     }
 
     .login-logo h1{
@@ -1429,4 +1473,35 @@ body::before{
     .login-button{
         min-height:50px;
     }
+}
+
+@media (max-height:760px){
+
+    .login-card{
+        max-height:calc(100dvh - 24px);
+        padding:18px 22px;
+    }
+
+    .login-logo{
+        margin-bottom:10px;
+    }
+
+    .login-logo img{
+        width:58px;
+        height:58px;
+        border-radius:15px;
+    }
+
+    .login-logo h1{
+        font-size:2rem;
+    }
+
+    .login-header{
+        margin-bottom:14px;
+    }
+
+    #login-form{
+        gap:10px;
+    }
+
 }
