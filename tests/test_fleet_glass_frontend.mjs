@@ -5,7 +5,7 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 const dashboard = read("frontend/dashboard.html");
 const glass = read("frontend/modules/css/fleetGlass.css");
 
-assert.match(dashboard, /fleetGlass\.css\?v=20261103fleetglass3/);
+assert.match(dashboard, /fleetGlass\.css\?v=20261103fleetglass4/);
 
 for (const selector of [
   ".bus-passes-page .glass-card",
@@ -14,6 +14,12 @@ for (const selector of [
   ".notifications-page .glass-card",
   ".settings-page .glass-card",
   ".profile-page .glass-card",
+  ".student-theme .portal-page .portal-header",
+  ".student-theme .portal-page .portal-card",
+  ".student-theme .account-settings-page .portal-form input",
+  ".bus-pass-page .portal-header",
+  ".bus-pass-page .portal-card",
+  ".bus-pass-page .digital-bus-pass",
 ]) {
   assert.ok(glass.includes(selector), `Missing shared glass selector: ${selector}`);
 }

@@ -35,6 +35,13 @@
     .profile-page .profile-loading,
     .profile-page .profile-hero,
     .profile-page .profile-card,
+    .student-theme .portal-page .portal-header,
+    .student-theme .portal-page .portal-card,
+    .student-theme .portal-page .portal-loading,
+    .student-theme .portal-page .portal-empty,
+    .bus-pass-page .portal-header,
+    .bus-pass-page .portal-card,
+    .bus-pass-page .digital-bus-pass,
     .modal.bus-details-modal,
     .modal.bus-details-modal .bus-document-tabs,
     .modal.bus-details-modal .bus-overview-stat,
@@ -58,13 +65,30 @@
     .notifications-page .notification-stat,
     .notifications-page .notification-card,
     .settings-page .settings-backup-flow div,
-    .profile-page .profile-details div
+    .profile-page .profile-details div,
+    .student-theme .portal-page .portal-details,
+    .student-theme .portal-page .portal-details div,
+    .student-theme .portal-page .portal-stats,
+    .student-theme .portal-page .portal-stats div,
+    .student-theme .portal-page .portal-notice,
+    .student-theme .account-settings-page .portal-form input,
+    .bus-pass-page .portal-details,
+    .bus-pass-page .portal-details div
 ) {
     background: linear-gradient(135deg, rgba(98, 157, 204, .24), rgba(83, 116, 180, .16)) !important;
     border-color: rgba(221, 241, 255, .22) !important;
     -webkit-backdrop-filter: blur(18px) saturate(135%) !important;
     backdrop-filter: blur(18px) saturate(135%) !important;
     box-shadow: 0 12px 28px rgba(0, 0, 0, .12), inset 0 1px rgba(255, 255, 255, .14) !important;
+}
+
+/* Preserve pass-state meaning while retaining the same transparent glass. */
+.bus-pass-page .digital-bus-pass:is(.status-expired, .status-revoked) {
+    background: linear-gradient(135deg, rgba(180, 91, 112, .32), rgba(112, 79, 132, .2)) !important;
+}
+
+.bus-pass-page .digital-bus-pass.status-suspended {
+    background: linear-gradient(135deg, rgba(186, 132, 55, .3), rgba(123, 94, 88, .19)) !important;
 }
 
 .bus-passes-page .bus-passes-table {
