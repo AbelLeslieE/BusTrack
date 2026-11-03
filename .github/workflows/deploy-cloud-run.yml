@@ -66,6 +66,21 @@ jobs:
             --substitutions "_REGION=$REGION,_REPOSITORY=$REPOSITORY,_IMAGE=$IMAGE_NAME,_TAG=$IMAGE_TAG" \
             .
 
+      - name: Grant runtime access to Google OAuth secrets
+        run: |
+          for secret_name in \
+            bustrack-google-oauth-client-id \
+            bustrack-google-oauth-client-secret \
+            bustrack-google-oauth-redirect-uri
+          do
+            gcloud secrets add-iam-policy-binding "$secret_name" \
+              --project "$PROJECT_ID" \
+              --member "serviceAccount:bustrack-runtime@$PROJECT_ID.iam.gserviceaccount.com" \
+              --role roles/secretmanager.secretAccessor \
+              --condition None \
+              --quiet
+          done
+
       - name: Deploy Cloud Run services
         shell: pwsh
         env:
