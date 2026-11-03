@@ -17,6 +17,24 @@
     .stops-page .stat-card,
     .driver-module .glass-card,
     .students-page .glass-card,
+    .bus-passes-page .glass-card,
+    .users-page .glass-card,
+    .active-users-page .glass-card,
+    .active-users-page .active-users-panel,
+    .active-users-page .active-suspended-panel,
+    .active-users-page .active-users-loading,
+    .active-users-page .active-empty,
+    .notifications-page .glass-card,
+    .notifications-page .notifications-hero,
+    .notifications-page .notifications-list-card,
+    .settings-page .glass-card,
+    .settings-page .settings-hero,
+    .settings-page .settings-card,
+    .settings-page .settings-loading,
+    .profile-page .glass-card,
+    .profile-page .profile-loading,
+    .profile-page .profile-hero,
+    .profile-page .profile-card,
     .modal.bus-details-modal,
     .modal.bus-details-modal .bus-document-tabs,
     .modal.bus-details-modal .bus-overview-stat,
@@ -28,6 +46,29 @@
     -webkit-backdrop-filter: blur(24px) saturate(145%) !important;
     backdrop-filter: blur(24px) saturate(145%) !important;
     box-shadow: 0 18px 45px rgba(0, 0, 0, .15), inset 0 1px rgba(255, 255, 255, .18) !important;
+}
+
+/* Nested cards retain separation without returning to opaque navy panels. */
+:is(
+    .bus-passes-page .bus-passes-summary,
+    .bus-passes-page .bus-passes-table-wrap,
+    .active-users-page .active-stat,
+    .active-users-page .active-session-card,
+    .active-users-page .suspended-user-card,
+    .notifications-page .notification-stat,
+    .notifications-page .notification-card,
+    .settings-page .settings-backup-flow div,
+    .profile-page .profile-details div
+) {
+    background: linear-gradient(135deg, rgba(98, 157, 204, .24), rgba(83, 116, 180, .16)) !important;
+    border-color: rgba(221, 241, 255, .22) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(135%) !important;
+    backdrop-filter: blur(18px) saturate(135%) !important;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, .12), inset 0 1px rgba(255, 255, 255, .14) !important;
+}
+
+.bus-passes-page .bus-passes-table {
+    background: rgba(73, 116, 164, .12) !important;
 }
 
 /* Keep inner controls legible while their enclosing panel shows the backdrop. */
