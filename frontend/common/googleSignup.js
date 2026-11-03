@@ -4,6 +4,7 @@ const message = document.querySelector("#signup-message");
 const identity = document.querySelector("#verified-identity");
 const emailLabel = document.querySelector("#verified-email");
 const usernameInput = document.querySelector("#signup-username");
+const routeSelect = document.querySelector("#signup-route");
 const passwordInput = document.querySelector("#signup-password");
 const passwordConfirm = document.querySelector("#signup-password-confirm");
 const togglePassword = document.querySelector("#toggle-signup-password");
@@ -22,6 +23,12 @@ function responseError(data, fallback) {
   return fallback;
 }
 
+function routeLabel(route) {
+  const routeName = [route.route_code, route.route_name].filter(Boolean).join(" · ");
+  const bus = [route.bus_number, route.registration_number].filter(Boolean).join(" · ");
+  return `${routeName} — ${bus}`;
+}
+
 async function loadVerifiedIdentity() {
   try {
     const response = await fetch("/api/auth/google/pending", { credentials: "same-origin" });
@@ -31,6 +38,14 @@ async function loadVerifiedIdentity() {
     }
     emailLabel.textContent = data.email;
     usernameInput.value = suggestedUsername(data.email);
+    const routes = Array.isArray(data.routes) ? data.routes : [];
+    routeSelect.replaceChildren(new Option("Select your route and bus", ""));
+    routes.forEach((route) => {
+      routeSelect.add(new Option(routeLabel(route), String(route.id)));
+    });
+    if (!routes.length) {
+      throw new Error("No active routes with an assigned bus are available. Contact the transport administrator.");
+    }
     identity.hidden = false;
     form.hidden = false;
     loading.hidden = true;
@@ -67,6 +82,7 @@ form?.addEventListener("submit", async (event) => {
       body: JSON.stringify({
         username: usernameInput.value.trim(),
         password: passwordInput.value,
+        route_id: Number(routeSelect.value),
       }),
     });
     const data = await response.json().catch(() => ({}));

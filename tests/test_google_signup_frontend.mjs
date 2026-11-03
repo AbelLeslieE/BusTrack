@@ -10,10 +10,15 @@ const authScript = read("frontend/common/auth.js");
 assert.match(login, /href="\/api\/auth\/google\/signup"/);
 assert.match(login, /Sign up with Google/);
 assert.match(login, /@sahrdaya\.ac\.in/);
-assert.match(signup, /Create your login/);
+assert.match(signup, /Complete your student account/);
+assert.match(signup, /Account role[\s\S]*Student/);
 assert.match(signup, /autocomplete="new-password"/);
+assert.match(signup, /id="signup-route"[\s\S]*required/);
+assert.match(signup, /one-time choice/);
 assert.match(signupScript, /fetch\("\/api\/auth\/google\/pending"/);
 assert.match(signupScript, /fetch\("\/api\/auth\/google\/complete"/);
+assert.match(signupScript, /route_id: Number\(routeSelect\.value\)/);
+assert.match(signupScript, /route\.bus_number/);
 assert.doesNotMatch(signupScript, /localStorage|sessionStorage/);
 assert.match(authScript, /account_exists: "An account already exists for this Google email/);
 

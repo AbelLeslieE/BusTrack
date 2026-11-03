@@ -254,6 +254,37 @@ body{
     font-size:.94rem;
 }
 
+.signup-account-type{
+    display:grid;
+    grid-template-columns:1fr auto;
+    gap:4px 14px;
+    margin-bottom:18px;
+    padding:12px 14px;
+    border:1px solid rgba(125,211,252,.24);
+    border-radius:14px;
+    background:rgba(14,165,233,.09);
+}
+
+.signup-account-type span{
+    color:var(--muted);
+    font-size:.76rem;
+    font-weight:700;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+}
+
+.signup-account-type strong{
+    color:#bae6fd;
+    font-size:.84rem;
+}
+
+.signup-account-type small{
+    grid-column:1/-1;
+    color:var(--muted);
+    font-size:.74rem;
+    line-height:1.4;
+}
+
 .signup-loading{
     padding:18px 0;
     color:var(--muted);
@@ -653,7 +684,8 @@ body::before{
 
 }
 
-.form-group input{
+.form-group input,
+.form-group select{
 
     width:100%;
 
@@ -687,13 +719,42 @@ body::before{
 
 }
 
+.form-group select{
+
+    appearance:none;
+
+    cursor:pointer;
+
+    background-color:rgba(255,255,255,.08);
+
+    background-image:linear-gradient(45deg,transparent 50%,#7dd3fc 50%),linear-gradient(135deg,#7dd3fc 50%,transparent 50%);
+
+    background-position:calc(100% - 19px) 21px,calc(100% - 14px) 21px;
+
+    background-repeat:no-repeat;
+
+    background-size:5px 5px,5px 5px;
+
+    padding-right:38px;
+
+}
+
+.form-group select option{
+
+    background:#10213a;
+
+    color:var(--text);
+
+}
+
 .form-group input::placeholder{
 
     color:rgba(255,255,255,.40);
 
 }
 
-.form-group input:hover{
+.form-group input:hover,
+.form-group select:hover{
 
     background:
 
@@ -705,7 +766,8 @@ body::before{
 
 }
 
-.form-group input:focus{
+.form-group input:focus,
+.form-group select:focus{
 
     background:
 

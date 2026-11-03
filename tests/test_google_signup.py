@@ -14,7 +14,7 @@ from sqlalchemy.pool import StaticPool
 
 from backend.auth import authenticate_user, get_password_hash
 from backend.database import Base
-from backend.models import Student, User, UserSession
+from backend.models import Bus, Route, Student, User, UserSession
 import backend.routes.models_tracking  # noqa: F401  # Register live-trip tables.
 from backend.routes.auth import (
     GOOGLE_OAUTH_COOKIE,
@@ -49,6 +49,30 @@ class GoogleSignupTest(unittest.TestCase):
         self.session_factory = sessionmaker(bind=self.engine, expire_on_commit=False)
         self.environment = patch.dict(os.environ, GOOGLE_ENVIRONMENT)
         self.environment.start()
+        with self.session_factory() as database_session:
+            bus = Bus(
+                bus_number="BUS-SIGNUP",
+                registration_number="KL-SIGNUP-01",
+                capacity=48,
+                manufacturer="Test",
+                model="Coach",
+                year=2026,
+                fuel_type="Diesel",
+                status="Active",
+            )
+            database_session.add(bus)
+            database_session.flush()
+            route = Route(
+                route_code="RT-SIGNUP",
+                route_name="Signup Route",
+                bus_id=bus.id,
+                status="Active",
+                total_stops=0,
+            )
+            database_session.add(route)
+            database_session.commit()
+            self.bus_id = bus.id
+            self.route_id = route.id
 
     def tearDown(self) -> None:
         self.environment.stop()
@@ -117,11 +141,23 @@ class GoogleSignupTest(unittest.TestCase):
 
         signup_cookie = self._response_cookie(callback, GOOGLE_SIGNUP_COOKIE)
         signup_request = self._request("/api/auth/google/pending", {GOOGLE_SIGNUP_COOKIE: signup_cookie})
-        pending = read_google_signup(signup_request)
+        with self.session_factory() as database_session:
+            pending = read_google_signup(signup_request, database_session)
         self.assertEqual(pending["email"], "abel@sahrdaya.ac.in")
+        self.assertEqual(pending["routes"], [{
+            "id": self.route_id,
+            "route_code": "RT-SIGNUP",
+            "route_name": "Signup Route",
+            "bus_number": "BUS-SIGNUP",
+            "registration_number": "KL-SIGNUP-01",
+        }])
         with self.session_factory() as database_session:
             completed = complete_google_signup(
-                GoogleSignupComplete(username="abel.student", password="StrongPassword12!"),
+                GoogleSignupComplete(
+                    username="abel.student",
+                    password="StrongPassword12!",
+                    route_id=self.route_id,
+                ),
                 signup_request,
                 Response(),
                 database_session,
@@ -134,6 +170,8 @@ class GoogleSignupTest(unittest.TestCase):
             self.assertEqual(user.role, "User")
             self.assertFalse(user.must_change_password)
             self.assertIsNotNone(user.student)
+            self.assertEqual(user.student.route_id, self.route_id)
+            self.assertEqual(user.student.bus_id, self.bus_id)
             self.assertEqual(authenticate_user(database_session, "abel.student", "StrongPassword12!").id, user.id)
 
     @patch("backend.routes.auth._fetch_google_identity")
@@ -224,7 +262,11 @@ class GoogleSignupTest(unittest.TestCase):
         signup_request = self._request("/api/auth/google/complete", {GOOGLE_SIGNUP_COOKIE: signup_token})
         with self.session_factory() as database_session:
             completed = complete_google_signup(
-                GoogleSignupComplete(username="student.one", password="ClaimedPassword12!"),
+                GoogleSignupComplete(
+                    username="student.one",
+                    password="ClaimedPassword12!",
+                    route_id=self.route_id,
+                ),
                 signup_request,
                 Response(),
                 database_session,
@@ -236,6 +278,8 @@ class GoogleSignupTest(unittest.TestCase):
             self.assertEqual(claimed.username, "student.one")
             self.assertFalse(claimed.must_change_password)
             self.assertEqual(claimed.auth_version, 2)
+            self.assertEqual(claimed.student.route_id, self.route_id)
+            self.assertEqual(claimed.student.bus_id, self.bus_id)
             self.assertEqual(database_session.query(Student).count(), 1)
             claimed_session = database_session.query(UserSession).filter_by(
                 session_id="imported-student-session"

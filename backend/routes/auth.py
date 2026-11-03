@@ -26,7 +26,7 @@ from backend.auth import (
     get_password_hash,
     normalize_username,
 )
-from backend.models import Student, User, UserSession
+from backend.models import Bus, Route, Student, User, UserSession
 from backend.roles import ROLE_USER, canonical_role
 from backend.schemas import GoogleSignupComplete, TokenResponse, UserResponse
 from backend.services.generated_codes import lock_generated_code_writes, next_student_code
@@ -331,11 +331,37 @@ def google_signup_callback(
 
 
 @router.get("/google/pending")
-def read_google_signup(request: Request) -> dict[str, str]:
-    """Return only the verified identity needed by the credential form."""
+def read_google_signup(
+    request: Request,
+    database_session: DatabaseSession,
+) -> dict[str, object]:
+    """Return the verified identity and routes available for first-time selection."""
 
     claims = _pending_google_signup(request)
-    return {"email": claims["email"], "full_name": str(claims.get("full_name") or "")}
+    available_routes = (
+        database_session.query(Route, Bus)
+        .join(Bus, Route.bus_id == Bus.id)
+        .filter(
+            func.lower(Route.status) == "active",
+            func.lower(Bus.status) == "active",
+        )
+        .order_by(Route.route_code, Route.route_name)
+        .all()
+    )
+    return {
+        "email": claims["email"],
+        "full_name": str(claims.get("full_name") or ""),
+        "routes": [
+            {
+                "id": route.id,
+                "route_code": route.route_code,
+                "route_name": route.route_name,
+                "bus_number": bus.bus_number,
+                "registration_number": bus.registration_number,
+            }
+            for route, bus in available_routes
+        ],
+    }
 
 
 @router.post("/google/complete", status_code=status.HTTP_201_CREATED)
@@ -366,6 +392,18 @@ def complete_google_signup(
         # Acquire this before the first query so SQLite can begin an immediate
         # transaction; PostgreSQL uses the matching advisory transaction lock.
         lock_generated_code_writes(database_session, "student")
+        route = database_session.get(Route, signup.route_id)
+        bus = database_session.get(Bus, route.bus_id) if route and route.bus_id else None
+        if (
+            route is None
+            or route.status.casefold() != "active"
+            or bus is None
+            or bus.status.casefold() != "active"
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="That route is no longer available. Choose another active route.",
+            )
         existing_email = (
             database_session.query(User)
             .filter(func.lower(User.email) == email)
@@ -420,8 +458,19 @@ def complete_google_signup(
             database_session.add(user)
             database_session.flush()
 
-        if user.student is None:
-            database_session.add(Student(user_id=user.id, student_code=next_student_code(database_session)))
+        student = user.student
+        if student is None:
+            student = Student(
+                user_id=user.id,
+                student_code=next_student_code(database_session),
+                route_id=route.id,
+                bus_id=bus.id,
+            )
+            database_session.add(student)
+        else:
+            student.route_id = route.id
+            student.bus_id = bus.id
+            student.stop_id = None
 
         record_audit_event(
             database_session,
@@ -431,7 +480,11 @@ def complete_google_signup(
             subject_type="student",
             subject_id=user.id,
             subject_label=user.username,
-            details={"existing_imported_account_claimed": account_was_claimed},
+            details={
+                "existing_imported_account_claimed": account_was_claimed,
+                "selected_route_id": route.id,
+                "assigned_bus_id": bus.id,
+            },
             request=request,
         )
         database_session.commit()
@@ -446,7 +499,12 @@ def complete_google_signup(
         ) from exc
 
     response.delete_cookie(GOOGLE_SIGNUP_COOKIE, path="/api/auth/google")
-    return {"message": "Your BusTrack student account is ready.", "username": username}
+    return {
+        "message": "Your BusTrack student account is ready.",
+        "username": username,
+        "route_name": route.route_name,
+        "bus_number": bus.bus_number,
+    }
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)

@@ -74,6 +74,7 @@ class GoogleSignupComplete(BaseModel):
         pattern=r"^[A-Za-z0-9_.-]+$",
     )
     password: str = Field(min_length=12, max_length=72)
+    route_id: int = Field(gt=0)
 # ==========================================================
 # USER SCHEMAS
 # ==========================================================

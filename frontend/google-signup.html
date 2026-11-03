@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Create student account | BusTrack</title>
     <link rel="icon" type="image/png" href="/static/assets/images/logo.png?v=20261015logo2">
-    <link rel="stylesheet" href="/static/common/login.css?v=20261103compact1">
+    <link rel="stylesheet" href="/static/common/login.css?v=20261103route1">
 </head>
 <body>
     <main class="login-container">
@@ -18,13 +18,19 @@
             </div>
 
             <div class="login-header signup-header">
-                <h2>Create your login</h2>
-                <p>Google has verified your Sahrdaya account. Choose the credentials you will use for BusTrack.</p>
+                <h2>Complete your student account</h2>
+                <p>Google has verified your Sahrdaya email. Create your BusTrack credentials and make your one-time route selection here.</p>
             </div>
 
             <div id="verified-identity" class="verified-identity" hidden>
                 <span>Verified by Google</span>
                 <strong id="verified-email"></strong>
+            </div>
+
+            <div class="signup-account-type">
+                <span>Account role</span>
+                <strong>Student</strong>
+                <small>Student access is assigned automatically and cannot be elevated during signup.</small>
             </div>
 
             <form id="google-signup-form" hidden>
@@ -34,6 +40,14 @@
                            minlength="3" maxlength="64" pattern="[A-Za-z0-9_.-]+"
                            autocomplete="username" required>
                     <small>Use letters, numbers, dots, dashes, or underscores.</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="signup-route">Choose your permanent route</label>
+                    <select id="signup-route" name="route_id" required>
+                        <option value="">Select your route and bus</option>
+                    </select>
+                    <small>This is a one-time choice. Your assigned bus follows this route and students cannot change it later.</small>
                 </div>
 
                 <div class="form-group">
@@ -60,6 +74,6 @@
             <a class="signup-cancel" href="/">Back to sign in</a>
         </section>
     </main>
-    <script type="module" src="/static/common/googleSignup.js?v=20261102google1"></script>
+    <script type="module" src="/static/common/googleSignup.js?v=20261103route1"></script>
 </body>
 </html>
