@@ -15,12 +15,58 @@ function suggestedUsername(email) {
   return cleaned.length >= 3 ? cleaned : `student.${cleaned}`.slice(0, 64);
 }
 
-function responseError(data, fallback) {
-  if (typeof data?.detail === "string") return data.detail;
-  if (Array.isArray(data?.detail) && typeof data.detail[0]?.msg === "string") {
-    return data.detail[0].msg.replace(/^Value error,\s*/i, "");
+function validationIssue(detail) {
+  const field = Array.isArray(detail?.loc) ? detail.loc.at(-1) : null;
+  const type = String(detail?.type || "");
+  const rawMessage = String(detail?.msg || "").replace(/^Value error,\s*/i, "");
+
+  if (field === "username") {
+    if (type.includes("too_short")) return { field, message: "Username must be at least 3 characters." };
+    if (type.includes("too_long")) return { field, message: "Username must be 64 characters or fewer." };
+    return { field, message: "Username can only use letters, numbers, dots, dashes, and underscores. Spaces are not allowed." };
   }
-  return fallback;
+  if (field === "password") {
+    if (type.includes("too_short")) return { field, message: "Password must be at least 12 characters." };
+    if (type.includes("too_long")) return { field, message: "Password must be 72 characters or fewer." };
+    return { field, message: rawMessage || "Please choose a stronger password." };
+  }
+  if (field === "route_id") {
+    return { field, message: "Please choose your bus route before creating the account." };
+  }
+  return { field, message: rawMessage || "Please check the information you entered." };
+}
+
+function responseIssue(data, fallback) {
+  if (typeof data?.detail === "string") return { field: null, message: data.detail };
+  if (Array.isArray(data?.detail) && data.detail.length) return validationIssue(data.detail[0]);
+  return { field: null, message: fallback };
+}
+
+function showError(text, input) {
+  form?.querySelectorAll("[aria-invalid='true']").forEach((element) => element.removeAttribute("aria-invalid"));
+  message.textContent = text;
+  if (input) {
+    input.setAttribute("aria-invalid", "true");
+    input.focus();
+  }
+}
+
+function validateForm() {
+  const username = usernameInput.value.trim();
+  if (username.length < 3) return { input: usernameInput, message: "Username must be at least 3 characters." };
+  if (username.length > 64) return { input: usernameInput, message: "Username must be 64 characters or fewer." };
+  if (!/^[A-Za-z0-9_.-]+$/.test(username)) {
+    return { input: usernameInput, message: "Username can only use letters, numbers, dots, dashes, and underscores. Spaces are not allowed." };
+  }
+  if (!routeSelect.value) return { input: routeSelect, message: "Please choose your bus route before creating the account." };
+  if (passwordInput.value.length < 12) return { input: passwordInput, message: "Password must be at least 12 characters." };
+  if (passwordInput.value.length > 72) return { input: passwordInput, message: "Password must be 72 characters or fewer." };
+  if (!/[a-z]/.test(passwordInput.value)) return { input: passwordInput, message: "Password needs at least one lowercase letter." };
+  if (!/[A-Z]/.test(passwordInput.value)) return { input: passwordInput, message: "Password needs at least one uppercase letter." };
+  if (!/[0-9]/.test(passwordInput.value)) return { input: passwordInput, message: "Password needs at least one number." };
+  if (!/[^A-Za-z0-9]/.test(passwordInput.value)) return { input: passwordInput, message: "Password needs at least one symbol, such as !, @, or #." };
+  if (passwordInput.value !== passwordConfirm.value) return { input: passwordConfirm, message: "The two passwords do not match." };
+  return null;
 }
 
 function routeLabel(route) {
@@ -34,7 +80,7 @@ async function loadVerifiedIdentity() {
     const response = await fetch("/api/auth/google/pending", { credentials: "same-origin" });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.email) {
-      throw new Error(responseError(data, "Your Google verification has expired."));
+      throw new Error(responseIssue(data, "Your Google verification has expired.").message);
     }
     emailLabel.textContent = data.email;
     usernameInput.value = suggestedUsername(data.email);
@@ -65,9 +111,9 @@ togglePassword?.addEventListener("click", () => {
 
 form?.addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (passwordInput.value !== passwordConfirm.value) {
-    message.textContent = "The passwords do not match.";
-    passwordConfirm.focus();
+  const invalid = validateForm();
+  if (invalid) {
+    showError(invalid.message, invalid.input);
     return;
   }
 
@@ -86,7 +132,12 @@ form?.addEventListener("submit", async (event) => {
       }),
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(responseError(data, "Unable to create the account."));
+    if (!response.ok) {
+      const issue = responseIssue(data, "Unable to create the account. Please try again.");
+      const error = new Error(issue.message);
+      error.field = issue.field;
+      throw error;
+    }
     message.textContent = "Account created. Taking you to sign in…";
     form.querySelectorAll("input, button").forEach((element) => { element.disabled = true; });
     window.setTimeout(() => {
@@ -94,7 +145,8 @@ form?.addEventListener("submit", async (event) => {
       window.location.assign(`/?${params}`);
     }, 1200);
   } catch (error) {
-    message.textContent = error.message || "Unable to create the account.";
+    const fieldInputs = { username: usernameInput, password: passwordInput, route_id: routeSelect };
+    showError(error.message || "Unable to create the account. Please try again.", fieldInputs[error.field]);
     submitButton.disabled = false;
   }
 });

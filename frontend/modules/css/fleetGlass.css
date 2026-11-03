@@ -113,3 +113,73 @@
     background: linear-gradient(135deg, rgba(50, 170, 226, .4), rgba(102, 90, 198, .3)) !important;
     border-color: rgba(114, 221, 255, .7) !important;
 }
+
+/* Give the student profile a compact identity header and keep its account
+   grid quieter than the surrounding glass card. */
+.student-theme .portal-page:not(.bus-pass-page) .portal-card > .portal-title-row {
+    align-items: center;
+    padding-bottom: 20px;
+    border-bottom: 1px solid rgba(221, 241, 255, .18);
+}
+
+.student-theme .portal-page:not(.bus-pass-page) .portal-card > .portal-title-row::before {
+    display: grid;
+    flex: 0 0 54px;
+    width: 54px;
+    height: 54px;
+    place-items: center;
+    border: 1px solid rgba(221, 241, 255, .3);
+    border-radius: 17px;
+    background: linear-gradient(135deg, rgba(63, 193, 244, .5), rgba(113, 91, 241, .42));
+    box-shadow: 0 12px 24px rgba(25, 91, 181, .18), inset 0 1px rgba(255, 255, 255, .22);
+    color: #f5fbff;
+    content: "\f007";
+    font-family: "Font Awesome 6 Free";
+    font-size: 1.2rem;
+    font-weight: 900;
+}
+
+.student-theme .portal-page:not(.bus-pass-page) .portal-title-row + .portal-details {
+    gap: 0;
+    margin-top: 20px;
+    border-color: rgba(221, 241, 255, .2) !important;
+    background: rgba(220, 235, 250, .06) !important;
+}
+
+.student-theme .portal-page:not(.bus-pass-page) .portal-title-row + .portal-details > div {
+    padding: 18px 20px;
+    border-right: 1px solid rgba(221, 241, 255, .14);
+    border-bottom: 1px solid rgba(221, 241, 255, .14);
+    background: rgba(226, 239, 252, .055) !important;
+    box-shadow: none !important;
+}
+
+.student-theme .portal-page:not(.bus-pass-page) .portal-title-row + .portal-details > div:nth-child(2n) {
+    border-right: 0;
+}
+
+.student-theme .portal-page:not(.bus-pass-page) .portal-title-row + .portal-details > div:nth-last-child(-n + 2) {
+    border-bottom: 0;
+}
+
+.student-theme .portal-page:not(.bus-pass-page) .portal-title-row + .portal-details > div:nth-child(n + 4) dd {
+    color: #d9f7ff;
+    font-weight: 700;
+}
+
+@media (max-width: 760px) {
+    .student-theme .portal-page:not(.bus-pass-page) .portal-card > .portal-title-row::before {
+        flex-basis: 46px;
+        width: 46px;
+        height: 46px;
+        border-radius: 14px;
+    }
+
+    .student-theme .portal-page:not(.bus-pass-page) .portal-title-row + .portal-details > div {
+        border-right: 0;
+    }
+
+    .student-theme .portal-page:not(.bus-pass-page) .portal-title-row + .portal-details > div:nth-last-child(2) {
+        border-bottom: 1px solid rgba(221, 241, 255, .14);
+    }
+}

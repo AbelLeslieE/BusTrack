@@ -88,11 +88,11 @@ Assert-AssetContains -Path "/static/common/auth.js?v=20261103google2" -ExpectedT
 Assert-AssetContains -Path "/static/common/loginSplash.js?v=20261103fullready1" -ExpectedText 'window.addEventListener("load"'
 Assert-AssetContains -Path "/static/common/loginSplash.js?v=20261103fullready1" -ExpectedText "login.css?v=20261103route1"
 Assert-AssetContains -Path "/static/common/login.css?v=20261103route1" -ExpectedText ".form-group select"
-Assert-AssetContains -Path "/google-signup" -ExpectedText "googleSignup.js?v=20261103route1"
-Assert-AssetContains -Path "/static/common/googleSignup.js?v=20261103route1" -ExpectedText "route_id: Number(routeSelect.value)"
-Assert-AssetContains -Path "/dashboard" -ExpectedText "fleetGlass.css?v=20261103fleetglass5"
+Assert-AssetContains -Path "/google-signup" -ExpectedText "googleSignup.js?v=20261103errors1"
+Assert-AssetContains -Path "/static/common/googleSignup.js?v=20261103errors1" -ExpectedText "Spaces are not allowed"
+Assert-AssetContains -Path "/dashboard" -ExpectedText "fleetGlass.css?v=20261103fleetglass6"
 Assert-AssetContains -Path "/dashboard" -ExpectedText "clamp(180px, 26vw, 240px)"
-Assert-AssetContains -Path "/static/modules/css/fleetGlass.css?v=20261103fleetglass5" -ExpectedText "rgba(232, 244, 255, .1)"
+Assert-AssetContains -Path "/static/modules/css/fleetGlass.css?v=20261103fleetglass6" -ExpectedText "portal-title-row + .portal-details"
 Assert-AssetContains -Path "/static/common/layout.css?v=20261102loader2" -ExpectedText ".page-loader__logo"
 
 Write-Host "Read-only deployment verification passed."
