@@ -5,7 +5,7 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 const dashboard = read("frontend/dashboard.html");
 const glass = read("frontend/modules/css/fleetGlass.css");
 
-assert.match(dashboard, /fleetGlass\.css\?v=20261103fleetglass6/);
+assert.match(dashboard, /fleetGlass\.css\?v=20261103fleetglass7/);
 
 for (const selector of [
   ".bus-passes-page .glass-card",
@@ -29,5 +29,8 @@ assert.match(glass, /backdrop-filter: blur\(24px\) saturate\(145%\)/);
 assert.match(glass, /\.history-page \.history-controls[\s\S]*?rgba\(232, 244, 255, \.1\)/);
 assert.match(glass, /\.student-theme \.portal-page:not\(\.bus-pass-page\) \.portal-title-row \+ \.portal-details/);
 assert.match(glass, /background: rgba\(226, 239, 252, \.055\) !important/);
+assert.match(glass, /\.modal:has\(#official-pass-name\)/);
+assert.match(glass, /#official-pass-file::file-selector-button/);
+assert.match(glass, /width: min\(760px, calc\(100vw - 32px\)\)/);
 
 console.log("Shared fleet glass frontend tests passed.");
