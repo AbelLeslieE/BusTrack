@@ -78,7 +78,7 @@ to GCP; create separate Secret Manager values for the target project.
    In Google Cloud Console, create an OAuth 2.0 **Web application** and add the
    exact public callback URL as an authorised redirect URI:
    `https://YOUR_PUBLIC_HOST/api/auth/google/callback`. Configure the OAuth
-   consent screen for the Sahardaya Workspace organisation. Bind the three
+   consent screen for the Sahrdaya Workspace organisation. Bind the three
    values above through `GCP_OPTIONAL_SECRET_BINDINGS` as
    `GOOGLE_OAUTH_CLIENT_ID=bustrack-google-oauth-client-id:1`,
    `GOOGLE_OAUTH_CLIENT_SECRET=bustrack-google-oauth-client-secret:1`, and

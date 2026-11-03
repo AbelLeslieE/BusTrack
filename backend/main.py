@@ -349,7 +349,7 @@ async def login_page() -> FileResponse:
 
 @app.get("/google-signup", include_in_schema=False)
 async def google_signup_page() -> FileResponse:
-    """Return credential setup after Google verifies a Sahardaya account."""
+    """Return credential setup after Google verifies a Sahrdaya account."""
 
     return FileResponse(
         FRONTEND_DIR / "google-signup.html",

@@ -33,7 +33,7 @@ GOOGLE_ENVIRONMENT = {
     "JWT_SECRET_KEY": "test-google-signup-secret-that-is-longer-than-thirty-two-characters",
     "GOOGLE_OAUTH_CLIENT_ID": "test-client.apps.googleusercontent.com",
     "GOOGLE_OAUTH_CLIENT_SECRET": "test-client-secret",
-    "GOOGLE_OAUTH_ALLOWED_DOMAIN": "sahardaya.ac.in",
+    "GOOGLE_OAUTH_ALLOWED_DOMAIN": "sahrdaya.ac.in",
     "GOOGLE_OAUTH_REDIRECT_URI": "http://testserver/api/auth/google/callback",
 }
 
@@ -89,19 +89,19 @@ class GoogleSignupTest(unittest.TestCase):
         authorization_url = urlparse(response.headers["location"])
         self.assertEqual(authorization_url.netloc, "accounts.google.com")
         parameters = parse_qs(authorization_url.query)
-        self.assertEqual(parameters["hd"], ["sahardaya.ac.in"])
+        self.assertEqual(parameters["hd"], ["sahrdaya.ac.in"])
         self.assertEqual(parameters["code_challenge_method"], ["S256"])
         flow_cookie = self._response_cookie(response, GOOGLE_OAUTH_COOKIE)
         self.assertIsNotNone(flow_cookie)
         return parameters["state"][0], flow_cookie
 
     @patch("backend.routes.auth._fetch_google_identity")
-    def test_verified_sahardaya_account_creates_student_with_normal_login(self, fetch_identity) -> None:
+    def test_verified_sahrdaya_account_creates_student_with_normal_login(self, fetch_identity) -> None:
         fetch_identity.return_value = {
             "sub": "google-user-123",
-            "email": "Abel@Sahardaya.ac.in",
+            "email": "Abel@Sahrdaya.ac.in",
             "email_verified": True,
-            "hd": "sahardaya.ac.in",
+            "hd": "sahrdaya.ac.in",
             "name": "Abel Student",
         }
         state, flow_cookie = self._begin_google_flow()
@@ -116,7 +116,7 @@ class GoogleSignupTest(unittest.TestCase):
         signup_cookie = self._response_cookie(callback, GOOGLE_SIGNUP_COOKIE)
         signup_request = self._request("/api/auth/google/pending", {GOOGLE_SIGNUP_COOKIE: signup_cookie})
         pending = read_google_signup(signup_request)
-        self.assertEqual(pending["email"], "abel@sahardaya.ac.in")
+        self.assertEqual(pending["email"], "abel@sahrdaya.ac.in")
         with self.session_factory() as database_session:
             completed = complete_google_signup(
                 GoogleSignupComplete(username="abel.student", password="StrongPassword12!"),
@@ -128,7 +128,7 @@ class GoogleSignupTest(unittest.TestCase):
 
         with self.session_factory() as database_session:
             user = database_session.query(User).filter_by(username="abel.student").one()
-            self.assertEqual(user.email, "abel@sahardaya.ac.in")
+            self.assertEqual(user.email, "abel@sahrdaya.ac.in")
             self.assertEqual(user.role, "User")
             self.assertFalse(user.must_change_password)
             self.assertIsNotNone(user.student)
@@ -155,8 +155,8 @@ class GoogleSignupTest(unittest.TestCase):
     def test_verified_email_can_claim_only_an_imported_student_account(self) -> None:
         with self.session_factory() as database_session:
             imported = User(
-                username="student@sahardaya.ac.in",
-                email="student@sahardaya.ac.in",
+                username="student@sahrdaya.ac.in",
+                email="student@sahrdaya.ac.in",
                 full_name="Imported Student",
                 password_hash=get_password_hash("TemporaryPassword12!"),
                 role="User",
@@ -177,7 +177,7 @@ class GoogleSignupTest(unittest.TestCase):
         signup_token = create_temporary_token(
             "google-signup",
             {
-                "email": "student@sahardaya.ac.in",
+                "email": "student@sahrdaya.ac.in",
                 "full_name": "Google Name",
                 "google_sub": "workspace-subject",
             },

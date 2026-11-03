@@ -28,7 +28,7 @@ services:
         value: 480
 
       - key: GOOGLE_OAUTH_ALLOWED_DOMAIN
-        value: sahardaya.ac.in
+        value: sahrdaya.ac.in
 
       - key: GOOGLE_OAUTH_CLIENT_ID
         sync: false

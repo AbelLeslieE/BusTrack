@@ -65,7 +65,11 @@ function Assert-GoogleSignupConfigured {
     }
     $statusCode = [int]$result[0]
     $location = [string]$result[1]
-    if ($statusCode -ne 302 -or $location -notmatch '^https://accounts\.google\.com/o/oauth2/v2/auth\?') {
+    if (
+        $statusCode -ne 302 `
+        -or $location -notmatch '^https://accounts\.google\.com/o/oauth2/v2/auth\?' `
+        -or $location -notmatch '(?:[?&])hd=sahrdaya\.ac\.in(?:&|$)'
+    ) {
         throw "$path is not configured for Google OAuth (HTTP $statusCode; redirect: $location)."
     }
     Write-Host "PASS $path -> Google OAuth authorization"

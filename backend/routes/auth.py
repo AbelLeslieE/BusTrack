@@ -55,7 +55,7 @@ def _secure_cookie() -> bool:
 def _google_configuration() -> tuple[str, str, str]:
     client_id = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "").strip()
     client_secret = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET", "").strip()
-    allowed_domain = os.getenv("GOOGLE_OAUTH_ALLOWED_DOMAIN", "sahardaya.ac.in").strip().casefold().lstrip("@")
+    allowed_domain = os.getenv("GOOGLE_OAUTH_ALLOWED_DOMAIN", "sahrdaya.ac.in").strip().casefold().lstrip("@")
     if not client_id or not client_secret:
         raise RuntimeError("Google signup is not configured.")
     if not allowed_domain or "." not in allowed_domain:
@@ -137,7 +137,7 @@ def _student_name(google_name: object, email: str) -> str:
     full_name = " ".join(str(google_name or "").split())[:100]
     if len(full_name) < 2:
         full_name = email.partition("@")[0].replace(".", " ").replace("_", " ").title()[:100]
-    return full_name if len(full_name) >= 2 else "Sahardaya Student"
+    return full_name if len(full_name) >= 2 else "Sahrdaya Student"
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -336,7 +336,7 @@ def complete_google_signup(
     email = str(claims["email"]).strip().casefold()
     _, _, allowed_domain = _google_configuration()
     if email.rpartition("@")[2] != allowed_domain:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="A Sahardaya email is required.")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="A Sahrdaya email is required.")
 
     username = normalize_username(signup.username)
     if not any(character.islower() for character in signup.password):

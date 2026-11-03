@@ -194,7 +194,7 @@ const googleError = loginParameters.get("google_error");
 if (googleError && message) {
   const googleMessages = {
     cancelled: "Google signup was cancelled.",
-    wrong_domain: "Use a verified @sahardaya.ac.in Google account.",
+    wrong_domain: "Use a verified @sahrdaya.ac.in Google account.",
     email_not_verified: "Google could not verify that email address.",
     not_configured: "Google signup is not available yet. Contact the transport administrator.",
     google_failed: "Google verification could not be completed. Please try again.",

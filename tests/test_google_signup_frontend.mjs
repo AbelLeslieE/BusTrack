@@ -8,7 +8,7 @@ const signupScript = read("frontend/common/googleSignup.js");
 
 assert.match(login, /href="\/api\/auth\/google\/signup"/);
 assert.match(login, /Sign up with Google/);
-assert.match(login, /@sahardaya\.ac\.in/);
+assert.match(login, /@sahrdaya\.ac\.in/);
 assert.match(signup, /Create your login/);
 assert.match(signup, /autocomplete="new-password"/);
 assert.match(signupScript, /fetch\("\/api\/auth\/google\/pending"/);

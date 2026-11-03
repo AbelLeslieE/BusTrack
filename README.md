@@ -56,7 +56,7 @@ python database/init_database.py --username your-admin-name
 The setup command securely prompts for a 12–72 character password and stores only its bcrypt hash with a unique salt. The login page receives a short-lived JWT in an HttpOnly, SameSite session cookie. The browser does not persist the JSON bearer token; that response field remains available only for non-browser API compatibility. The dashboard verifies the server session before it loads, and logout revokes the session and clears the browser cookie.
 
 New students can choose **Sign up with Google** and verify an account in the
-`sahardaya.ac.in` Google Workspace organisation. Google handles the email and
+`sahrdaya.ac.in` Google Workspace organisation. Google handles the email and
 password check; BusTrack then asks the verified student to create a local
 username and password. Later sign-ins continue through the same JWT session
 flow described above. Configure `GOOGLE_OAUTH_CLIENT_ID`,
