@@ -6,7 +6,7 @@ import { canonicalRole, ROLE_ADMIN, ROLE_DRIVER, ROLE_TECHNICIAN, ROLE_USER } fr
 import {
     createSidebar,
     setSidebarActive
-} from "./sidebar.js?v=20261015logo2";
+} from "./sidebar.js?v=20261103authors1";
 
 import {
     createDriverSidebar,

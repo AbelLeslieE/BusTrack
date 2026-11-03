@@ -139,6 +139,15 @@ export function createSidebar(activeRoute, onNavigate) {
 
             <a
                 class="nav-item"
+                href="/authors">
+
+                <span class="nav-icon" aria-hidden="true">✦</span>
+                <span>Meet the creators</span>
+
+            </a>
+
+            <a
+                class="nav-item"
                 href="#settings"
                 data-route="settings">
 

@@ -357,6 +357,16 @@ async def google_signup_page() -> FileResponse:
     )
 
 
+@app.get("/authors", include_in_schema=False)
+async def authors_page() -> FileResponse:
+    """Return the public showcase for the BusTrack creators."""
+
+    return FileResponse(
+        FRONTEND_DIR / "authors.html",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @app.get("/dashboard", include_in_schema=False)
 async def dashboard_page() -> FileResponse:
     """Return the protected SPA host; feature modules are loaded by the client router."""
