@@ -95,14 +95,18 @@
     background: rgba(73, 116, 164, .12) !important;
 }
 
-/* Keep inner controls legible while their enclosing panel shows the backdrop. */
+/* Keep Trip History's nested surfaces in the same neutral glass family as its
+   topbar and section. A subtle white layer avoids the cyan colour shift that
+   appeared when the old blue tint was stacked over the parent glass. */
 :is(
     .history-page .history-controls,
     .history-page .history-bus,
     .history-page .history-summary-stat,
     .history-page .history-event
 ) {
-    background: linear-gradient(135deg, rgba(98, 157, 204, .26), rgba(83, 116, 180, .18)) !important;
+    background: linear-gradient(135deg, rgba(232, 244, 255, .1), rgba(210, 218, 242, .07)) !important;
+    border-color: rgba(221, 241, 255, .24) !important;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, .1), inset 0 1px rgba(255, 255, 255, .13) !important;
 }
 
 .history-page .history-bus.is-selected {
