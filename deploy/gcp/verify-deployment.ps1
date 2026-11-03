@@ -52,12 +52,28 @@ function Assert-AssetContains {
     Write-Host "PASS $Path -> current release asset"
 }
 
+function Assert-GoogleSignupConfigured {
+    $path = "/api/auth/google/signup"
+    $response = Invoke-WebRequest `
+        -Uri "$BaseUrl$path" `
+        -Method Get `
+        -MaximumRedirection 0 `
+        -SkipHttpErrorCheck
+    $statusCode = [int]$response.StatusCode
+    $location = [string]$response.Headers.Location
+    if ($statusCode -ne 302 -or $location -notmatch '^https://accounts\.google\.com/o/oauth2/v2/auth\?') {
+        throw "$path is not configured for Google OAuth (HTTP $statusCode; redirect: $location)."
+    }
+    Write-Host "PASS $path -> Google OAuth authorization"
+}
+
 Invoke-Check -Path "/health" -ExpectedStatuses @(200)
 Invoke-Check -Path "/ready" -ExpectedStatuses @(200)
 Invoke-Check -Path "/" -ExpectedStatuses @(200)
 Invoke-Check -Path "/docs" -ExpectedStatuses @(404)
 Invoke-Check -Path "/openapi.json" -ExpectedStatuses @(404)
 Invoke-Check -Path "/api/routes" -ExpectedStatuses @(401, 403)
+Assert-GoogleSignupConfigured
 Assert-AssetContains -Path "/dashboard" -ExpectedText "fleetGlass.css?v=20261102fleetglass2"
 Assert-AssetContains -Path "/dashboard" -ExpectedText "clamp(180px, 26vw, 240px)"
 Assert-AssetContains -Path "/static/modules/css/fleetGlass.css?v=20261102fleetglass2" -ExpectedText "rgba(131, 185, 225, .28)"
