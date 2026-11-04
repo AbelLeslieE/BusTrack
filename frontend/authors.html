@@ -1984,6 +1984,114 @@ html:has(.film[open]) { overflow: hidden; }
   .portrait-abel:hover .authors-portrait-photo { transform: scale(1.5); }
   .portrait-agna:hover .authors-portrait-photo { transform: scale(1.12); }
 }
+/* A connected scroll journey with measured, fluid navigation. */
+section[id], #top, #authors-title { scroll-margin-top: calc(var(--header-height,110px) + 18px); }
+.authors-nav { position: relative; isolation: isolate; }
+.authors-nav::before {
+  content: ""; position: absolute; z-index: -1; top: var(--nav-y,5px);
+  left: 0; width: var(--nav-width,0px); height: var(--nav-height,44px); border-radius: 999px;
+  background: linear-gradient(110deg,#24d9e322,#659aff16); border: 1px solid #62dce929;
+  translate: var(--nav-x,0px) 0; opacity: var(--nav-visible,0);
+  transition: translate .42s cubic-bezier(.2,.8,.2,1), width .42s, opacity .25s;
+}
+.authors-nav a[aria-current="location"] { background: transparent; }
+.authors-nav a { transition: color .2s, scale .2s; }
+.authors-nav a:active { scale: .94; }
+.authors-section-title.is-visible h2 { animation: none; }
+.authors-word {
+  --word-progress: clamp(0,calc(var(--reveal-progress,1) * 1.5 - var(--word-step,0)),1);
+  display: inline-block; opacity: var(--word-progress);
+  translate: 0 calc((1 - var(--word-progress)) * 22px);
+  rotate: calc((1 - var(--word-progress)) * 2deg);
+}
+.authors-feature-icon svg [pathLength] {
+  stroke-dasharray: 1; stroke-dashoffset: calc(1 - var(--reveal-progress,1));
+}
+.authors-feature-card { overflow: hidden; }
+.authors-feature-card::after {
+  content: ""; position: absolute; pointer-events: none; top: 0; bottom: 0; width: 20%;
+  left: calc(var(--reveal-progress,1) * 130% - 25%); opacity: calc(1 - var(--reveal-progress,1));
+  background: linear-gradient(90deg,transparent,#8effeb18,transparent); transform: skewX(-16deg);
+}
+.authors-person-card .authors-portrait {
+  box-shadow: 0 12px 26px #0004, 0 0 calc(var(--reveal-progress,1) * 22px) #66e9db14;
+}
+.authors-js .authors-timeline::before { display: none; }
+.authors-journey-route { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.authors-journey-track { stroke: #6bacc033; stroke-width: 2; fill: none; }
+.authors-journey-fill { stroke: #80ebd8; stroke-width: 2; fill: none; stroke-dasharray: 1; stroke-dashoffset: calc(1 - var(--journey-progress,0)); filter: drop-shadow(0 0 5px #61ffe499); }
+.authors-journey-bus { fill: #f6ce76; stroke: #102d3b; stroke-width: 1.4; }
+.authors-journey-bus .bus-window { fill: #193b4c; }
+.authors-js .authors-timeline-item.authors-build { translate: 0 0; scale: 1; rotate: 0deg; }
+.authors-timeline-item > div { translate: 0 calc((1 - var(--reveal-progress,1)) * 22px); }
+.authors-timeline-item > span { transition: color .35s, border-color .35s, background .35s, box-shadow .35s; }
+.authors-timeline-item.is-reached > span { background: #153f46; border-color: #8bf4da; color: #c4fff1; box-shadow: 0 0 0 6px #62e2cf0d,0 0 24px #62e2cf22; }
+.authors-final-cta { box-shadow: 0 20px 60px #0003,0 0 calc(var(--reveal-progress,1) * 36px) #19e7ff0d; }
+.authors-to-top::before {
+  content: ""; position: absolute; inset: -4px; border-radius: 19px; pointer-events: none;
+  background: conic-gradient(#77eddf calc(var(--page-progress,0) * 1turn),#45627744 0);
+  mask: linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  mask-composite: exclude; padding: 2px;
+}
+@media (min-width: 701px) and (max-width: 900px) {
+  .authors-header, .authors-header.is-scrolled { gap: 12px; padding: 12px; }
+  .authors-brand-logo { width: 44px; height: 44px; }
+  .authors-brand-name { font-size: 1.55rem; margin-left: 10px; }
+  .authors-nav a { padding: 8px 12px; font-size: .74rem; }
+  .authors-back { width: 44px; padding: 0; justify-content: center; }
+  .authors-back-label { display: none; }
+}
+@media (max-width: 960px) {
+  .authors-feature-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18px; }
+  .authors-feature-card, .authors-feature-card:nth-child(4) { grid-column: auto; }
+  .authors-feature-card:nth-child(5) { grid-column: 1 / -1; min-height: 210px; }
+  .authors-timeline { grid-template-columns: 1fr; gap: 18px; max-width: 740px; margin-inline: auto; padding-left: 28px; }
+  .authors-timeline-item::before { content: ""; position: absolute; left: -15px; top: 50%; width: 15px; height: 1px; background: #80ebd83d; }
+  .authors-timeline-item {
+    display: grid; grid-template-columns: 54px minmax(0,1fr); align-items: center;
+    gap: 22px; padding: 22px; text-align: left; border: 1px solid #8bcddc1a;
+    border-radius: 18px; background: #132637a6;
+  }
+  .authors-timeline-item > span { width: 54px; height: 54px; margin: 0; box-shadow: none; }
+  .authors-timeline-item h3 { margin-bottom: 6px; }
+  .authors-hero { min-height: 0; }
+}
+@media (max-width: 600px) {
+  .authors-feature-grid { grid-template-columns: 1fr; }
+  .authors-feature-card, .authors-feature-card:nth-child(4), .authors-feature-card:nth-child(5) {
+    display: grid; grid-template-columns: 48px minmax(0,1fr); grid-column: auto;
+    gap: 0 16px; min-height: 150px; padding: 24px 20px;
+  }
+  .authors-feature-icon { width: 48px; height: 48px; grid-row: 1 / 3; margin: 2px 0 0; border-radius: 14px; }
+  .authors-feature-card h3, .authors-feature-card p { grid-column: 2; }
+  .authors-feature-card h3 { font-size: 1.02rem; padding-right: 10px; }
+  .authors-feature-number { top: 10px; right: 12px; font-size: .6rem; }
+  .authors-timeline-item { grid-template-columns: 46px minmax(0,1fr); gap: 18px; padding: 20px 16px; }
+  .authors-timeline-item > span { width: 46px; height: 46px; }
+  .authors-hero-actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; width: 100%; }
+  .authors-hero-actions .authors-button { width: 100%; padding-inline: 12px; font-size: .8rem; gap: 6px; }
+  .authors-final-cta .authors-button { width: 100%; }
+  .authors-to-top { right: max(14px,env(safe-area-inset-right)); bottom: max(14px,env(safe-area-inset-bottom)); }
+}
+@media (max-width: 360px) {
+  .authors-hero-actions { grid-template-columns: 1fr; }
+  .authors-feature-card, .authors-feature-card:nth-child(4), .authors-feature-card:nth-child(5) { padding-inline: 14px; gap: 0 12px; }
+  .authors-person-top { gap: 12px; }
+  .authors-person-top .authors-role-pill { white-space: normal; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .authors-header { position: relative; }
+  section[id] { scroll-margin-top: 16px; }
+  .authors-hero { padding-top: 30px; }
+  .signal-stage { padding-block: 8px; }
+  .signal-engine h2 { font-size: clamp(1.5rem,4vw,2.5rem); }
+}
+.authors-motion-paused .authors-nav::before { transition: none; }
+.authors-motion-paused .authors-word { opacity: 1; translate: 0 0; rotate: 0deg; }
+@media (prefers-reduced-motion: reduce) {
+  html:not(.authors-full-motion) .authors-word { opacity: 1; translate: 0 0; rotate: 0deg; }
+  html:not(.authors-full-motion) .authors-feature-icon svg [pathLength] { stroke-dashoffset: 0; }
+}
   </style>
 </head>
 <body id="top">
@@ -2317,6 +2425,7 @@ html:has(.film[open]) { overflow: hidden; }
   const reveals = [...document.querySelectorAll(".authors-reveal")];
   const zones = [...document.querySelectorAll("main > section")];
   const navLinks = [...document.querySelectorAll(".authors-nav a")];
+  const navigation = document.querySelector(".authors-nav");
   const progress = document.querySelector(".authors-scroll-progress span");
   const header = document.querySelector(".authors-header");
   const toTop = document.querySelector(".authors-to-top");
@@ -2328,6 +2437,39 @@ html:has(.film[open]) { overflow: hidden; }
   let paused = false;
   try { paused = localStorage.getItem("bustrack-authors-motion-v2") === "paused"; } catch {}
   const canAnimate = () => !paused && !document.hidden;
+
+  document.querySelectorAll(".authors-section-title h2").forEach((heading) => {
+    const words = heading.textContent.trim().split(/\s+/);
+    const fragment = document.createDocumentFragment();
+    words.forEach((word, index) => {
+      const span = document.createElement("span");
+      span.className = "authors-word";
+      span.textContent = word;
+      span.style.setProperty("--word-step", String(index / words.length * .45));
+      fragment.append(span);
+      if (index < words.length - 1) fragment.append(" ");
+    });
+    heading.replaceChildren(fragment);
+  });
+  document.querySelectorAll(".authors-feature-icon svg :is(path,circle,rect,line,polyline,polygon)").forEach((shape) => {
+    shape.setAttribute("pathLength", "1");
+  });
+
+  const timeline = document.querySelector(".authors-timeline");
+  const journeySteps = [...timeline.querySelectorAll(".authors-timeline-item")];
+  const makeSvg = (tag, attributes) => {
+    const element = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    Object.entries(attributes).forEach(([name, value]) => element.setAttribute(name, value));
+    return element;
+  };
+  const journeySvg = makeSvg("svg", { class: "authors-journey-route", "aria-hidden": "true", focusable: "false" });
+  const journeyTrack = makeSvg("path", { class: "authors-journey-track" });
+  const journeyPath = makeSvg("path", { class: "authors-journey-fill", pathLength: "1" });
+  const journeyBus = makeSvg("g", { class: "authors-journey-bus" });
+  journeyBus.innerHTML = '<rect x="-7" y="-11" width="14" height="22" rx="4"/><rect class="bus-window" x="-4.5" y="-6" width="9" height="7" rx="1.5"/><path d="M-4-8h2m4 0h2M-4 7h8" stroke="#fff1c5"/>';
+  journeySvg.append(journeyTrack, journeyPath, journeyBus);
+  timeline.prepend(journeySvg);
+  let journeyLayout;
 
   // Stops and the traveler use one SVG coordinate system, at every screen size.
   const routePath = document.querySelector("#authors-route-path");
@@ -2400,6 +2542,21 @@ html:has(.film[open]) { overflow: hidden; }
       }
       buildLayout.set(item, { top: position.top, fromX, fromY, stagger });
     });
+    const timelinePosition = layoutPosition(timeline);
+    const points = journeySteps.map((step) => {
+      const badge = step.querySelector(":scope > span");
+      const position = layoutPosition(badge);
+      return { x: innerWidth <= 960 ? 13 : position.left - timelinePosition.left + badge.offsetWidth / 2, y: position.top - timelinePosition.top + badge.offsetHeight / 2 };
+    });
+    const route = points.map((point, index) => `${index ? "L" : "M"}${point.x} ${point.y}`).join(" ");
+    journeyTrack.setAttribute("d", route);
+    journeyPath.setAttribute("d", route);
+    journeyLayout = {
+      start: timelinePosition.top + points[0].y,
+      distance: Math.max(innerHeight * .32, points[points.length - 1].y - points[0].y),
+      length: journeyPath.getTotalLength()
+    };
+    root.style.setProperty("--header-height", `${header.offsetHeight}px`);
     layoutDirty = false;
   };
   const updateBuild = () => {
@@ -2424,6 +2581,16 @@ html:has(.film[open]) { overflow: hidden; }
       const amount = enabled ? smoothStep(clamp01((innerHeight * .98 - (top - scrollY)) / distance)) : 1;
       surface.style.setProperty("--section-build", amount.toFixed(3));
     });
+    const journeyAmount = enabled ? clamp01((scrollY + innerHeight * .68 - journeyLayout.start) / journeyLayout.distance) : 1;
+    timeline.style.setProperty("--journey-progress", journeyAmount.toFixed(4));
+    const routeDistance = journeyLayout.length * journeyAmount;
+    const point = journeyPath.getPointAtLength(routeDistance);
+    const before = journeyPath.getPointAtLength(Math.max(0, routeDistance - 1));
+    const after = journeyPath.getPointAtLength(Math.min(journeyLayout.length, routeDistance + 1));
+    const angle = Math.atan2(after.y - before.y, after.x - before.x) * 180 / Math.PI + 90;
+    journeyBus.setAttribute("transform", `translate(${point.x} ${point.y}) rotate(${angle})`);
+    journeyBus.style.opacity = journeyAmount > 0 && journeyAmount < 1 ? "1" : "0";
+    journeySteps.forEach((step, index) => step.classList.toggle("is-reached", journeyAmount > 0 && journeyAmount >= index / (journeySteps.length - 1)));
   };
 
   // The same document works on the application and when opened directly from disk.
@@ -2441,7 +2608,7 @@ html:has(.film[open]) { overflow: hidden; }
   }
 
   document.querySelectorAll(".authors-skill-list, .authors-timeline").forEach((group) => {
-    [...group.children].forEach((item, index) => item.style.setProperty("--item-index", index));
+    [...group.children].filter((item) => item.tagName.toLowerCase() !== "svg").forEach((item, index) => item.style.setProperty("--item-index", index));
   });
 
   const finishCounters = () => {
@@ -2505,7 +2672,9 @@ html:has(.film[open]) { overflow: hidden; }
   const updateScroll = () => {
     scrollFrame = 0;
     const scrollable = Math.max(1, root.scrollHeight - innerHeight);
-    progress?.style.setProperty("transform", `scaleX(${Math.max(0, Math.min(1, scrollY / scrollable))})`);
+    const pageAmount = clamp01(scrollY / scrollable);
+    progress?.style.setProperty("transform", `scaleX(${pageAmount})`);
+    toTop?.style.setProperty("--page-progress", pageAmount.toFixed(4));
     header?.classList.toggle("is-scrolled", scrollY > 28);
     const showTop = scrollY > innerHeight * 0.65;
     toTop?.classList.toggle("is-visible", showTop);
@@ -2520,6 +2689,14 @@ html:has(.film[open]) { overflow: hidden; }
       if (link.hash === active) link.setAttribute("aria-current", "location");
       else link.removeAttribute("aria-current");
     });
+    const activeLink = navLinks.find((link) => link.hash === active);
+    navigation.style.setProperty("--nav-visible", activeLink ? "1" : "0");
+    if (activeLink) {
+      navigation.style.setProperty("--nav-x", `${activeLink.offsetLeft}px`);
+      navigation.style.setProperty("--nav-y", `${activeLink.offsetTop}px`);
+      navigation.style.setProperty("--nav-width", `${activeLink.offsetWidth}px`);
+      navigation.style.setProperty("--nav-height", `${activeLink.offsetHeight}px`);
+    }
     const shift = canAnimate() && finePointer.matches && !compactScreen.matches ? Math.min(scrollY * .045, 24) : 0;
     scene?.style.setProperty("--scene-y", `${shift}px`);
     if (!document.hidden) updateBuild();
@@ -2534,6 +2711,7 @@ html:has(.film[open]) { overflow: hidden; }
   if ("ResizeObserver" in window) {
     const layoutObserver = new ResizeObserver(refreshLayout);
     layoutObserver.observe(document.querySelector("main"));
+    layoutObserver.observe(header);
     buildItems.forEach((item) => layoutObserver.observe(item));
   }
   addEventListener("pageshow", queueScroll);
