@@ -43,7 +43,7 @@ import {
 // ==========================================================
 
 const adminModules = {
-    routeStudio: { title: "Routes · Traced paths", load: () => import("../modules/js/routeStudio.js") },
+    maintainRoute: { title: "Maintain route", load: () => import("../modules/js/routeStudio.js") },
 
     dashboard: {
         title: "Overview",

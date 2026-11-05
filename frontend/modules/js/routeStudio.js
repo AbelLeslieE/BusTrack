@@ -15,6 +15,7 @@ async function api(path, data, method = 'POST') {
 }
 const profile = JSON.parse(localStorage.getItem('bus_tracker_profile') || '{}');
 const tracer = profile.role === 'Tracer';
+const admin = profile.role === 'Admin';
 
 function openStore() {
     return new Promise((resolve, reject) => {
@@ -41,7 +42,7 @@ export function render() {
     const root = document.createElement('section');
     root.className = 'portal-page studio-page';
     root.innerHTML = `
-      <header class="studio-header"><div><p class="studio-eyebrow">BUSTRACK / ${tracer ? 'TRACER PORTAL' : 'ROUTE STUDIO'}</p><h1>${tracer ? 'Every turn, captured.' : 'Routes · Traced paths'}</h1><p>${tracer ? 'Watch your journey take shape as you travel.' : 'Review recorded paths and prepare routes.'}</p></div><span class="studio-record-badge">● Recording off</span></header>
+      <header class="studio-header"><div><p class="studio-eyebrow">BUSTRACK / ${tracer ? 'TRACER PORTAL' : admin ? 'ROUTE APPROVAL' : 'TECHNICIAN PORTAL'}</p><h1>${tracer ? 'Every turn, captured.' : admin ? 'Maintain route' : 'Routes · Traced paths'}</h1><p>${tracer ? 'Watch your journey take shape as you travel.' : admin ? 'Review technician-prepared paths and choose the route maintained for this bus.' : 'Review recorded paths, refine stops, and prepare routes for approval.'}</p></div><span class="studio-record-badge">● Recording off</span></header>
       ${tracer ? `<section class="studio-permission"><div><h2>Your location, your control</h2><p>Allow precise location to trace your assigned bus. Samples are saved on this phone and synchronized to BusTrack. Keep this page visible and your phone unlocked.</p></div><button data-action="permission">Enable location</button><span class="studio-permission-state">Permission not requested</span></section>` : ''}
       <div class="studio-metrics"><div><span>Assigned bus</span><strong class="studio-bus-label">—</strong></div><div><span>GPS accuracy</span><strong class="studio-accuracy">Waiting</strong></div><div><span>Samples captured</span><strong class="studio-samples">0</strong></div><div><span>Pending upload</span><strong class="studio-pending">0</strong></div><div><span>Last GPS fix</span><strong class="studio-last-fix">—</strong></div></div>
       <p role="status" class="studio-status">Loading…</p><div class="studio-controls studio-management"></div>
@@ -106,6 +107,11 @@ export function render() {
             root.querySelector('.studio-bus-label').textContent=overview.assignment?.bus_number || 'Not assigned';
             root.querySelector('.studio-record').innerHTML = ['Start','Recover','Pause','Resume','Finish','Discard'].map(a => `<button data-action="${a.toLowerCase()}">${a}</button>`).join('');
             status(`Recording ${watch === null ? 'OFF' : 'ON'} · ${overview.assignment ? 'Assigned bus: ' + overview.assignment.bus_number : 'Waiting for technician assignment'} · ${local?.pending?.length || 0} pending samples. Keep this page open and the phone unlocked.`);
+        } else if (admin) {
+            root.querySelector('.studio-management').innerHTML = '';
+            root.querySelector('.studio-record').innerHTML = '';
+            root.querySelector('.studio-name').hidden = true;
+            status('Choose a technician-prepared path. Only an administrator can select the route maintained for this bus.');
         } else {
             root.querySelector('.studio-management').innerHTML = `<select class="studio-tracer" aria-label="Tracer">${overview.tracers.map(u => `<option value="${u.id}">${esc(u.name)}</option>`).join('')}</select><select class="studio-bus" aria-label="Bus">${overview.buses.map(b => `<option value="${b.id}">${esc(b.name)}</option>`).join('')}</select><button data-action="assign">Assign bus to tracer</button>`;
             status('Choose a saved path to edit. Only an administrator can select it for service.');

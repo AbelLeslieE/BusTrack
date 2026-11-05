@@ -11,7 +11,7 @@ const primaryItems = [
   ["tripHistory", "Trip history", "◷"],
   ["buses", "Buses", "▣"],
   ["routes", "Routes", "⌁"],
-  ["routeStudio", "Traced paths", "⌁"],
+  ["maintainRoute", "Maintain route", "⌁"],
   ["assignments", "Assignments", "⇄"],
   ["stops", "Stops", "⌖"],
 ];
