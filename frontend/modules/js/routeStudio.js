@@ -60,7 +60,9 @@ export function render() {
         root.querySelector('.studio-samples').textContent = String(local?.sequence || 0);
         root.querySelector('.studio-pending').textContent = String(local?.pending?.length || 0);
         if(lastFix) {
-            root.querySelector('.studio-accuracy').textContent = `± ${Math.round(lastFix.coords.accuracy)} m`;
+            const accuracy = Math.round(lastFix.coords.accuracy);
+            root.querySelector('.studio-accuracy').textContent = accuracy > 100 ? `Weak · ± ${accuracy} m` : `± ${accuracy} m`;
+            root.querySelector('.studio-accuracy').dataset.quality = accuracy > 100 ? 'weak' : 'good';
             root.querySelector('.studio-last-fix').textContent = new Date(lastFix.timestamp).toLocaleTimeString();
         }
     }

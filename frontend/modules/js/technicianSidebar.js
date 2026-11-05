@@ -1,6 +1,6 @@
 import { logoutSession } from "/static/common/auth.js?v=20261015d";
 
-const workspaceItems = [
+const technicianItems = [
     ["technicianDashboard", "GPS Integration", "⌘"],
     ["providerHealth", "Provider Health", "⌁"],
     ["routeStudio", "Traced paths", "⌁"],
@@ -13,18 +13,20 @@ function navItem([route, label, icon], activeRoute) {
 }
 
 export function createTechnicianSidebar(activeRoute, onNavigate) {
-    if (JSON.parse(localStorage.getItem("bus_tracker_profile") || "{}").role === "Tracer") workspaceItems.splice(0, workspaceItems.length, ["routeStudio", "Trace assigned bus", "⌁"]);
+    const profile = JSON.parse(localStorage.getItem("bus_tracker_profile") || "{}");
+    const isTracer = String(profile.role || "").toLowerCase() === "tracer";
+    const workspaceItems = isTracer ? [["routeStudio", "Trace assigned bus", "⌁"]] : technicianItems;
     const sidebar = document.createElement("aside");
     sidebar.className = "sidebar glass-panel";
     sidebar.innerHTML = `
         <div class="sidebar-mobile-header">
-            <a class="brand" href="#technicianDashboard"><span class="brand-mark"><img src="/static/assets/images/logo.png?v=20261015logo2" alt="" aria-hidden="true"></span><div class="brand-text"><span class="brand-title">BusTrack</span><span class="brand-subtitle">Technician Portal</span></div></a>
+            <a class="brand" href="${isTracer ? "#routeStudio" : "#technicianDashboard"}"><span class="brand-mark"><img src="/static/assets/images/logo.png?v=20261015logo2" alt="" aria-hidden="true"></span><div class="brand-text"><span class="brand-title">BusTrack</span><span class="brand-subtitle">${isTracer ? "Tracer Portal" : "Technician Portal"}</span></div></a>
             <button type="button" class="sidebar-close" aria-label="Close navigation"><span aria-hidden="true">×</span></button>
         </div>
-        <nav class="sidebar-nav"><p class="nav-label">Integration</p>${workspaceItems.map(item => navItem(item, activeRoute)).join("")}</nav>
+        <nav class="sidebar-nav"><p class="nav-label">${isTracer ? "Bus route" : "Technician workspace"}</p>${workspaceItems.map(item => navItem(item, activeRoute)).join("")}</nav>
         <div class="sidebar-footer">
             <p class="nav-label">Restricted access</p>
-            <p class="sidebar-help">Manage GPS integration and inspect each provider heartbeat.</p>
+            <p class="sidebar-help">${isTracer ? "Record the assigned bus route and review recording status." : "Manage GPS integrations, review traces, and prepare routes for admin approval."}</p>
             <a class="nav-item logout-btn" href="#" data-action="logout"><span class="nav-icon">⇦</span><span>Logout</span></a>
         </div>`;
     sidebar.addEventListener("click", event => {
