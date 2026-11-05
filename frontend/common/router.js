@@ -345,7 +345,7 @@ function applyModuleStyles(moduleName) {
 
     const styles = [loadStylesheet(
         "active-module-styles",
-        `/static/modules/css/${styleModuleName}.css?v=${styleModuleName === "routeStudio" ? "20261105glass1" : styleModuleName === "traceAssignment" ? "20261105assign1" : styleModuleName === "live_tracking" ? "20261105cardreset1" : styleModuleName === "technicianDashboard" ? "20261105pagination1" : styleModuleName === "providerHealth" ? "20261105portals1" : "20261103providerdelay1"}`
+        `/static/modules/css/${styleModuleName}.css?v=${styleModuleName === "routeStudio" ? "20261105darkmatch1" : styleModuleName === "traceAssignment" ? "20261105assign1" : styleModuleName === "live_tracking" ? "20261105cardreset1" : styleModuleName === "technicianDashboard" ? "20261105pagination1" : styleModuleName === "providerHealth" ? "20261105portals1" : "20261103providerdelay1"}`
     )];
 
     // Driver shared styles
