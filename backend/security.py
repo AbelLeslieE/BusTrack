@@ -201,7 +201,7 @@ class RequestSecurityMiddleware:
             b"script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
             if is_api_docs
             else (
-                b"script-src 'self' 'sha256-Ju0bl047SAK2pZtnV7WH7WQKBn3PiTGulnww6GBtc50=' "
+                b"script-src 'self' 'sha256-9EsfcvbGy9PbAQzP+wC6yS0vydqo1YQc0PN2tDJ3kcw=' "
                 b"https://unpkg.com; "
                 if is_authors_page
                 else b"script-src 'self' https://unpkg.com; "

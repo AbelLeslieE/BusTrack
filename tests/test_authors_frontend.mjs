@@ -56,7 +56,7 @@ assert.match(page, /id="creators"/);
 assert.match(page, /id="journey"/);
 assert.match(styles, /@media \(max-width: 700px\)/);
 assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
-assert.match(page, /class="authors-no-js"/);
+assert.match(page, /class="authors-no-js authors-full-motion"/);
 assert.match(script, /bustrack-authors-motion-v2/);
 assert.match(styles, /authors-route-flow/);
 assert.match(styles, /\.authors-campus-frame > img[\s\S]*?object-position: center/);

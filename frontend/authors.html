@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" class="authors-no-js">
+<html lang="en" class="authors-no-js authors-full-motion">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -1982,15 +1982,6 @@ html:has(.film[open]) { overflow: hidden; }
   .signal-photo { height: clamp(100px,30svh,135px); }
   .signal-person figcaption { padding: .7rem .8rem; }
 }
-@media (prefers-reduced-motion: reduce) {
-  .authors-person-card.is-visible .authors-portrait-photo { animation: none; }
-  .film[open] .coach-cabin, .film[open] .coach-wheels { animation: none; }
-  .authors-campus-frame > img { translate: none; }
-  .authors-section-title { transform: none; }
-  .authors-section::after, .authors-ambient { translate: none; }
-  body.authors-intro-complete .authors-header,
-  body.authors-intro-complete main { animation: none; }
-}
 @media (max-height: 360px) { .film[open] { grid-template-rows: auto minmax(220px,1fr) auto; } }
 /* Size the credits by their content rather than the viewport height. */
 .authors-team-section { max-width: 1260px; margin-inline: auto; padding-block: clamp(56px,6vw,88px); }
@@ -2572,12 +2563,11 @@ section[id], #top, #authors-title { scroll-margin-top: calc(var(--header-height,
   const scene = document.querySelector(".authors-hero-visual");
   const hero = document.querySelector(".authors-hero");
   const counters = [...document.querySelectorAll("[data-count]")];
-  const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
   const counterFrames = new Map();
   const counted = new WeakSet();
   let paused = false;
   try { paused = localStorage.getItem("bustrack-authors-motion-v2") === "paused"; } catch {}
-  const canAnimate = () => !paused && !document.hidden && !reducedMotion.matches;
+  const canAnimate = () => !paused && !document.hidden;
 
   document.querySelectorAll(".authors-section-title h2").forEach((heading) => {
     const words = heading.textContent.trim().split(/\s+/);
@@ -2702,7 +2692,7 @@ section[id], #top, #authors-title { scroll-margin-top: calc(var(--header-height,
   };
   const updateBuild = () => {
     if (layoutDirty) measureBuildLayout();
-    const enabled = !paused && !reducedMotion.matches;
+    const enabled = !paused;
     const distance = Math.max(140, Math.min(innerHeight * .4, 340));
     buildItems.forEach((item) => {
       const { top, fromX, fromY, stagger } = buildLayout.get(item);
@@ -3100,7 +3090,7 @@ section[id], #top, #authors-title { scroll-margin-top: calc(var(--header-height,
     const playFilm = (afterEscape) => {
       if (film.open) return;
       fillCredits();
-      film.classList.toggle("is-static", paused || reducedMotion.matches);
+      film.classList.toggle("is-static", paused);
       focusAfter = afterEscape;
       elapsed = 0;
       previousTime = undefined;
