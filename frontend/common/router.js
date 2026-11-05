@@ -337,7 +337,7 @@ function applyModuleStyles(moduleName) {
 
     const styles = [loadStylesheet(
         "active-module-styles",
-        `/static/modules/css/${styleModuleName}.css?v=20261103providerdelay1`
+        `/static/modules/css/${styleModuleName}.css?v=${styleModuleName === "routeStudio" ? "20261105polished1" : "20261103providerdelay1"}`
     )];
 
     // Driver shared styles
