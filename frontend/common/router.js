@@ -43,6 +43,7 @@ import {
 // ==========================================================
 
 const adminModules = {
+    routeStudio: { title: "Routes · Traced paths", load: () => import("../modules/js/routeStudio.js") },
 
     dashboard: {
         title: "Overview",
@@ -207,6 +208,7 @@ const studentModules = {
 };
 
 const technicianModules = {
+    routeStudio: { title: "Routes · Traced paths", load: () => import("../modules/js/routeStudio.js") },
     technicianDashboard: {
         title: "GPS Integration",
         load: () => import("../modules/js/technicianDashboard.js?v=20261015a")
@@ -236,7 +238,12 @@ const isAdmin = activeRole === ROLE_ADMIN;
 const isDriver = activeRole === ROLE_DRIVER;
 // User accounts use the existing student transport-profile tables and views.
 const isStudent = activeRole === ROLE_USER;
-const isTechnician = activeRole === ROLE_TECHNICIAN;
+const isTracer = activeRole === "tracer";
+const isTechnician = activeRole === ROLE_TECHNICIAN || isTracer;
+if (isTracer) {
+    delete technicianModules.providerHealth;
+    delete technicianModules.technicianDashboard;
+}
 
 
 /* ==========================================================
@@ -604,7 +611,7 @@ export async function loadModule(requestedRoute) {
             : isStudent
                 ? "studentTracking"
                 : isTechnician
-                    ? "technicianDashboard"
+                    ? (isTracer ? "routeStudio" : "technicianDashboard")
                 : "dashboard";
 
   if (!requestedRoute) {
@@ -746,7 +753,7 @@ window.addEventListener(
                 : isStudent
                     ? "studentTracking"
                     : isTechnician
-                        ? "technicianDashboard"
+                        ? (isTracer ? "routeStudio" : "technicianDashboard")
                     : "dashboard";
 
 

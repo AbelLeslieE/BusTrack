@@ -18,7 +18,8 @@ ROLE_ADMIN = "Admin"
 ROLE_DRIVER = "Driver"
 ROLE_USER = "User"
 ROLE_TECHNICIAN = "Technician"
-CANONICAL_ROLES = frozenset({ROLE_ADMIN, ROLE_DRIVER, ROLE_USER, ROLE_TECHNICIAN})
+ROLE_TRACER = "Tracer"
+CANONICAL_ROLES = frozenset({ROLE_ADMIN, ROLE_DRIVER, ROLE_USER, ROLE_TECHNICIAN, ROLE_TRACER})
 
 # Only roles that were previously supported receive an explicit migration.
 # Former Student accounts are now User accounts; their Student profile remains
@@ -33,6 +34,7 @@ LEGACY_ROLE_MAPPINGS = {
     "user": ROLE_USER,
     "dispatcher": ROLE_USER,
     "technician": ROLE_TECHNICIAN,
+    "tracer": ROLE_TRACER,
     "developer": ROLE_TECHNICIAN,
 }
 

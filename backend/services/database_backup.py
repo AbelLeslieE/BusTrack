@@ -143,6 +143,12 @@ def _read_backup_archive(archive: bytes, metadata: MetaData) -> dict[str, list[d
         raise ValueError("The uploaded file is not a valid BusTrack backup archive.") from error
 
     expected_schema = _schema(metadata)
+    # Exact pre-Studio schema remains accepted; only known new tables may be absent.
+    additive = {"daily_direction_checkpoints", "route_studio_assignments", "route_studio_sessions", "route_studio_points", "route_studio_choices"}
+    legacy_schema = [item for item in expected_schema if item["name"] not in additive]
+    if manifest.get("schema") == legacy_schema and isinstance(payload, dict) and set(payload) == {item["name"] for item in legacy_schema}:
+        manifest["schema"] = expected_schema
+        payload.update({name: [] for name in additive if name in metadata.tables})
     if (
         manifest.get("application") != "BusTrack"
         or manifest.get("format_version") != BACKUP_FORMAT_VERSION

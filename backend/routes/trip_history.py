@@ -13,6 +13,31 @@ from backend.security import require_management
 router = APIRouter(prefix="/api/trip-history", tags=["Trip History"])
 
 
+def completed_round_trips(events, route_stops):
+    """Pair outbound and return terminal events within one IST service day."""
+    from backend.services.daily_direction import IST
+    from backend.services.trip_reset import as_utc
+    endpoints = {}
+    for row in sorted(route_stops.values(), key=lambda row: (row.sequence, row.id)):
+        pair = endpoints.setdefault(row.route_id, [row.id, row.id])
+        pair[1] = row.id
+    pending, completed = {}, []
+    for event in sorted(events, key=lambda e: (as_utc(e.occurred_at), e.id)):
+        if event.event_type != "Leg completed" or event.route_stop_id not in route_stops:
+            continue
+        route_id = route_stops[event.route_stop_id].route_id
+        key = (event.trip_id, route_id, as_utc(event.occurred_at).astimezone(IST).date())
+        first, last = endpoints[route_id]
+        if first == last:
+            continue
+        if event.route_stop_id == last:
+            pending[key] = event
+        elif event.route_stop_id == first and key in pending:
+            outbound = pending.pop(key)
+            completed.append({"trip_id": event.trip_id, "service_day": key[2], "outbound_completed_at": outbound.occurred_at, "return_completed_at": event.occurred_at})
+    return completed
+
+
 def _bounds(date_from: date | None, date_to: date | None):
     start = datetime.combine(date_from, time.min, tzinfo=timezone.utc) if date_from else None
     end = datetime.combine(date_to, time.max, tzinfo=timezone.utc) if date_to else None
@@ -277,4 +302,5 @@ def bus_history(
             route_stops=route_stops,
         ),
         "timeline": timeline,
+        "round_trips": completed_round_trips(stop_event_models, route_stops),
     }

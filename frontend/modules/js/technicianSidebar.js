@@ -3,6 +3,7 @@ import { logoutSession } from "/static/common/auth.js?v=20261015d";
 const workspaceItems = [
     ["technicianDashboard", "GPS Integration", "⌘"],
     ["providerHealth", "Provider Health", "⌁"],
+    ["routeStudio", "Traced paths", "⌁"],
 ];
 
 function navItem([route, label, icon], activeRoute) {
@@ -12,6 +13,7 @@ function navItem([route, label, icon], activeRoute) {
 }
 
 export function createTechnicianSidebar(activeRoute, onNavigate) {
+    if (JSON.parse(localStorage.getItem("bus_tracker_profile") || "{}").role === "Tracer") workspaceItems.splice(0, workspaceItems.length, ["routeStudio", "Trace assigned bus", "⌁"]);
     const sidebar = document.createElement("aside");
     sidebar.className = "sidebar glass-panel";
     sidebar.innerHTML = `

@@ -44,7 +44,8 @@ const USER_ROLES = {
 
     USER: "User",
 
-    TECHNICIAN: "Technician"
+    TECHNICIAN: "Technician",
+    TRACER: "Tracer"
 
 };
 

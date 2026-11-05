@@ -259,6 +259,9 @@ form?.addEventListener("submit", async (event) => {
     // ------------------------------------------------
 
     switch (normalizedRole) {
+        case "tracer":
+            window.location.assign("/dashboard#routeStudio");
+            break;
 
         case ROLE_ADMIN:
 

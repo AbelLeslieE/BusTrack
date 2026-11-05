@@ -20,6 +20,10 @@ const role = canonicalRole(profile.role);
 let moduleName;
 
 switch (role) {
+    case "tracer":
+        moduleName = "routeStudio";
+        window.location.hash = "routeStudio";
+        break;
     case ROLE_ADMIN:
         moduleName = window.location.hash.slice(1) || "dashboard";
         break;

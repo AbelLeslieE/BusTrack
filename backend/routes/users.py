@@ -49,6 +49,7 @@ router = APIRouter(
 # ==========================================================
 
 ALLOWED_ROLES = {
+    "Tracer",
     ROLE_ADMIN,
     ROLE_DRIVER,
     ROLE_TECHNICIAN,

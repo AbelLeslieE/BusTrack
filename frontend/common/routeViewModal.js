@@ -19,6 +19,8 @@ let routeViewLayer = null;
 let routeViewMarkers = [];
 
 let routeViewStops = [];
+let routeViewId = null;
+let routeViewGeneration = 0;
 
 
 /* ==========================================================================
@@ -26,6 +28,8 @@ let routeViewStops = [];
 ========================================================================== */
 
 export function openRouteViewModal(route){
+    routeViewId = route?.id;
+    routeViewGeneration++;
 
     /*
      * The route object is expected to already contain the
@@ -968,6 +972,23 @@ function renderRouteViewMarkers(){
 ========================================================================== */
 
 async function generateRouteViewRoadRoute(){
+    const generation = routeViewGeneration;
+    if (routeViewId) {
+        try {
+            const response = await fetch(`/api/route-studio/geometry/${routeViewId}`);
+            if (!response.ok) throw new Error('Saved route unavailable');
+            const saved = await response.json();
+            if (generation !== routeViewGeneration || !routeViewMap) return;
+            if (saved.geometry) {
+                drawRouteViewRoad(saved.geometry);
+                updateRouteViewMapStatus('Saved traced path');
+                return;
+            }
+        } catch {
+            if (generation !== routeViewGeneration) return;
+            // Existing manual-route rendering remains the fallback.
+        }
+    }
 
     if(
         !routeViewMap ||
@@ -1113,6 +1134,8 @@ async function generateRouteViewRoadRoute(){
 
         const data =
             await response.json();
+
+        if (generation !== routeViewGeneration || !routeViewMap) return;
 
 
         if(
@@ -1559,6 +1582,7 @@ function updateRouteViewMapStatus(
 ========================================================================== */
 
 function destroyRouteViewMap(){
+    routeViewGeneration++;
 
     if(routeViewMap){
 

@@ -220,7 +220,7 @@ class RequestSecurityMiddleware:
             if is_api_docs
             else (
                 b"img-src 'self' data: blob: https://unpkg.com "
-                b"https://tile.openstreetmap.org https://*.tile.openstreetmap.org; "
+                b"https://tiles.openfreemap.org https://tile.openstreetmap.org https://*.tile.openstreetmap.org; "
             )
         )
         headers = [
@@ -241,7 +241,7 @@ class RequestSecurityMiddleware:
                     + style_src
                     + b"font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
                     + img_src
-                    + b"connect-src 'self' https://unpkg.com https://router.project-osrm.org https://nominatim.openstreetmap.org; "
+                    + b"connect-src 'self' https://unpkg.com https://tiles.openfreemap.org https://router.project-osrm.org https://nominatim.openstreetmap.org; "
                     + b"worker-src 'self' blob:"
                 ),
             ),

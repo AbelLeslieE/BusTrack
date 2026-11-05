@@ -4,6 +4,7 @@ export const ROLE_ADMIN = "admin";
 export const ROLE_DRIVER = "driver";
 export const ROLE_USER = "user";
 export const ROLE_TECHNICIAN = "technician";
+export const ROLE_TRACER = "tracer";
 
 const legacyRoles = {
   admin: ROLE_ADMIN,
@@ -15,6 +16,7 @@ const legacyRoles = {
   user: ROLE_USER,
   dispatcher: ROLE_USER,
   technician: ROLE_TECHNICIAN,
+  tracer: ROLE_TRACER,
   developer: ROLE_TECHNICIAN,
 };
 

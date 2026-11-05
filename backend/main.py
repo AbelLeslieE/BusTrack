@@ -22,6 +22,9 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from backend.routes.driver import router as driver_router
 import backend.models  # noqa: F401  # Register models before table creation.
+import backend.services.daily_direction  # noqa: F401
+import backend.models_route_studio  # noqa: F401
+from backend.routes.route_studio import router as route_studio_router
 import backend.routes.models_tracking  # noqa: F401
 from backend.database import (
     SessionLocal,
@@ -185,6 +188,23 @@ async def _document_expiry_loop() -> None:
         await asyncio.sleep(86400)
 
 
+def _check_daily_direction():
+    from backend.services.daily_direction import apply_daily_direction
+    with SessionLocal() as db:
+        apply_daily_direction(db)
+        db.commit()
+
+
+async def _daily_direction_loop():
+    while True:
+        if not restore_in_progress():
+            try:
+                await asyncio.to_thread(_check_daily_direction)
+            except Exception:
+                logger.exception("Daily IST direction recovery failed; retrying.")
+        await asyncio.sleep(10)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     validate_database_configuration()
@@ -207,10 +227,16 @@ async def lifespan(_: FastAPI):
     poll_task = None
     retention_task = None
     document_task = None
+    daily_task = None
     from backend.services.gps_providers import provider_polling_configured
 
     run_background_jobs = background_jobs_enabled()
     if run_background_jobs:
+        try:
+            await asyncio.to_thread(_check_daily_direction)
+        except Exception:
+            logger.exception("Initial daily direction recovery failed; background retry will continue.")
+        daily_task = asyncio.create_task(_daily_direction_loop())
         document_task = asyncio.create_task(_document_expiry_loop())
     if run_background_jobs and provider_polling_configured():
         initial_refresh_completed = False
@@ -239,6 +265,10 @@ async def lifespan(_: FastAPI):
     try:
         yield
     finally:
+        if daily_task is not None:
+            daily_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await daily_task
         if document_task is not None:
             document_task.cancel()
             with suppress(asyncio.CancelledError):
@@ -278,6 +308,7 @@ app.add_middleware(
 )
 app.add_middleware(RequestAuditMiddleware)
 app.include_router(authentication_router)
+app.include_router(route_studio_router)
 app.include_router(bus_router)
 app.include_router(bus_documents_router)
 app.include_router(driver_router)

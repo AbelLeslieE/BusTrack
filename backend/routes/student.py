@@ -27,6 +27,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.audit import record_audit_event
+from backend.services.trace_geometry import published_geometry
 from backend.auth import get_password_hash
 from backend.database import SessionLocal, get_db
 from backend.services.generated_codes import lock_generated_code_writes, next_student_code
@@ -1512,6 +1513,7 @@ def get_student_live_tracking(
         "trip":
             trip_data,
 
+        "published_geometry": published_geometry(db, route.id, bus.id),
         # This is intentionally a derived, student-safe view of the provider
         # data rather than a copy of the vendor payload.
         "telemetry": telemetry,

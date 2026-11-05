@@ -69,8 +69,7 @@ def get_assignments(
     }
 
 
-@router.put("/routes/{route_id}")
-def save_route_assignment(
+def apply_route_assignment(
     route_id: int,
     assignment: RouteAssignmentUpdate,
     db: Session = Depends(get_db),
@@ -156,6 +155,13 @@ def save_route_assignment(
             if assigned_driver:
                 assigned_driver.bus_id = assigned_bus.id
 
-    db.commit()
-    db.refresh(route)
+    db.flush()
     return _route_data(route, db)
+
+
+@router.put("/routes/{route_id}")
+def save_route_assignment(route_id: int, assignment: RouteAssignmentUpdate,
+                          db: Session = Depends(get_db), _current_user=Depends(require_management)):
+    result = apply_route_assignment(route_id, assignment, db, _current_user)
+    db.commit()
+    return result

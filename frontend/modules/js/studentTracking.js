@@ -2072,10 +2072,18 @@ async function loadRoadRoute() {
     try {
 
         let data = null;
+        const published = state.trackingData?.published_geometry;
+        if (published?.type === "LineString" && published.coordinates?.length >= 2) {
+            const points = [...published.coordinates];
+            if (state.routeDirection === "reverse") points.reverse();
+            let distance = 0;
+            for (let i = 1; i < points.length; i++) distance += L.latLng(points[i-1][1], points[i-1][0]).distanceTo(L.latLng(points[i][1], points[i][0]));
+            data = {code: "Ok", routes: [{geometry: {type: "LineString", coordinates: points}, distance, duration: 0}]};
+        }
         try {
             const cached = JSON.parse(localStorage.getItem(cacheKey) || "null");
             if (
-                cached?.definition === state.routeDefinitionKey
+                !data && cached?.definition === state.routeDefinitionKey
                 && Date.now() - Number(cached.savedAt || 0) < ROAD_ROUTE_CACHE_TTL_MS
                 && Array.isArray(cached.data?.routes?.[0]?.geometry?.coordinates)
             ) data = cached.data;
