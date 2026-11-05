@@ -18,6 +18,7 @@ from backend.services.trip_reset import lock_tracking_bus, as_utc
 from backend.routes.models_tracking import LiveTrip
 from backend.services.generated_codes import lock_generated_code_writes, next_route_code
 from backend.services.stop_codes import lock_stop_code_writes, next_stop_code
+from backend.services.road_matching import road_geometry
 from backend.audit import record_audit_event
 
 router = APIRouter(prefix="/api/route-studio", tags=["Route Studio"])
@@ -199,8 +200,12 @@ def action(sid: str, data: Action, db: Session = Depends(get_db), actor=Depends(
         if len(points) < 2:
             raise HTTPException(422, "At least two GPS samples are required.")
         raw = [json.loads(p.payload) for p in points]
-        s.geometry_json = json.dumps([[p["longitude"], p["latitude"]] for p in raw])
+        geometry, matched = road_geometry(raw)
+        s.geometry_json = json.dumps(geometry)
         s.ended_at = datetime.now(timezone.utc)
+        record_audit_event(db, category="route_studio", action="recording_finished", actor=actor,
+                           details={"trace_id": s.id, "raw_samples": len(raw),
+                                    "geometry_points": len(geometry), "road_matched": matched})
     s.status = target_status
     db.commit()
     return payload(s)

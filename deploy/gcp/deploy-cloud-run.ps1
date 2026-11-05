@@ -138,6 +138,8 @@ if (-not $ExternalDatabase) {
 $commonEnvironment = @(
     "APP_ENV=production",
     "ENABLE_ROUTE_STUDIO=true",
+    "ROUTE_STUDIO_ROAD_MATCHING_ENABLED=true",
+    "ROUTE_STUDIO_ROUTER_TIMEOUT_SECONDS=12",
     "LOG_LEVEL=INFO",
     "FORWARDED_ALLOW_IPS=*",
     "STATIC_ASSET_CACHE_SECONDS=3600",

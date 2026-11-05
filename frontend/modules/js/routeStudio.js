@@ -57,9 +57,16 @@ export function render() {
     const status = message => { if (!closed) { root.querySelector('.studio-status').textContent = message; metrics(); } };
     let closed = false, map, selected = null, local = null, watch = null, timer = null, syncing = false, busy = false;
     let chain = Promise.resolve(), lastSample = 0, retries = 0, nextRetry = 0, overview, undo = [], redo = [], releaseLock = null, masterStops = [];
-    let placingStop = false;
+    let placingStop = false, rawGeometry = [], roadGeometry = [], roadAnchor = 0;
+    let roadRequest = null, roadQueued = false, roadTimer = null, roadUpdatedAt = 0, roadAbort = null;
     const name = () => root.querySelector('.studio-name')?.value.trim() || selected?.name || 'Bus trace';
-    let lastFix = null, locationPermission = 'prompt';
+    let lastFix = null, lastAcceptedPoint = null, locationPermission = 'prompt';
+    const distanceMetres = (a,b) => {
+        const rad=value=>value*Math.PI/180, dLat=rad(b.latitude-a.latitude), dLon=rad(b.longitude-a.longitude);
+        const x=Math.sin(dLat/2)**2+Math.cos(rad(a.latitude))*Math.cos(rad(b.latitude))*Math.sin(dLon/2)**2;
+        const bounded=Math.max(0,Math.min(1,x));
+        return 6371000*2*Math.atan2(Math.sqrt(bounded),Math.sqrt(1-bounded));
+    };
     function metrics() {
         const badge=root.querySelector('.studio-record-badge');
         if(!badge) return;
@@ -101,6 +108,57 @@ export function render() {
         map.setPath(coords,{fit});
         map.setStops(selected?.stops || [], !tracer && selected?.status === 'DRAFT');
     }
+    function showLiveGeometry() {
+        if (!selected) return;
+        // Never paint a temporary chord between GPS fixes.  The marker can
+        // move immediately, but the blue line advances only with road geometry.
+        selected.geometry=roadGeometry.length ? [...roadGeometry] : rawGeometry.slice(0,1);
+        draw();
+    }
+    const routingWaypoints = coordinates => {
+        if(coordinates.length <= 80) return coordinates;
+        const step=(coordinates.length-1)/79;
+        return Array.from({length:80},(_,index)=>coordinates[Math.round(index*step)]);
+    };
+    async function requestRoadSegment(coordinates, signal) {
+        const points=routingWaypoints(coordinates);
+        const encoded=points.map(point=>`${Number(point[0]).toFixed(7)},${Number(point[1]).toFixed(7)}`).join(';');
+        const response=await fetch(`https://router.project-osrm.org/route/v1/driving/${encoded}?overview=full&geometries=geojson&steps=false`,{signal});
+        if(!response.ok) throw new Error(`Road routing returned ${response.status}.`);
+        const data=await response.json();
+        const geometry=data.routes?.[0]?.geometry?.coordinates;
+        if(!Array.isArray(geometry) || geometry.length < 2) throw new Error('Road routing returned no usable path.');
+        return geometry.filter(point=>Array.isArray(point) && point.length >= 2 && point.every(Number.isFinite));
+    }
+    function scheduleRoadTrace(force=false) {
+        if(!tracer || closed || !selected || rawGeometry.length < 2) return Promise.resolve();
+        if(roadRequest) { roadQueued=true; return roadRequest; }
+        const delay=force ? 0 : Math.max(0,6000-(Date.now()-roadUpdatedAt));
+        if(delay) {
+            if(!roadTimer) roadTimer=setTimeout(()=>{roadTimer=null;void scheduleRoadTrace();},delay);
+            return Promise.resolve();
+        }
+        const start=roadGeometry.length ? roadAnchor : 0;
+        const end=rawGeometry.length-1;
+        if(end <= start) return Promise.resolve();
+        const segment=rawGeometry.slice(start,end+1);
+        roadAbort?.abort();roadAbort=new AbortController();
+        roadRequest=requestRoadSegment(segment,roadAbort.signal).then(result=>{
+            if(closed || !selected) return;
+            roadGeometry=roadGeometry.length ? [...roadGeometry,...result.slice(1)] : result;
+            roadAnchor=end;roadUpdatedAt=Date.now();showLiveGeometry();
+            const snappedEnd=result.at(-1);
+            if(lastFix && snappedEnd) map?.setPosition(snappedEnd,lastFix.coords.accuracy);
+            const mapStatus=root.querySelector('.studio-map-status');
+            if(mapStatus) mapStatus.textContent='Live road-following line updated · original GPS samples remain safely stored';
+        }).catch(error=>{
+            if(error.name !== 'AbortError') console.warn('Live road matching is temporarily unavailable; showing raw GPS points.',error);
+        }).finally(()=>{
+            roadRequest=null;
+            if(roadQueued || roadAnchor < rawGeometry.length-1) {roadQueued=false;void scheduleRoadTrace();}
+        });
+        return roadRequest;
+    }
     function editor() {
         const el = root.querySelector('.studio-editor');
         if (!selected || tracer) { el.innerHTML = ''; return; }
@@ -109,7 +167,7 @@ export function render() {
             el.innerHTML = `<div class="studio-admin-editor-heading"><div><p class="studio-eyebrow">ROUTE STOPS</p><h2>${esc(selected.name)}</h2><span>${selected.stops.length} named stop${selected.stops.length === 1 ? '' : 's'}</span></div><div class="studio-controls">${editable ? '<button data-action="undo">Undo</button><button data-action="save">Save stops</button><button data-action="traced">Use this route</button>' : '<button data-action="copy">Edit stops</button>'}<button data-action="manual">Use manual route</button></div></div><p class="studio-admin-help">${editable ? 'Enter a stop name above, choose Add stop on map, then click its position. Drag a numbered marker to move it.' : 'This route is published. Choose Edit stops to create an editable version.'}</p><ol class="studio-stops studio-admin-stops">${selected.stops.length ? selected.stops.map((s,i) => `<li><b>${i+1}</b><input data-stop="${i}" value="${esc(s.name)}" aria-label="Stop ${i+1} name"><button data-remove="${i}">Remove</button></li>`).join('') : '<li class="studio-empty-stops">No stops added yet. Add the first one from the map.</li>'}</ol>`;
             return;
         }
-        el.innerHTML = `<h2>${esc(selected.status)} · revision ${selected.revision}</h2><p>This is a GPS trace, not a verified road-matched route. Review gaps and accuracy before selecting it. Click the map to add a stop; drag stop markers to move them.</p>
+        el.innerHTML = `<h2>${esc(selected.status)} · revision ${selected.revision}</h2><p>The blue line follows the recorded road geometry. Review any GPS gaps before selecting it. Click the map to add a stop; drag stop markers to move them.</p>
           <div class="studio-controls"><button data-action="undo">Undo</button><button data-action="redo">Redo</button><button data-action="save">Save draft</button><button data-action="copy">New draft version</button><button data-action="reload">Cancel edits</button>${String(profile.role || '').toLowerCase() === 'admin' ? '<button data-action="traced">Approve and select traced route</button><button data-action="manual">Use original manual route</button>' : ''}</div>
           <div class="studio-controls"><select class="studio-master-stop" aria-label="Existing stop">${masterStops.map((s,i) => `<option value="${i}">${esc(s.name)}</option>`).join('')}</select><button data-action="existing-stop">Add existing stop</button></div><ol class="studio-stops">${selected.stops.map((s,i) => `<li><input data-stop="${i}" value="${esc(s.name)}" aria-label="Stop name"><span>${s.latitude.toFixed(5)}, ${s.longitude.toFixed(5)}</span><button data-up="${i}">↑</button><button data-down="${i}">↓</button><button data-remove="${i}">Remove</button></li>`).join('')}</ol>
           <details><summary>Edit trace coordinates (longitude, latitude)</summary><p>Corrections are unverified GPS geometry. Do not bridge missing sections without evidence.</p><textarea class="studio-geometry" aria-label="Trace coordinates" rows="8" style="width:100%">${esc(JSON.stringify(selected.geometry))}</textarea><button data-action="geometry">Apply coordinate edits</button></details>`;
@@ -157,8 +215,12 @@ export function render() {
         const saved=await api(`/recordings/${local.id}`);
         const points=new Map((saved.points || []).map(p=>[p.sequence,p]));
         local.pending.forEach(p=>points.set(p.sequence,p));
-        selected.geometry=[...points.values()].sort((a,b)=>a.sequence-b.sequence).map(p=>[p.longitude,p.latitude]);
+        const ordered=[...points.values()].sort((a,b)=>a.sequence-b.sequence);
+        rawGeometry=ordered.map(p=>[p.longitude,p.latitude]);
+        roadGeometry=[];roadAnchor=0;selected.geometry=[...rawGeometry];
+        lastAcceptedPoint=ordered.at(-1) || null;
         draw(true);
+        void scheduleRoadTrace(true);
     }
     async function capture() {
         if (!window.isSecureContext || !navigator.geolocation) throw new Error('Phone recording requires HTTPS and location access.');
@@ -178,13 +240,30 @@ export function render() {
             queue(async () => {
                 if (local.sequence >= 20000) throw new Error('Recording reached 20,000 samples. Finish this path before starting another.');
                 const c = position.coords;
+                lastFix=position;
+                map?.setPosition([c.longitude,c.latitude],c.accuracy);
+                if (![c.latitude,c.longitude,c.accuracy].every(Number.isFinite) || c.accuracy > 150) {
+                    status(`Waiting for a better GPS fix · current accuracy ±${Math.round(c.accuracy || 0)}m · point not recorded`);
+                    return;
+                }
                 const point = {sequence: local.sequence + 1, latitude:c.latitude, longitude:c.longitude, accuracy:c.accuracy,
                     speed:c.speed !== null && c.speed >= 0 ? c.speed : null, heading:c.heading, recorded_at:new Date(position.timestamp).toISOString()};
+                if(lastAcceptedPoint) {
+                    const elapsed=Math.max(1,(new Date(point.recorded_at)-new Date(lastAcceptedPoint.recorded_at))/1000);
+                    const distance=distanceMetres(lastAcceptedPoint,point);
+                    if(distance > 250 && distance/elapsed > 55) {
+                        status(`GPS jump ignored · ${Math.round(distance)}m in ${Math.round(elapsed)}s · waiting for the next fix`);
+                        return;
+                    }
+                }
                 local.sequence = point.sequence; local.pending.push(point);
                 await storage(local, true);
-                lastFix=position;
-                map?.setPosition([point.longitude,point.latitude],point.accuracy);
-                if (selected?.id === local.id) { selected.geometry.push([point.longitude,point.latitude]); draw(); }
+                lastAcceptedPoint=point;
+                if (selected?.id === local.id) {
+                    rawGeometry.push([point.longitude,point.latitude]);showLiveGeometry();void scheduleRoadTrace();
+                    const mapStatus=root.querySelector('.studio-map-status');
+                    if(rawGeometry.length > 1 && mapStatus) mapStatus.textContent='GPS point captured · fitting the latest movement to the road…';
+                }
                 status(`Recording ON · accuracy ${Math.round(c.accuracy)}m · ${local.pending.length} pending samples`);
             });
         }, error => { stopWatch(); if(error.code===1) root.querySelector('.studio-permission-state').textContent='Location permission revoked. Allow Location in browser site settings.'; status(`Recording interrupted: ${error.message}. Saved samples are recoverable.`); }, {enableHighAccuracy:true, maximumAge:0, timeout:15000});
@@ -209,6 +288,8 @@ export function render() {
             if (!window.isSecureContext) throw new Error('Use HTTPS on the phone for location capture.');
             if(!overview?.assignment) throw new Error('A technician must assign your bus before recording.');
             await requestLocation();
+            lastAcceptedPoint=null;
+            rawGeometry=[];roadGeometry=[];roadAnchor=0;roadUpdatedAt=0;
             local = {id:crypto.randomUUID(), sequence:0, pending:[], finished:false, name:name() || 'Bus trace'};
             await storage(local, true);
             selected = await api('/recordings', {request_id:local.id, name:local.name});
@@ -224,11 +305,7 @@ export function render() {
                 status('Recording was already finalized on the server. You can start a new recording.'); return;
             }
             if (selected.status === 'PAUSED') selected = await api(`/recordings/${local.id}/action`, {action:'resume'});
-            const saved=await api(`/recordings/${local.id}`);
-            const points=new Map((saved.points || []).map(p=>[p.sequence,p]));
-            local.pending.forEach(p=>points.set(p.sequence,p));
-            selected.geometry=[...points.values()].sort((a,b)=>a.sequence-b.sequence).map(p=>[p.longitude,p.latitude]);
-            draw(true);
+            await restorePath();
             await capture(); return;
         }
         if (['pause','resume','finish','discard'].includes(action)) {
@@ -273,7 +350,7 @@ export function render() {
     });
     const visibility = () => { if (document.hidden && watch !== null) { stopWatch(); status('Recording interrupted while page was hidden. Use Recover when ready.'); } };
     document.addEventListener('visibilitychange', visibility);
-    root.cleanup = () => { closed=true; stopWatch(); clearInterval(timer); document.removeEventListener('visibilitychange',visibility); map?.remove(); };
+    root.cleanup = () => { closed=true; stopWatch(); clearInterval(timer); clearTimeout(roadTimer); roadAbort?.abort(); document.removeEventListener('visibilitychange',visibility); map?.remove(); };
     requestAnimationFrame(async () => {
         if (closed) return;
         const mapStatus=message=>{if(!closed)root.querySelector('.studio-map-status').textContent=message;};
@@ -281,7 +358,7 @@ export function render() {
             onError:mapStatus,
             onStop:p=>{if(tracer || selected?.status !== 'DRAFT')return;let label;if(admin){if(!placingStop)return;label=root.querySelector('.studio-new-stop-name')?.value.trim();placingStop=false;}else{label=prompt('Stop name')?.trim();}if(!label)return;remember();selected.stops.push({name:label,latitude:p.lat,longitude:p.lng,radius:50});const input=root.querySelector('.studio-new-stop-name');if(input)input.value='';draw();editor();root.querySelector('.studio-map-status').textContent='Stop added. Drag its numbered marker to fine-tune the position.';},
             onMoveStop:(i,p)=>{remember();selected.stops[i].latitude=p.lat;selected.stops[i].longitude=p.lng;editor();}
-        }).then(result=>{if(closed){result.remove();return;}map=result;draw(true);if(lastFix)map.setPosition([lastFix.coords.longitude,lastFix.coords.latitude],lastFix.coords.accuracy);mapStatus(admin ? 'Choose a recorded path above.' : 'Blue line: recorded path · blue marker: latest phone position');}).catch(e=>mapStatus(e.message));
+        }).then(result=>{if(closed){result.remove();return;}map=result;draw(true);if(lastFix)map.setPosition([lastFix.coords.longitude,lastFix.coords.latitude],lastFix.coords.accuracy);mapStatus(admin ? 'Choose a recorded path above.' : 'Blue line: live road-following path · blue marker: latest phone position');}).catch(e=>mapStatus(e.message));
         try { if (tracer) local=await storage(); else if(!admin) masterStops=await api('/stops'); await refresh(); } catch(e) { status(e.message); }
     });
     return root;
