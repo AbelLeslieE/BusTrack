@@ -40,8 +40,13 @@ async function storage(value, write = false) {
 
 export function render() {
     const root = document.createElement('section');
-    root.className = 'portal-page studio-page';
-    root.innerHTML = `
+    root.className = `portal-page studio-page${admin ? ' studio-admin-page' : ''}`;
+    root.innerHTML = admin ? `
+      <header class="studio-header"><div><p class="studio-eyebrow">BUSTRACK / RECORDED ROUTES</p><h1>Maintain route</h1><p>Choose a recording, review its path, and place named stops directly on the map.</p></div></header>
+      <section class="studio-admin-picker"><label>Recorded path<select class="studio-history" aria-label="Recorded path"><option value="">Choose a recorded path</option></select></label><button data-action="refresh">Refresh list</button></section>
+      <p role="status" class="studio-status">Loading recorded paths…</p>
+      <section class="studio-map-card studio-admin-map"><div class="studio-map-toolbar"><span>Recorded route <small>Select a path to zoom to its recording</small></span><div class="studio-map-actions"><input class="studio-new-stop-name" aria-label="New stop name" placeholder="Name this stop"><button data-action="add-stop">Add stop on map</button><button data-action="fit">Show whole path</button></div></div><p class="studio-map-status" role="status">Choose a recorded path above.</p><div class="studio-map" aria-label="Recorded bus route map"></div></section>
+      <div class="studio-editor"></div>` : `
       <header class="studio-header"><div><p class="studio-eyebrow">BUSTRACK / ${tracer ? 'TRACER PORTAL' : admin ? 'ROUTE APPROVAL' : 'TECHNICIAN PORTAL'}</p><h1>${tracer ? 'Every turn, captured.' : admin ? 'Maintain route' : 'Routes · Traced paths'}</h1><p>${tracer ? 'Watch your journey take shape as you travel.' : admin ? 'Review technician-prepared paths and choose the route maintained for this bus.' : 'Review recorded paths, refine stops, and prepare routes for approval.'}</p></div><span class="studio-record-badge">● Recording off</span></header>
       ${tracer ? `<section class="studio-permission"><div><h2>Your location, your control</h2><p>Allow precise location to trace your assigned bus. Samples are saved on this phone and synchronized to BusTrack. Keep this page visible and your phone unlocked.</p></div><button data-action="permission">Enable location</button><span class="studio-permission-state">Permission not requested</span></section>` : ''}
       <div class="studio-metrics"><div><span>Assigned bus</span><strong class="studio-bus-label">—</strong></div><div><span>GPS accuracy</span><strong class="studio-accuracy">Waiting</strong></div><div><span>Samples captured</span><strong class="studio-samples">0</strong></div><div><span>Pending upload</span><strong class="studio-pending">0</strong></div><div><span>Last GPS fix</span><strong class="studio-last-fix">—</strong></div></div>
@@ -52,11 +57,14 @@ export function render() {
     const status = message => { if (!closed) { root.querySelector('.studio-status').textContent = message; metrics(); } };
     let closed = false, map, selected = null, local = null, watch = null, timer = null, syncing = false, busy = false;
     let chain = Promise.resolve(), lastSample = 0, retries = 0, nextRetry = 0, overview, undo = [], redo = [], releaseLock = null, masterStops = [];
-    const name = () => root.querySelector('.studio-name').value.trim();
+    let placingStop = false;
+    const name = () => root.querySelector('.studio-name')?.value.trim() || selected?.name || 'Bus trace';
     let lastFix = null, locationPermission = 'prompt';
     function metrics() {
-        root.querySelector('.studio-record-badge').textContent = watch === null ? '● Recording off' : '● Recording live';
-        root.querySelector('.studio-record-badge').dataset.live = watch === null ? 'false' : 'true';
+        const badge=root.querySelector('.studio-record-badge');
+        if(!badge) return;
+        badge.textContent = watch === null ? '● Recording off' : '● Recording live';
+        badge.dataset.live = watch === null ? 'false' : 'true';
         root.querySelector('.studio-samples').textContent = String(local?.sequence || 0);
         root.querySelector('.studio-pending').textContent = String(local?.pending?.length || 0);
         if(lastFix) {
@@ -96,6 +104,11 @@ export function render() {
     function editor() {
         const el = root.querySelector('.studio-editor');
         if (!selected || tracer) { el.innerHTML = ''; return; }
+        if (admin) {
+            const editable=selected.status === 'DRAFT';
+            el.innerHTML = `<div class="studio-admin-editor-heading"><div><p class="studio-eyebrow">ROUTE STOPS</p><h2>${esc(selected.name)}</h2><span>${selected.stops.length} named stop${selected.stops.length === 1 ? '' : 's'}</span></div><div class="studio-controls">${editable ? '<button data-action="undo">Undo</button><button data-action="save">Save stops</button><button data-action="traced">Use this route</button>' : '<button data-action="copy">Edit stops</button>'}<button data-action="manual">Use manual route</button></div></div><p class="studio-admin-help">${editable ? 'Enter a stop name above, choose Add stop on map, then click its position. Drag a numbered marker to move it.' : 'This route is published. Choose Edit stops to create an editable version.'}</p><ol class="studio-stops studio-admin-stops">${selected.stops.length ? selected.stops.map((s,i) => `<li><b>${i+1}</b><input data-stop="${i}" value="${esc(s.name)}" aria-label="Stop ${i+1} name"><button data-remove="${i}">Remove</button></li>`).join('') : '<li class="studio-empty-stops">No stops added yet. Add the first one from the map.</li>'}</ol>`;
+            return;
+        }
         el.innerHTML = `<h2>${esc(selected.status)} · revision ${selected.revision}</h2><p>This is a GPS trace, not a verified road-matched route. Review gaps and accuracy before selecting it. Click the map to add a stop; drag stop markers to move them.</p>
           <div class="studio-controls"><button data-action="undo">Undo</button><button data-action="redo">Redo</button><button data-action="save">Save draft</button><button data-action="copy">New draft version</button><button data-action="reload">Cancel edits</button>${String(profile.role || '').toLowerCase() === 'admin' ? '<button data-action="traced">Approve and select traced route</button><button data-action="manual">Use original manual route</button>' : ''}</div>
           <div class="studio-controls"><select class="studio-master-stop" aria-label="Existing stop">${masterStops.map((s,i) => `<option value="${i}">${esc(s.name)}</option>`).join('')}</select><button data-action="existing-stop">Add existing stop</button></div><ol class="studio-stops">${selected.stops.map((s,i) => `<li><input data-stop="${i}" value="${esc(s.name)}" aria-label="Stop name"><span>${s.latitude.toFixed(5)}, ${s.longitude.toFixed(5)}</span><button data-up="${i}">↑</button><button data-down="${i}">↓</button><button data-remove="${i}">Remove</button></li>`).join('')}</ol>
@@ -104,16 +117,14 @@ export function render() {
     async function refresh() {
         overview = await api('');
         if (closed) return;
-        root.querySelector('.studio-history').innerHTML = '<option value="">Choose a recording</option>' + overview.recordings.map(s => `<option value="${s.id}">${esc(s.name)} · ${esc(s.status)}</option>`).join('');
+        const recordings=admin ? overview.recordings.filter(s => ['DRAFT','PUBLISHED'].includes(s.status)) : overview.recordings;
+        root.querySelector('.studio-history').innerHTML = '<option value="">Choose a recorded path</option>' + recordings.map(s => `<option value="${s.id}">${esc(s.name)} · ${esc(s.status)}</option>`).join('');
         if (tracer) {
             root.querySelector('.studio-bus-label').textContent=overview.assignment?.bus_number || 'Not assigned';
             root.querySelector('.studio-record').innerHTML = ['Start','Recover','Pause','Resume','Finish','Discard'].map(a => `<button data-action="${a.toLowerCase()}">${a}</button>`).join('');
             status(`Recording ${watch === null ? 'OFF' : 'ON'} · ${overview.assignment ? 'Assigned bus: ' + overview.assignment.bus_number : 'Waiting for technician assignment'} · ${local?.pending?.length || 0} pending samples. Keep this page open and the phone unlocked.`);
         } else if (admin) {
-            root.querySelector('.studio-management').innerHTML = '';
-            root.querySelector('.studio-record').innerHTML = '';
-            root.querySelector('.studio-name').hidden = true;
-            status('Choose a technician-prepared path. Only an administrator can select the route maintained for this bus.');
+            status(recordings.length ? 'Choose a recorded path to view it on the map.' : 'No completed recorded paths are ready for review.');
         } else {
             root.querySelector('.studio-management').innerHTML = `<select class="studio-tracer" aria-label="Tracer">${overview.tracers.map(u => `<option value="${u.id}">${esc(u.name)}</option>`).join('')}</select><select class="studio-bus" aria-label="Bus">${overview.buses.map(b => `<option value="${b.id}">${esc(b.name)}</option>`).join('')}</select><button data-action="assign">Assign bus to tracer</button>`;
             status('Choose a saved path to edit. Only an administrator can select it for service.');
@@ -123,7 +134,7 @@ export function render() {
         if(watch !== null) throw new Error('Pause recording before viewing another path.');
         selected = await api('/recordings/' + id);
         if (closed) return;
-        root.querySelector('.studio-name').value = selected.name;
+        const nameInput=root.querySelector('.studio-name');if(nameInput)nameInput.value = selected.name;
         undo = []; redo = []; draw(true); editor();
     }
     async function flush(force = false) {
@@ -184,6 +195,13 @@ export function render() {
         if(action === 'permission') { await requestLocation(); status('Location enabled. Press Start to begin recording your assigned bus.'); return; }
         if(action === 'follow') { map?.follow(); return; }
         if(action === 'fit') { draw(true); return; }
+        if(action === 'add-stop') {
+            if (!selected) throw new Error('Choose a recorded path first.');
+            if (selected.status !== 'DRAFT') throw new Error('Choose Edit stops before changing a published route.');
+            const label=root.querySelector('.studio-new-stop-name')?.value.trim();
+            if(!label) throw new Error('Enter a stop name first.');
+            placingStop=true;root.querySelector('.studio-map-status').textContent=`Click the map where “${label}” should be placed.`;return;
+        }
         if (action === 'refresh') return refresh();
         if (action === 'assign') { await api('/assignment', {user_id:Number(root.querySelector('.studio-tracer').value), bus_id:Number(root.querySelector('.studio-bus').value)}, 'PUT'); return refresh(); }
         if (action === 'start') {
@@ -229,7 +247,7 @@ export function render() {
         if (!selected) throw new Error('Choose a saved path first.');
         if (action === 'reload') return load(selected.id);
         if (action === 'existing-stop') { if (selected.status !== 'DRAFT') throw new Error('Create a new draft to change published stops.'); const stop=masterStops[Number(root.querySelector('.studio-master-stop').value)]; if (!stop) throw new Error('No existing stop selected.'); remember(); selected.stops.push({...stop}); }
-        if (action === 'copy') { selected = await api(`/recordings/${selected.id}/copy`, {}); root.querySelector('.studio-name').value = selected.name; }
+        if (action === 'copy') { selected = await api(`/recordings/${selected.id}/copy`, {}); const nameInput=root.querySelector('.studio-name');if(nameInput)nameInput.value = selected.name; }
         if (action === 'undo' && undo.length) { redo.push(JSON.stringify(selected)); selected = JSON.parse(undo.pop()); }
         if (action === 'redo' && redo.length) { undo.push(JSON.stringify(selected)); selected = JSON.parse(redo.pop()); }
         if (action === 'geometry') { const value = JSON.parse(root.querySelector('.studio-geometry').value); if (!Array.isArray(value) || value.length < 2 || value.some(p => !Array.isArray(p) || p.length !== 2 || !p.every(Number.isFinite) || Math.abs(p[0]) > 180 || Math.abs(p[1]) > 90)) throw new Error('Enter valid longitude/latitude pairs.'); remember(); selected.geometry = value; }
@@ -261,10 +279,10 @@ export function render() {
         const mapStatus=message=>{if(!closed)root.querySelector('.studio-map-status').textContent=message;};
         createStudioMap(root.querySelector('.studio-map'), {
             onError:mapStatus,
-            onStop:p=>{if(tracer || selected?.status !== 'DRAFT')return;const label=prompt('Stop name');if(!label?.trim())return;remember();selected.stops.push({name:label.trim(),latitude:p.lat,longitude:p.lng,radius:50});draw();editor();},
+            onStop:p=>{if(tracer || selected?.status !== 'DRAFT')return;let label;if(admin){if(!placingStop)return;label=root.querySelector('.studio-new-stop-name')?.value.trim();placingStop=false;}else{label=prompt('Stop name')?.trim();}if(!label)return;remember();selected.stops.push({name:label,latitude:p.lat,longitude:p.lng,radius:50});const input=root.querySelector('.studio-new-stop-name');if(input)input.value='';draw();editor();root.querySelector('.studio-map-status').textContent='Stop added. Drag its numbered marker to fine-tune the position.';},
             onMoveStop:(i,p)=>{remember();selected.stops[i].latitude=p.lat;selected.stops[i].longitude=p.lng;editor();}
-        }).then(result=>{if(closed){result.remove();return;}map=result;draw(true);if(lastFix)map.setPosition([lastFix.coords.longitude,lastFix.coords.latitude],lastFix.coords.accuracy);mapStatus('Blue line: recorded path · blue marker: latest phone position');}).catch(e=>mapStatus(e.message));
-        try { if (tracer) local=await storage(); else masterStops=await api('/stops'); await refresh(); } catch(e) { status(e.message); }
+        }).then(result=>{if(closed){result.remove();return;}map=result;draw(true);if(lastFix)map.setPosition([lastFix.coords.longitude,lastFix.coords.latitude],lastFix.coords.accuracy);mapStatus(admin ? 'Choose a recorded path above.' : 'Blue line: recorded path · blue marker: latest phone position');}).catch(e=>mapStatus(e.message));
+        try { if (tracer) local=await storage(); else if(!admin) masterStops=await api('/stops'); await refresh(); } catch(e) { status(e.message); }
     });
     return root;
 }
