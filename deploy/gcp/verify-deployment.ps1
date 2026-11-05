@@ -110,7 +110,7 @@ Assert-AssetContains -Path "/google-signup" -ExpectedText "googleSignup.js?v=202
 Assert-AssetContains -Path "/static/common/googleSignup.js?v=20261103errors1" -ExpectedText "Spaces are not allowed"
 Assert-AssetContains -Path "/dashboard" -ExpectedText "fleetGlass.css?v=20261103fleetglass7"
 Assert-AssetContains -Path "/dashboard" -ExpectedText "bootstrap.js?v=20261105tracer1"
-Assert-AssetContains -Path "/dashboard" -ExpectedText "clamp(160px,32vw,220px)"
+Assert-AssetContains -Path "/dashboard" -ExpectedText "clamp(180px, 26vw, 240px)"
 Assert-AssetContains -Path "/static/modules/css/fleetGlass.css?v=20261103fleetglass7" -ExpectedText ".modal:has(#official-pass-name)"
 Assert-AssetContains -Path "/static/common/bootstrap.js?v=20261105tracer1" -ExpectedText "router.js?v=20261105tracer1"
 Assert-AssetContains -Path "/static/common/router.js?v=20261105tracer1" -ExpectedText "studentSidebar.js?v=20261103authors2"
