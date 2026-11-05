@@ -1,5 +1,5 @@
-import { requireAuthenticatedSession } from "/static/common/auth.js?v=20261015d";
-import { canonicalRole, ROLE_ADMIN, ROLE_DRIVER, ROLE_TECHNICIAN, ROLE_USER } from "/static/common/roles.js";
+import { requireAuthenticatedSession } from "/static/common/auth.js?v=20261105tracer1";
+import { canonicalRole, ROLE_ADMIN, ROLE_DRIVER, ROLE_TECHNICIAN, ROLE_USER } from "/static/common/roles.js?v=20261105tracer1";
 import { installHardRefreshShortcut } from "/static/common/cacheRefresh.js";
 
 installHardRefreshShortcut();
@@ -14,7 +14,7 @@ if (!profile) {
 // Import the role-sensitive router only after the server session has refreshed
 // localStorage. Otherwise a previous account's cached role can build the wrong
 // sidebar when a technician opens or reloads a bookmarked module.
-const { loadModule } = await import("/static/common/router.js?v=20261103authors2");
+const { loadModule } = await import("/static/common/router.js?v=20261105tracer1");
 
 const role = canonicalRole(profile.role);
 let moduleName;

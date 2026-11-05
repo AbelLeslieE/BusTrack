@@ -1,12 +1,12 @@
 /** Role-aware hash router and shared application-shell coordinator. */
 
 import { createLoader } from "./loader.js";
-import { canonicalRole, ROLE_ADMIN, ROLE_DRIVER, ROLE_TECHNICIAN, ROLE_USER } from "./roles.js";
+import { canonicalRole, ROLE_ADMIN, ROLE_DRIVER, ROLE_TECHNICIAN, ROLE_USER } from "./roles.js?v=20261105tracer1";
 
 import {
     createSidebar,
     setSidebarActive
-} from "./sidebar.js?v=20261103authors1";
+} from "./sidebar.js?v=20261105tracer1";
 
 import {
     createDriverSidebar,
@@ -97,7 +97,7 @@ const adminModules = {
 
     users: {
         title: "Users",
-        load: () => import("../modules/js/users.js")
+        load: () => import("../modules/js/users.js?v=20261105tracer1")
     },
 
     activeUsers: {
