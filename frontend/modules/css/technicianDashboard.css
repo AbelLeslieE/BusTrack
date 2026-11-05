@@ -12,7 +12,8 @@
 .tech-hero h1{max-width:820px;line-height:1.05}
 .tech-stat{transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
 .tech-stat:hover{transform:translateY(-2px);border-color:rgba(121,228,255,.42);box-shadow:0 22px 48px rgba(0,8,24,.34)}
-.tech-panel{border-color:rgba(137,223,255,.24);background:linear-gradient(135deg,rgba(7,31,60,.96),rgba(13,48,76,.9));box-shadow:0 18px 44px rgba(0,8,24,.27)}
+.tech-panel{border-color:rgba(137,223,255,.3);background:linear-gradient(135deg,rgba(7,31,60,.82),rgba(13,48,76,.7));box-shadow:0 20px 54px rgba(0,8,24,.3),inset 0 1px 0 rgba(190,233,255,.08);backdrop-filter:blur(22px) saturate(135%);-webkit-backdrop-filter:blur(22px) saturate(135%)}
+.tech-audit-table-wrap{max-height:680px;overflow:auto;overscroll-behavior:contain}.tech-audit-table thead{position:sticky;top:0;z-index:1;background:rgba(6,29,57,.94);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}.tech-audit-pagination{padding-top:16px}
 .tech-panel-heading{align-items:center}
 .tech-button:focus-visible{outline:3px solid #79e4ff;outline-offset:3px}
 @media(max-width:700px){.tech-page{gap:14px;padding:0 10px 24px}.tech-hero{min-height:0;padding:24px;border-radius:20px}.tech-panel{padding:18px;border-radius:18px}.tech-stat-grid{gap:10px}.tech-stat{padding:16px}}

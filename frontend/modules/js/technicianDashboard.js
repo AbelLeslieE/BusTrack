@@ -5,7 +5,7 @@ import { escapeHtml } from "/static/common/security.js";
 
 const state = {
     tokens: [], allTokens: [], devices: [], buses: [], statuses: [], translator: null,
-    auditEvents: [], auditTotal: 0, auditHasMore: false, auditOffset: 0,
+    auditEvents: [], auditTotal: 0, auditPage: 1, auditPageSize: 10,
     requestLogs: [], requestTotal: 0, requestHasMore: false, requestOffset: 0,
     requestPage: 1, requestPageSize: 25,
     tokenFilters: { search: "", state: "" },
@@ -108,6 +108,21 @@ function requestPageCount() {
     return Math.max(1, Math.ceil(state.requestTotal / state.requestPageSize));
 }
 
+function auditPageCount() {
+    return Math.max(1, Math.ceil(state.auditTotal / state.auditPageSize));
+}
+
+function auditPagination() {
+    const pageCount = auditPageCount();
+    if (state.auditTotal <= state.auditPageSize) return "";
+
+    return `<nav class="tech-pagination tech-audit-pagination" aria-label="Security audit pages">
+        <button class="tech-button secondary" type="button" data-audit-page="previous" ${state.auditPage <= 1 ? "disabled" : ""}>Previous</button>
+        <span>Page ${state.auditPage} of ${pageCount}</span>
+        <button class="tech-button secondary" type="button" data-audit-page="next" ${state.auditPage >= pageCount ? "disabled" : ""}>Next</button>
+    </nav>`;
+}
+
 function requestPagination() {
     const pageCount = requestPageCount();
     if (state.requestTotal <= state.requestPageSize) return "";
@@ -180,7 +195,7 @@ function renderDashboard() {
                 <article class="tech-panel glass-card tech-wide"><div class="tech-panel-heading"><div><p class="tech-eyebrow">DEVICE TRANSLATION</p><h2>External bus IDs</h2><p>Update the GPS-company identifier without changing BusTrack’s internal bus number.</p></div><button class="tech-button primary" id="add-device">Map device</button></div><div class="tech-table-wrap"><table><thead><tr><th>Bus</th><th>Provider device ID</th><th>Display name</th><th>Status</th><th></th></tr></thead><tbody>${deviceRows}</tbody></table></div></article>
                 <article class="tech-panel glass-card tech-wide"><div class="tech-panel-heading"><div><p class="tech-eyebrow">FORMAT ADAPTER</p><h2>Provider field layout</h2><p>When the GPS company changes its JSON field names, update these paths here. The translation still runs securely on the server.</p></div><button class="tech-button secondary" id="edit-translator">Edit field paths</button></div><div class="tech-translation">${translationSummary}</div></article>
                 <article class="tech-panel glass-card tech-wide"><div class="tech-panel-heading"><div><p class="tech-eyebrow">LIVE SIGNAL</p><h2>Latest vehicle GPS</h2></div><span class="tech-muted">20s while on · 2m while off</span></div><div class="tech-device-grid">${statusCards}</div></article>
-                <article class="tech-panel glass-card tech-wide"><div class="tech-panel-heading"><div><p class="tech-eyebrow">SECURITY AUDIT</p><h2>Portal and integration history</h2><p>Records portal entry, sign-out, failed sign-in attempts, and GPS token or translation changes. Token values and passwords are never logged.</p></div><span class="tech-muted">${state.auditTotal} recorded event${state.auditTotal === 1 ? "" : "s"}</span></div><div class="tech-table-wrap"><table class="tech-audit-table"><thead><tr><th>When</th><th>Activity</th><th>User / role</th><th>IP</th><th>Details</th></tr></thead><tbody>${auditRows}</tbody></table></div>${state.auditHasMore ? `<div class="tech-audit-more"><button class="tech-button secondary" id="tech-load-more-audit">Load older events</button></div>` : ""}</article>
+                <article class="tech-panel glass-card tech-wide"><div class="tech-panel-heading"><div><p class="tech-eyebrow">SECURITY AUDIT</p><h2>Portal and integration history</h2><p>Records portal entry, sign-out, failed sign-in attempts, and GPS token or translation changes. Token values and passwords are never logged.</p></div><span class="tech-muted">${state.auditTotal} recorded event${state.auditTotal === 1 ? "" : "s"}</span></div><div class="tech-table-wrap tech-audit-table-wrap"><table class="tech-audit-table"><thead><tr><th>When</th><th>Activity</th><th>User / role</th><th>IP</th><th>Details</th></tr></thead><tbody>${auditRows}</tbody></table></div>${auditPagination()}</article>
                 <article class="tech-panel glass-card tech-wide"><div class="tech-panel-heading"><div><p class="tech-eyebrow">API REQUEST MONITOR</p><h2>Request queue and history</h2><p>Search completed API requests by route, user, service token, method, or result. Request bodies and token values are never stored.</p></div><span class="tech-muted">${state.requestTotal} matching request${state.requestTotal === 1 ? "" : "s"}</span></div><div class="tech-filter-bar tech-request-filters"><input class="tech-filter-input" id="tech-request-search" value="${escapeHtml(state.requestFilters.search)}" maxlength="100" placeholder="Search route, user or token"><div id="tech-request-method-container" class="tech-dropdown-container"></div><div id="tech-request-status-container" class="tech-dropdown-container"></div><div id="tech-request-token-container" class="tech-dropdown-container tech-token-filter-dropdown"></div><button class="tech-button secondary" id="tech-apply-request-filters">Apply</button><button class="tech-filter-clear" id="tech-clear-request-filters" type="button">Clear</button></div><div class="tech-table-wrap"><table class="tech-request-table"><thead><tr><th>When</th><th>Request</th><th>Result</th><th>Caller</th><th>GPS token</th><th>IP</th></tr></thead><tbody>${requestRows}</tbody></table></div>${requestPagination()}</article>
             </section>
         </section>`;
@@ -200,12 +215,16 @@ async function refresh() {
             limit: state.requestPageSize,
             offset: (state.requestPage - 1) * state.requestPageSize,
         });
+        const auditFilters = queryString({
+            limit: state.auditPageSize,
+            offset: (state.auditPage - 1) * state.auditPageSize,
+        });
         const allTokensRequest = request("/integrations/gps/tokens");
         const filteredTokensRequest = tokenFilters
             ? request(`/integrations/gps/tokens${tokenFilters}`)
             : allTokensRequest;
         const results = await Promise.allSettled([
-            filteredTokensRequest, allTokensRequest, request("/integrations/gps/devices"), request("/integrations/gps/buses"), request("/integrations/gps/status"), request("/integrations/gps/translator"), request("/integrations/gps/audit?limit=100&offset=0"), request(`/integrations/gps/requests${requestFilters}`),
+            filteredTokensRequest, allTokensRequest, request("/integrations/gps/devices"), request("/integrations/gps/buses"), request("/integrations/gps/status"), request("/integrations/gps/translator"), request(`/integrations/gps/audit${auditFilters}`), request(`/integrations/gps/requests${requestFilters}`),
         ]);
         const failedSections = [];
         const value = (index, fallback, label) => {
@@ -223,7 +242,7 @@ async function refresh() {
         const requestLog = value(7, { requests: [], total: 0, has_more: false, offset: 0 }, "request history");
         Object.assign(state, {
             tokens, allTokens, devices, buses, statuses, translator,
-            auditEvents: audit.events, auditTotal: audit.total, auditHasMore: audit.has_more, auditOffset: audit.events.length,
+            auditEvents: audit.events, auditTotal: audit.total,
             requestLogs: requestLog.requests, requestTotal: requestLog.total, requestHasMore: requestLog.has_more, requestOffset: requestLog.offset,
             loadError: failedSections.length ? `Could not load ${failedSections.join(", ")}. Refresh to retry.` : "",
         });
@@ -232,13 +251,20 @@ async function refresh() {
     } finally { state.loading = false; renderDashboard(); }
 }
 
-async function loadMoreAudit() {
+async function changeAuditPage(direction) {
+    const pageCount = auditPageCount();
+    const nextPage = direction === "next"
+        ? Math.min(pageCount, state.auditPage + 1)
+        : Math.max(1, state.auditPage - 1);
+    if (nextPage === state.auditPage) return;
+    state.auditPage = nextPage;
     try {
-        const audit = await request(`/integrations/gps/audit?limit=100&offset=${state.auditOffset}`);
-        Object.assign(state, { auditEvents: [...state.auditEvents, ...audit.events], auditTotal: audit.total, auditHasMore: audit.has_more, auditOffset: state.auditOffset + audit.events.length });
+        const audit = await request(`/integrations/gps/audit?limit=${state.auditPageSize}&offset=${(state.auditPage - 1) * state.auditPageSize}`);
+        Object.assign(state, { auditEvents: audit.events, auditTotal: audit.total });
         renderDashboard();
     } catch (error) {
-        Modal.error({ title: "Unable to load older audit events", subtitle: error.message });
+        state.auditPage = direction === "next" ? Math.max(1, nextPage - 1) : Math.min(pageCount, nextPage + 1);
+        Modal.error({ title: "Unable to load that audit page", subtitle: error.message });
     }
 }
 
@@ -362,7 +388,7 @@ function bindEvents() {
     page.querySelector("#create-token")?.addEventListener("click", createToken);
     page.querySelector("#add-device")?.addEventListener("click", () => editDevice());
     page.querySelector("#edit-translator")?.addEventListener("click", editTranslator);
-    page.querySelector("#tech-load-more-audit")?.addEventListener("click", loadMoreAudit);
+    page.querySelectorAll("[data-audit-page]").forEach(button => button.addEventListener("click", () => changeAuditPage(button.dataset.auditPage)));
     page.querySelectorAll("[data-request-page]").forEach(button => button.addEventListener("click", () => changeRequestPage(button.dataset.requestPage)));
     page.querySelector("#tech-apply-token-filters")?.addEventListener("click", applyTokenFilters);
     page.querySelector("#tech-clear-token-filters")?.addEventListener("click", clearTokenFilters);
