@@ -386,7 +386,7 @@ function createShell(initialRoute) {
     else if (isTechnician) {
 
         document.body.classList.add(
-            "technician-theme
+            "technician-theme"
         );
 
     }

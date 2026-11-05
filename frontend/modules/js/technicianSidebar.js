@@ -42,9 +42,6 @@ export function createTechnicianSidebar(activeRoute, onNavigate, {tracerPortal =
     return sidebar;
 }
 
-export function createTracerSidebar(activeRoute, onNavigate) {
-    return createTechnicianSidebar(activeRoute, onNavigate, {tracerPortal:true});
-}
 
 export function setTechnicianSidebarActive(sidebar, activeRoute) {
     sidebar.querySelectorAll("[data-route]").forEach(link => link.classList.toggle("is-active", link.dataset.route === activeRoute));
