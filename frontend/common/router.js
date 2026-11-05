@@ -331,6 +331,8 @@ function applyModuleStyles(moduleName) {
     const styleModuleName =
         isDriver && moduleName === "profile"
             ? "driverProfile"
+            : moduleName === "maintainRoute"
+                ? "routeStudio"
             : isStudent && moduleName === "notifications"
                 ? "studentNotifications"
                 : isStudent && moduleName === "profile"
