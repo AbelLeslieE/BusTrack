@@ -1,6 +1,6 @@
 /** Browser session handling and login-form behavior. */
 
-import { canonicalRole, ROLE_ADMIN, ROLE_DRIVER, ROLE_TECHNICIAN, ROLE_USER } from "/static/common/roles.js";
+import { canonicalRole, ROLE_ADMIN, ROLE_DRIVER, ROLE_TECHNICIAN, ROLE_USER } from "/static/common/roles.js?v=20261105tracer1";
 import { installHardRefreshShortcut } from "/static/common/cacheRefresh.js";
 
 installHardRefreshShortcut();
