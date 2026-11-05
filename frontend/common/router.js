@@ -22,7 +22,7 @@ import {
     createTechnicianSidebar,
     createTracerSidebar,
     setTechnicianSidebarActive
-} from "../modules/js/technicianSidebar.js?v=20261105tracerportal2";
+} from "../modules/js/technicianSidebar.js?v=20261105tracerportal3";
 
 
 import {
@@ -209,6 +209,10 @@ const studentModules = {
 };
 
 const technicianModules = {
+    traceAssignment: {
+        title: "Assign tracer bus",
+        load: () => import("../modules/js/traceAssignment.js?v=20261105assign1")
+    },
     technicianDashboard: {
         title: "GPS Integration",
         load: () => import("../modules/js/technicianDashboard.js?v=20261015a")
@@ -341,7 +345,7 @@ function applyModuleStyles(moduleName) {
 
     const styles = [loadStylesheet(
         "active-module-styles",
-        `/static/modules/css/${styleModuleName}.css?v=${styleModuleName === "routeStudio" ? "20261105polished2" : ["technicianDashboard", "providerHealth"].includes(styleModuleName) ? "20261105portals1" : "20261103providerdelay1"}`
+        `/static/modules/css/${styleModuleName}.css?v=${styleModuleName === "routeStudio" ? "20261105polished2" : styleModuleName === "traceAssignment" ? "20261105assign1" : ["technicianDashboard", "providerHealth"].includes(styleModuleName) ? "20261105portals1" : "20261103providerdelay1"}`
     )];
 
     // Driver shared styles
