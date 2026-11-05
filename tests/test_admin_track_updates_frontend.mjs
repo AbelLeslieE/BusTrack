@@ -6,14 +6,17 @@ import vm from 'node:vm';
 const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 
 function monitor(extra = {}) {
-    const panel = {innerHTML: '', querySelector: () => null};
+    const panel = {
+        innerHTML: '', querySelector: () => null, contains: () => true,
+        addEventListener(name, handler) { this.listeners ??= {}; this.listeners[name] = handler; },
+    };
     const source = read('frontend/modules/js/adminTrackUpdates.js')
         .replace(/^import .*;\r?$/gm, '')
         .replace(/^export /gm, '');
     const context = vm.createContext({
         document: {getElementById: id => id === 'fleetTrackUpdates' ? panel : null},
         escapeHtml: value => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;'),
-        Date, Map, Intl, Number, String, Set, Object,
+        Date, Map, Intl, Number, String, Set, Object, WeakSet,
         ...extra,
     });
     vm.runInContext(source, context);
@@ -31,7 +34,7 @@ test('admin route view shows every bus and live stop progress', () => {
         {id: 2, bus_number: 'BUS-002', registration_number: 'KL002'},
     ];
     const trip = {
-        bus_id: 1, bus_number: 'BUS-001', is_active_trip: true,
+        bus_id: 1, trip_id: 21, bus_number: 'BUS-001', is_active_trip: true,
         route_name: 'Moonupedika', route_direction: 'forward',
         location_source: 'vehicle_gps', last_location_update: '2026-10-15T07:00:00Z',
         provider_gps: {fix_time: '2026-10-15T12:30:00Z', protocol: 'kingstrack'},
@@ -51,6 +54,8 @@ test('admin route view shows every bus and live stop progress', () => {
     assert.match(panel.innerHTML, /STOP 1[\s\S]*?Start[\s\S]*?Passed/);
     assert.match(panel.innerHTML, /STOP 2[\s\S]*?Middle[\s\S]*?Approaching/);
     assert.match(panel.innerHTML, /STOP 3[\s\S]*?End[\s\S]*?Upcoming/);
+    assert.match(panel.innerHTML, /data-reset-route-bus="1"[^>]*>Reset to first stop/);
+    assert.match(panel.innerHTML, /data-reset-route-bus="2"[^>]*disabled/);
     assert.doesNotMatch(panel.innerHTML, new RegExp(new Date(trip.provider_gps.fix_time).toLocaleString()));
 
     trip.route_direction = 'reverse';
@@ -63,6 +68,53 @@ test('admin route view shows every bus and live stop progress', () => {
     assert.match(panel.innerHTML, /Return journey/);
     assert.match(panel.innerHTML, /STOP 2[\s\S]*?Middle[\s\S]*?Skipped/);
     assert.match(panel.innerHTML, /STOP 3[\s\S]*?Start[\s\S]*?Reached/);
+});
+test('each active route card confirms a forward first-stop reset for only that bus', async () => {
+    const calls = [];
+    let form;
+    let refreshed = 0;
+    const {context, panel} = monitor({
+        crypto: {randomUUID: () => '00000000-0000-4000-8000-000000000001'},
+        request: async (path, options) => {
+            calls.push({path, options});
+            if (path.endsWith('/reset-options')) return {
+                bus_number: 'BUS-002', route_name: 'Campus route', trip_id: 22,
+                reset_version: 4, starts: {forward: {name: 'First campus stop'}},
+            };
+            return {message: 'Route reset to First campus stop.'};
+        },
+        Modal: {
+            form: options => {form = options;},
+            close: () => form.onClose(),
+            success: () => {},
+            error: error => {throw Error(error.subtitle);},
+        },
+    });
+    const activeTrip = {
+        bus_id: 2, trip_id: 22, bus_number: 'BUS-002', is_active_trip: true,
+        route_name: 'Campus route', route_direction: 'reverse',
+        route_stops: [{sequence: 1, stop_name: 'Last stop', tracking_status: 'reached'},
+            {sequence: 2, stop_name: 'First campus stop', tracking_status: 'pending'}],
+    };
+    context.render([activeTrip], [{id: 2, bus_number: 'BUS-002'}]);
+    vm.runInContext('setFleetTrackRefreshHandler(() => { refreshed++; })', Object.assign(context, {
+        refreshed: 0,
+    }));
+    const button = {disabled: false, dataset: {resetRouteBus: '2'}};
+    panel.listeners.click({target: {closest: () => button}});
+    await new Promise(resolve => setImmediate(resolve));
+    assert.match(form.title, /BUS-002/);
+    assert.match(form.content, /Forward \(outbound\)/);
+    assert.match(form.content, /First campus stop/);
+    assert.equal(calls.length, 1);
+    await form.onSubmit();
+    assert.equal(calls.length, 2);
+    assert.equal(calls[1].path, '/integrations/gps/provider-health/buses/2/reset');
+    assert.deepEqual(JSON.parse(calls[1].options.body), {
+        direction: 'forward', trip_id: 22, expected_reset_version: 4,
+        request_id: '00000000-0000-4000-8000-000000000001',
+    });
+    assert.equal(context.refreshed, 1);
 });
 
 test('waiting buses load assigned stops without inventing live progress', async () => {

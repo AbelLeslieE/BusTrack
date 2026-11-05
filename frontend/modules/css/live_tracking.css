@@ -727,6 +727,23 @@
 }
 .track-route-heading h3{margin:5px 0 0;color:#f3f8ff;font-size:1.15rem;}
 .track-route-live{margin:10px 0 16px;color:#c9dcf3;font-size:.85rem;}
+.track-route-reset{
+    min-height:40px;
+    margin:0 0 16px;
+    padding:8px 13px;
+    border:1px solid rgba(101,211,255,.55);
+    border-radius:10px;
+    background:rgba(28,113,164,.24);
+    color:#d9f5ff;
+    font:inherit;
+    font-size:.8rem;
+    font-weight:700;
+    cursor:pointer;
+}
+.track-route-reset:hover:not(:disabled),
+.track-route-reset:focus-visible:not(:disabled){background:rgba(49,150,205,.4);border-color:#8ae4ff;}
+.track-route-reset:focus-visible{outline:2px solid #8ae4ff;outline-offset:2px;}
+.track-route-reset:disabled{opacity:.48;cursor:not-allowed;}
 .fleet-route-timeline{
     position:relative;
     max-height:440px;

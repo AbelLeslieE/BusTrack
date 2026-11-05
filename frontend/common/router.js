@@ -53,7 +53,7 @@ const adminModules = {
 
     live_tracking: {
         title: "Live Tracking",
-        load: () => import("../modules/js/live_tracking.js?v=20261017reset4")
+        load: () => import("../modules/js/live_tracking.js?v=20261105cardreset1")
     },
 
     tripHistory: {
@@ -345,7 +345,7 @@ function applyModuleStyles(moduleName) {
 
     const styles = [loadStylesheet(
         "active-module-styles",
-        `/static/modules/css/${styleModuleName}.css?v=${styleModuleName === "routeStudio" ? "20261105routesimple1" : styleModuleName === "traceAssignment" ? "20261105assign1" : ["technicianDashboard", "providerHealth"].includes(styleModuleName) ? "20261105portals1" : "20261103providerdelay1"}`
+        `/static/modules/css/${styleModuleName}.css?v=${styleModuleName === "routeStudio" ? "20261105routesimple1" : styleModuleName === "traceAssignment" ? "20261105assign1" : styleModuleName === "live_tracking" ? "20261105cardreset1" : ["technicianDashboard", "providerHealth"].includes(styleModuleName) ? "20261105portals1" : "20261103providerdelay1"}`
     )];
 
     // Driver shared styles
