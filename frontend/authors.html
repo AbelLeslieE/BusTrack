@@ -1828,7 +1828,7 @@ html:has(.film[open]) { overflow: hidden; }
 .signal-brand b { color: var(--ice); font: 900 1.35rem/1 system-ui; letter-spacing: -.12em; padding-right: .8rem; border-right: 1px solid var(--line); }
 .film-skip { border: 1px solid #476260; border-radius: 3px; padding: .6em 1em; min-height: 44px; cursor: pointer; color: #d6e6e1; background: #0b191f; }
 .film-skip:hover { border-color: var(--ice); }
-.signal-stage { min-height: 0; position: relative; isolation: isolate; display: grid; place-items: center; }
+.signal-stage { min-height: 0; position: relative; isolation: isolate; display: grid; place-items: center; overflow-x: clip; }
 .signal-fork { position: absolute; width: min(80%,830px); height: 60%; top: 24%; fill: none; pointer-events: none; }
 .signal-fork path { stroke-dasharray: 1; stroke-dashoffset: 1; vector-effect: non-scaling-stroke; }
 .film[data-phase="lock"] .signal-fork path { animation: trace-origin 1.1s ease-in-out forwards; }
@@ -1853,6 +1853,9 @@ html:has(.film[open]) { overflow: hidden; }
 .film[data-phase="trace"] .departure-line, .film[data-phase="lock"] .departure-line { animation: trace-origin 1.35s ease both; }
 .coach-model { transform-origin: 50% 65%; transition: transform 1.25s cubic-bezier(.3,0,.65,1); }
 .film[data-phase="lock"] .coach-model { transform: translate(48px,-5px) scale(.97); }
+.coach-hub { transform-origin: 0 0; }
+.film[data-phase="lock"] .coach-hub { animation: wheel-roll .85s linear infinite; }
+.film[open] .coach-indicators { animation: ignition-indicators 1.6s .8s both; }
 .signal-wire { stroke-dasharray: 1; stroke-dashoffset: 1; }
 .film[data-phase="trace"] .signal-wire, .film[data-phase="lock"] .signal-wire { animation: trace-origin 1.25s ease both; }
 .signal-engine h2, .signal-id h2 { margin: .1em 0; color: #f0f8f4; font-size: clamp(2.3rem,5.3vw,5.5rem); font-weight: 580; letter-spacing: -.065em; line-height: 1.02; }
@@ -1861,33 +1864,50 @@ html:has(.film[open]) { overflow: hidden; }
 .signal-side b { display: block; margin-top: .6em; color: var(--ice); }
 .signal-side svg { width: 100%; height: 32px; margin-top: .75em; }
 .signal-side.left { left: 6%; } .signal-side.right { right: 6%; text-align: right; }
-.signal-id { visibility: hidden; width: min(740px,92%); pointer-events: none; }
+.signal-id { position: relative; visibility: hidden; width: min(820px,92%); pointer-events: none; perspective: 1100px; isolation: isolate; }
 .film[data-phase="reveal"] .signal-engine, .film[data-phase="reveal"] .signal-side { opacity: 0; pointer-events: none; }
-.film[data-phase="reveal"] .signal-engine { transform: scale(.86); }
-.film[data-phase="reveal"] .signal-id { visibility: visible; animation: signature-in .55s ease-out both; }
+.film[data-phase="reveal"] .signal-engine { transform: translate(65px,-10px) scale(.96); }
+.film[data-phase="reveal"] .signal-id { visibility: visible; }
+.signal-id::before {
+  content: ""; position: absolute; inset: 14% -8% -8%; z-index: -1; border: 1px solid #8bf4df55;
+  border-radius: 50%; opacity: 0; box-shadow: 0 0 35px #77efd51a;
+}
+.film[data-phase="reveal"] .signal-id::before { animation: credits-arrival-ring 1.5s ease-out both; }
+.film[data-phase="reveal"] .signal-id > p { animation: credit-label-in .7s .1s both; }
+.film[data-phase="reveal"] .signal-id h2 { animation: credits-title-in .9s cubic-bezier(.16,1,.3,1) both; }
 .signal-id h2 { font-size: clamp(2.1rem,4.6vw,4.6rem); }
 .signal-pair { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: clamp(12px,3vw,38px); margin: clamp(14px,3vh,32px) auto 0; }
 .signal-person {
-  --phosphor: var(--ice); position: relative; overflow: hidden; text-align: left; margin: 0;
+  --phosphor: var(--ice); --entry-x: 84px; --entry-angle: -12deg; --credit-delay: .15s; --portrait-rest: 1.12;
+  position: relative; overflow: hidden; text-align: left; margin: 0; border-radius: 12px;
   background: linear-gradient(135deg,#102b30,#0b161f); border: 1px solid #325257; border-top: 2px solid var(--phosphor);
+  box-shadow: 0 24px 70px #0007; transform-origin: center;
 }
-.signal-person:nth-child(2) { --phosphor: var(--brass); }
-.film[data-phase="reveal"] .signal-person { animation: signature-in .68s .08s both; }
-.film[data-phase="reveal"] .signal-person:nth-child(2) { animation-delay: .32s; }
-.signal-photo { position: relative; height: clamp(110px,24svh,225px); overflow: hidden; }
-.signal-photo img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 18%; }
+.signal-person:nth-child(2) { --phosphor: var(--brass); --entry-x: -84px; --entry-angle: 12deg; --credit-delay: .4s; --portrait-rest: 1.04; }
+.film[data-phase="reveal"] .signal-person { animation: creator-dock 1.05s var(--credit-delay) cubic-bezier(.16,1,.3,1) both; }
+.signal-person::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; border: 1px solid var(--phosphor);
+  border-radius: inherit; opacity: .25;
+}
+.film[data-phase="reveal"] .signal-person::after { animation: credits-frame-in 1.5s var(--credit-delay) both; }
+.signal-photo { position: relative; height: clamp(130px,28svh,270px); overflow: hidden; }
+.signal-photo img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 18%; transform-origin: 50% 25%; }
+.film[data-phase="reveal"] .signal-photo img { animation: credits-portrait-in 1.6s calc(var(--credit-delay) + .12s) cubic-bezier(.16,1,.3,1) both; }
 .signal-person:nth-child(2) img { object-position: 50% 20%; }
 .signal-photo::after { position: absolute; content: ""; inset: 0; background: linear-gradient(transparent 65%,#0b1b22b0); }
 .film[data-phase="reveal"] .signal-photo::before {
-  content: ""; position: absolute; z-index: 1; inset: 0; pointer-events: none;
-  background: linear-gradient(transparent 85%, #75ffdd28 98%, var(--phosphor));
-  animation: portrait-scan 1s ease-out both;
+  content: ""; position: absolute; z-index: 1; inset: -10% auto -10% -45%; width: 30%; pointer-events: none;
+  background: linear-gradient(90deg,transparent,#dafff345,transparent);
+  animation: credits-light-sweep 1.15s calc(var(--credit-delay) + .35s) ease-out both;
 }
-.film[data-phase="reveal"] .signal-person:nth-child(2) .signal-photo::before { animation-delay: .24s; }
 .signal-photo span { position: absolute; z-index: 1; bottom: 8px; left: 12px; color: white; text-shadow: 0 1px 4px black; }
 .signal-person figcaption { padding: .8rem clamp(.7rem,2vw,1.4rem) 1rem; }
 .signal-person strong { display: block; font-size: clamp(1.25rem,2.4vw,2.15rem); letter-spacing: -.045em; line-height: 1.15; }
 .signal-person small { display: block; color: var(--phosphor); margin-top: .5em; }
+.signal-name-word { display: inline-block; }
+.film[data-phase="reveal"] .signal-name-word { animation: credits-name-in .7s calc(var(--credit-delay) + .45s + var(--name-order) * .09s) cubic-bezier(.16,1,.3,1) both; }
+.film[data-phase="reveal"] .signal-person small { animation: credit-label-in .65s calc(var(--credit-delay) + .85s) both; }
+.film.is-static *, .film.is-static *::before, .film.is-static *::after { animation: none !important; transition: none !important; }
 .signal-foot { border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
 .signal-foot output { color: var(--ice); min-width: 4ch; text-align: right; }
 .signal-meter { flex: 1; height: 4px; background: #173039; overflow: hidden; }
@@ -1897,7 +1917,7 @@ html:has(.film[open]) { overflow: hidden; }
 @keyframes panels-assemble { from { opacity: .16; clip-path: inset(0 98% 0 0); } to { opacity: 1; clip-path: inset(-1%); } }
 @keyframes glazing-settle { from { opacity: 0; transform: translateY(-18px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes axle-seat { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes body-trace { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; opacity: .35; } }
+@keyframes body-trace { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; opacity: .08; } }
 @keyframes headlamps-on { from { opacity: 0; } to { opacity: 1; } }
 @keyframes camera-approach { from { transform: scale(.88) translateY(14px); } to { transform: scale(1) translateY(0); } }
 @keyframes road-travel { to { stroke-dashoffset: -58; } }
@@ -1905,11 +1925,27 @@ html:has(.film[open]) { overflow: hidden; }
 @keyframes portrait-scan { from { transform: translateY(-100%); } to { transform: translateY(100%); } }
 @keyframes trace-origin { to { stroke-dashoffset: 0; } }
 @keyframes signature-in { from { opacity: 0; translate: 0 10px; clip-path: inset(0 0 35%); } to { opacity: 1; translate: 0; clip-path: inset(0); } }
+@keyframes wheel-roll { to { transform: rotate(360deg); } }
+@keyframes ignition-indicators { 0%,45% { opacity: .2; } 20%,65%,100% { opacity: 1; } }
+@keyframes credits-arrival-ring { 0% { opacity: 0; scale: .55; } 30% { opacity: .55; } 100% { opacity: 0; scale: 1.3; } }
+@keyframes credits-title-in { from { opacity: 0; translate: 0 14px; clip-path: inset(0 45%); } to { opacity: 1; translate: 0 0; clip-path: inset(0); } }
+@keyframes creator-dock {
+  0% { opacity: 0; transform: translate3d(var(--entry-x),35px,-170px) rotateY(var(--entry-angle)) scale(.86); }
+  65% { opacity: 1; transform: translate3d(0,-4px,0) rotateY(0deg) scale(1.015); }
+  100% { opacity: 1; transform: translate3d(0,0,0) rotateY(0deg) scale(1); }
+}
+@keyframes credits-frame-in { 0% { opacity: 0; } 35% { opacity: .85; box-shadow: inset 0 0 22px #b6ffed22; } 100% { opacity: .25; box-shadow: inset 0 0 0 transparent; } }
+@keyframes credits-portrait-in { from { transform: scale(1.3); } to { transform: scale(var(--portrait-rest)); } }
+@keyframes credits-light-sweep { from { translate: 0 0; transform: skewX(-18deg); } to { translate: 500% 0; transform: skewX(-18deg); } }
+@keyframes credits-name-in { from { opacity: 0; translate: 0 16px; clip-path: inset(0 0 100%); } to { opacity: 1; translate: 0 0; clip-path: inset(0); } }
+@keyframes credit-label-in { from { opacity: 0; translate: 0 8px; } to { opacity: 1; translate: 0 0; } }
 @media (max-width: 760px) {
-  .signal-instrument { width: min(94vw,470px); }
+  .signal-instrument { width: min(98vw,620px,82svh); }
   .signal-side { display: none; }
   .signal-pair { gap: 8px; }
   .signal-person figcaption { padding-inline: .65rem; }
+  .signal-person { --entry-x: 36px; --entry-angle: -7deg; }
+  .signal-person:nth-child(2) { --entry-x: -36px; --entry-angle: 7deg; }
   .signal-stage .film-meta { letter-spacing: .09em; }
 }
 @media (max-height: 490px) {
@@ -1918,13 +1954,15 @@ html:has(.film[open]) { overflow: hidden; }
   .signal-instrument { width: min(49vw,65svh); }
   .signal-id > p { margin: 0; }
   .signal-pair { margin-top: 8px; }
-  .signal-photo { height: 21svh; }
-  .signal-person figcaption { padding-block: .4em; }
+  .signal-person { display: grid; grid-template-columns: clamp(76px,14vw,110px) minmax(0,1fr); align-items: center; }
+  .signal-photo { height: clamp(100px,30svh,135px); }
+  .signal-person figcaption { padding: .7rem .8rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   .authors-person-card.is-visible .authors-portrait-photo { animation: none; }
   .film[open] .coach-cabin, .film[open] .coach-wheels { animation: none; }
 }
+@media (max-height: 360px) { .film[open] { grid-template-rows: auto minmax(220px,1fr) auto; } }
 /* Size the credits by their content rather than the viewport height. */
 .authors-team-section { max-width: 1260px; margin-inline: auto; padding-block: clamp(56px,6vw,88px); }
 .authors-section[tabindex="-1"]:focus, #authors-title:focus { outline: none; }
@@ -2109,18 +2147,42 @@ section[id], #top, #authors-title { scroll-margin-top: calc(var(--header-height,
       <div class="signal-engine" aria-hidden="true">
 <svg class="signal-instrument" viewBox="0 0 800 440" fill="none" aria-hidden="true">
           <defs>
-            <linearGradient id="coach-gold" x1="0" y1="0" x2=".15" y2="1"><stop stop-color="#fff1a4"/><stop offset=".38" stop-color="#ffcb46"/><stop offset="1" stop-color="#d18a16"/></linearGradient>
-            <linearGradient id="coach-front" x1="0" y1="0" x2="1" y2=".9"><stop stop-color="#ffe991"/><stop offset=".5" stop-color="#ffd049"/><stop offset="1" stop-color="#b67515"/></linearGradient>
-            <linearGradient id="coach-glass" x1="0" y1="0" x2=".7" y2="1"><stop stop-color="#699fa8"/><stop offset=".4" stop-color="#264c61"/><stop offset=".44" stop-color="#497b88"/><stop offset="1" stop-color="#102735"/></linearGradient>
+            <linearGradient id="coach-gold" x1="0" y1="0" x2=".1" y2="1"><stop stop-color="#f8db79"/><stop offset=".3" stop-color="#e9b62e"/><stop offset=".48" stop-color="#f6ca40"/><stop offset=".82" stop-color="#d89c16"/><stop offset="1" stop-color="#92641b"/></linearGradient>
+            <linearGradient id="coach-front" x1="0" y1="0" x2="1" y2=".7"><stop stop-color="#ffe995"/><stop offset=".24" stop-color="#f5c834"/><stop offset=".8" stop-color="#deb025"/><stop offset="1" stop-color="#a47519"/></linearGradient>
+            <linearGradient id="coach-glass" x1="0" y1="0" x2=".25" y2="1"><stop stop-color="#9bb5b9"/><stop offset=".22" stop-color="#42646d"/><stop offset=".5" stop-color="#264650"/><stop offset=".58" stop-color="#415b57"/><stop offset="1" stop-color="#10242c"/></linearGradient>
             <linearGradient id="coach-roof" x2="1" y2="1"><stop stop-color="#fff7c4"/><stop offset=".55" stop-color="#f4d574"/><stop offset="1" stop-color="#dca939"/></linearGradient>
             <linearGradient id="coach-lamp"><stop stop-color="#fff8cf" stop-opacity=".65"/><stop offset="1" stop-color="#ffeab2" stop-opacity="0"/></linearGradient>
             <radialGradient id="coach-rubber"><stop stop-color="#1b2a36"/><stop offset=".6" stop-color="#0a151d"/><stop offset=".85" stop-color="#30404a"/><stop offset="1" stop-color="#061016"/></radialGradient>
             <radialGradient id="coach-metal"><stop stop-color="#edf2ed"/><stop offset=".35" stop-color="#708592"/><stop offset=".55" stop-color="#d9dfda"/><stop offset="1" stop-color="#526672"/></radialGradient>
             <linearGradient id="coach-reflection" x2="1" y2="1"><stop stop-color="#d5fcff" stop-opacity=".55"/><stop offset="1" stop-color="#d5fcff" stop-opacity="0"/></linearGradient>
-            <g id="coach-window"><rect width="31" height="64" rx="3" fill="#0b2231"/><rect x="3" y="3" width="25" height="56" rx="2" fill="url(#coach-glass)"/><path d="M3 40h25M15 3v56" stroke="#172d36" stroke-width="2"/><path d="m4 5 7 1-7 24z" fill="#b9f7ff" opacity=".18"/></g>
-            <g id="coach-wheel"><ellipse rx="23" ry="32" fill="url(#coach-rubber)" stroke="#4b5e65" stroke-width="1.5"/><ellipse rx="15" ry="22" fill="url(#coach-metal)"/><ellipse rx="10" ry="15" fill="#243b47"/><path d="M0-14v28m-9-20 18 12m-18 0L9-6" stroke="#c3d2d2" stroke-width="3"/><ellipse rx="5" ry="7" fill="#bac9c4" stroke="#e3e9dc"/><path d="M-19-8q-4 21 11 34" stroke="#77878a" opacity=".5"/></g>
+            <radialGradient id="coach-shadow"><stop stop-color="#000" stop-opacity=".7"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
+            <radialGradient id="coach-lens" cx=".4" cy=".35"><stop stop-color="#fffef0"/><stop offset=".35" stop-color="#d8e3dd"/><stop offset=".7" stop-color="#8a9da3"/><stop offset="1" stop-color="#354b54"/></radialGradient>
+            <linearGradient id="coach-chrome" x2=".2" y2="1"><stop stop-color="#dce5df"/><stop offset=".35" stop-color="#4f636d"/><stop offset=".5" stop-color="#adbcb9"/><stop offset="1" stop-color="#243c46"/></linearGradient>
+            <g id="coach-window">
+              <rect width="31" height="64" rx="3" fill="#10222a" stroke="#627976" stroke-width=".7"/>
+              <rect x="3" y="3" width="25" height="56" rx="2" fill="url(#coach-glass)"/>
+              <path d="M6 57V42q0-7 5-7h5q5 0 5 7v15" fill="#132a31" opacity=".65"/>
+              <path d="m4 29 7-12 4 7 6-12 6 10v12H4z" fill="#173a36" opacity=".3"/>
+              <path d="M3 38h25M15 3v56" stroke="#162b33" stroke-width="2"/>
+              <path d="M4 39h23M16 4v33" stroke="#bdcbc0" stroke-opacity=".6" stroke-width=".7"/>
+              <path d="m5 5 7 1-7 24z" fill="#e8ffff" opacity=".15"/><path d="M5 4h21" stroke="#d0e2df" stroke-opacity=".55"/>
+              <path d="M19 34h5" stroke="#8ca3a4" stroke-width="1.2"/>
+            </g>
+            <g id="coach-wheel">
+              <ellipse rx="23" ry="32" fill="url(#coach-rubber)" stroke="#141e23" stroke-width="2"/>
+              <ellipse rx="21" ry="29" stroke="#536068" stroke-opacity=".5" stroke-dasharray="2 3"/>
+              <ellipse rx="17" ry="24" fill="#08141c" stroke="#63747b" stroke-width=".8"/>
+              <g transform="scale(.69 1)"><g class="coach-hub">
+                <circle r="21" fill="url(#coach-metal)" stroke="#d6ded5" stroke-width=".8"/>
+                <g fill="#142a35"><ellipse cy="-14" rx="3" ry="4"/><ellipse cy="14" rx="3" ry="4"/><ellipse cx="12" cy="-7" rx="3" ry="4" transform="rotate(60 12 -7)"/><ellipse cx="-12" cy="7" rx="3" ry="4" transform="rotate(60 -12 7)"/><ellipse cx="12" cy="7" rx="3" ry="4" transform="rotate(-60 12 7)"/><ellipse cx="-12" cy="-7" rx="3" ry="4" transform="rotate(-60 -12 -7)"/></g>
+                <circle r="7" fill="url(#coach-chrome)" stroke="#b2c3c2"/>
+                <g fill="#e4ebe0"><circle cy="-9" r="1.3"/><circle cy="9" r="1.3"/><circle cx="8" cy="-4.5" r="1.3"/><circle cx="-8" cy="4.5" r="1.3"/><circle cx="8" cy="4.5" r="1.3"/><circle cx="-8" cy="-4.5" r="1.3"/></g>
+                <circle r="3" fill="#5d737d"/>
+              </g></g>
+              <path d="M-19-8q-4 21 11 34" stroke="#91a09e" stroke-opacity=".38" stroke-width="1.2"/>
+            </g>
           </defs>
-          <ellipse cx="405" cy="352" rx="294" ry="38" fill="#000" opacity=".38"/>
+          <ellipse cx="411" cy="348" rx="310" ry="53" fill="url(#coach-shadow)"/>
           <g class="road-grid" stroke="#416966" stroke-width=".8" opacity=".55"><path d="m25 277 440 96 298-98M66 304l365 80m-286-126 449 97m-302-116 423 89M117 315l163-74m-22 104 162-73m-13 105 171-75"/></g>
           <g class="road-stream" stroke="#66bdb4" stroke-width="1.5" opacity=".45" stroke-dasharray="22 36"><path d="m32 304 381 83M310 236l454 99"/></g>
           <path class="departure-line" pathLength="1" d="m35 284 417 91 281-91" stroke="#73edda" stroke-width="2"/>
@@ -2128,7 +2190,7 @@ section[id], #top, #authors-title { scroll-margin-top: calc(var(--header-height,
             <g class="coach-chassis"><path d="m104 258 404 87 163-57-3 24-162 60-402-88z" fill="#0a202b" stroke="#526b6d"/><path d="m134 275 353 76" stroke="#9ab4a5" opacity=".35"/></g>
             <g class="coach-shell">
               <path d="M104 133 501 214l4 137-39-8q-5-43-28-47t-28 35l-203-44q-4-43-28-47t-28 35l-44-10q-7-2-7-10z" fill="url(#coach-gold)" stroke="#e7be5d"/>
-              <path d="m501 214 154-56q13 2 18 28l17 95q3 16-9 23l-176 65z" fill="url(#coach-front)" stroke="#dca64b"/>
+              <path d="m501 214 154-36q13 2 18 28l17 75q3 16-9 23l-176 65z" fill="url(#coach-front)" stroke="#c39b3e"/>
               <path d="m105 222 395 83" stroke="#c25326" stroke-width="7"/>
               <path d="m106 258 44 10m58 13 201 43m58 14 36 8" stroke="#6b552c" stroke-width="5"/>
               <path d="m107 232 385 81m-380-75 380 81" stroke="#ffe79b" stroke-opacity=".7"/>
@@ -2137,6 +2199,9 @@ section[id], #top, #authors-title { scroll-margin-top: calc(var(--header-height,
               <text transform="matrix(1 .208 0 1 222 270)" fill="#493a24" font-family="system-ui,sans-serif" font-weight="800" font-size="15" letter-spacing="1">SAHRDAYA</text>
               <text transform="matrix(1 .208 0 1 222 282)" fill="#68512c" font-family="system-ui,sans-serif" font-size="7.1">COLLEGE OF ENGINEERING &amp; TECHNOLOGY</text>
               <path d="m130 245 12 3m337 68 13 3" stroke="#fff3bb" stroke-width="3" stroke-linecap="round"/>
+              <path d="m112 244 33 7m69 15 185 39m75 16 23 5" stroke="#a8751d" stroke-width=".8"/>
+              <path d="m113 241 30 6m71 15 185 39m75 16 23 5" stroke="#fff0af" stroke-opacity=".4" stroke-width=".7"/>
+              <g fill="#a77d28"><circle cx="117" cy="250" r="1"/><circle cx="236" cy="279" r="1"/><circle cx="287" cy="290" r="1"/><circle cx="355" cy="304" r="1"/><circle cx="394" cy="312" r="1"/></g>
             </g>
             <g class="coach-cabin">
               <g transform="matrix(1 .205 0 1 111 150)">
@@ -2144,38 +2209,45 @@ section[id], #top, #authors-title { scroll-margin-top: calc(var(--header-height,
                 <use href="#coach-window" x="4" y="3"/><use href="#coach-window" x="38" y="3"/><use href="#coach-window" x="72" y="3"/><use href="#coach-window" x="106" y="3"/><use href="#coach-window" x="140" y="3"/><use href="#coach-window" x="174" y="3"/><use href="#coach-window" x="208" y="3"/><use href="#coach-window" x="242" y="3"/><use href="#coach-window" x="276" y="3"/><use href="#coach-window" x="310" y="3"/><use href="#coach-window" x="344" y="3"/>
                 <path d="M4 6h369M4 68h369" stroke="#91b3ac" stroke-width="1"/>
               </g>
-              <path d="m513 217 137-49q9-2 12 14l12 65-157 57z" fill="#102a38" stroke="#fff1b7" stroke-width="2"/>
-              <path d="m520 223 130-46 11 66-139 50z" fill="url(#coach-glass)"/>
-              <path d="m527 226 32-11-26 71-10 4zM593 201l13-5-25 77-15 5z" fill="url(#coach-reflection)"/>
-              <path d="m517 218 132-48 2 15-132 48z" fill="#f7edcb"/>
-              <text transform="matrix(.93 -.34 .08 1 529 226)" fill="#23435c" font-family="system-ui,sans-serif" font-size="13" font-weight="850" letter-spacing=".8">SAHRDAYA</text>
-              <path d="m529 283 45-28m17 9 52-32" stroke="#071b27" stroke-width="3" stroke-linecap="round"/>
-              <path d="m577 260 2 10m61-34 2 12" stroke="#8ca4a4"/>
+              <path d="m513 219 135-33q12-3 15 14l11 51q1 6-5 8l-149 53q-4 2-4-8z" fill="#112630" stroke="#c9ba7e" stroke-width="2"/>
+              <path d="m520 239 133-33 10 44-141 51z" fill="url(#coach-glass)"/>
+              <path d="m528 246 27-7-20 57-12 4zM599 226l12-3-22 53-16 6z" fill="url(#coach-reflection)"/>
+              <path d="m527 299 132-46-7-8-22 7-18-2-27 15-32 6-27 14z" fill="#142b33" opacity=".7"/>
+              <ellipse cx="551" cy="282" rx="12" ry="7" transform="rotate(-19 551 282)" stroke="#101b20" stroke-width="3"/><path d="m551 281 1 15" stroke="#18272c" stroke-width="3"/>
+              <path d="m517 221 132-33 3 13-134 35z" fill="#e5e5cf"/>
+              <text transform="matrix(.93 -.24 .08 1 529 231)" fill="#23435c" font-family="system-ui,sans-serif" font-size="13" font-weight="850" letter-spacing=".8">SAHRDAYA</text>
+              <path d="m531 298 33-31m32 8 42-31" stroke="#091b25" stroke-width="2.5" stroke-linecap="round"/>
+              <path d="m548 284 26-25m40 4 28-23" stroke="#77918f" stroke-width=".8"/>
+              <circle cx="531" cy="298" r="2" fill="#b7c3af"/><circle cx="596" cy="275" r="2" fill="#b7c3af"/>
               <path d="m480 229 12 2 3 68-12-2z" stroke="#9f8a52"/><path d="m484 260 5 1" stroke="#fff0a3"/>
             </g>
             <g class="coach-roof">
-              <path d="m104 133 150-53q9-3 21 0l380 78-154 56z" fill="url(#coach-roof)" stroke="#fff2b0" stroke-width="2"/>
-              <path d="m116 132 141-47 380 76-135 48z" fill="none" stroke="#cb9d42"/>
-              <path d="m205 122 42-14 93 19-40 15zm159 33 42-15 98 20-42 15z" fill="#a5915c" stroke="#d6c086"/>
-              <path d="m217 121 79 17m-61-23 79 17m62 21 80 17m-63-23 80 17" stroke="#5e6c66" stroke-width="2"/>
+              <path d="m104 133 150-33q9-3 21 0l380 78-154 36z" fill="url(#coach-roof)" stroke="#ebd38e" stroke-width="1.4"/>
+              <path d="m116 132 141-27 380 76-135 28z" fill="none" stroke="#c9a84f" stroke-width=".8"/>
+              <path d="m205 133 42-9 93 19-40 9zm159 33 42-9 98 20-42 9z" fill="#b7aa78" stroke="#e1d5a5"/>
+              <path d="m217 133 79 17m-61-21 79 17m62 21 80 17m-63-21 80 17" stroke="#6c756d" stroke-width="1.5"/>
               <path d="m117 138 378 77" stroke="#fff6c8" stroke-width="2"/>
             </g>
             <g class="coach-wheels"><use href="#coach-wheel" transform="translate(179 274) rotate(-9)"/><use href="#coach-wheel" transform="translate(438 328) rotate(-9)"/></g>
             <g class="coach-details">
+              <path d="m148 272q-1-43 29-38t31 45m201 49q-1-43 29-38t31 45" stroke="#976f27" stroke-width="4"/>
+              <path d="m148 270q0-41 29-36t31 43m201 47q0-41 29-36t31 43" stroke="#ffe08b" stroke-opacity=".7" stroke-width="1"/>
               <path d="m519 319 155-56 3 23-156 58z" fill="#243746" stroke="#e1ce91"/>
               <path d="m562 314 70-25 4 14-72 26z" fill="#0a202b"/><path d="m567 315 62-23m-60 28 62-23" stroke="#849f9e"/>
               <ellipse cx="598" cy="307" rx="8" ry="9" fill="#b8c8be" transform="rotate(-20 598 307)"/><path d="m593 307 10-4m-5 2 1 6" stroke="#203f48" stroke-width="2"/>
-              <path d="m522 316 23-8 5 17-25 9zm126-46 22-8 6 18-25 9z" fill="#8fa7ad" stroke="#e0e4c5"/>
-              <path d="m526 322 16-6m111-37 15-5" stroke="#f9f3d9" stroke-width="5" stroke-linecap="round"/>
+              <path d="m522 316 23-8 5 17-25 9zm126-46 22-8 6 18-25 9z" fill="#26383e" stroke="url(#coach-chrome)" stroke-width="1.5"/>
+              <g fill="url(#coach-lens)" stroke="#c2cdbe" stroke-width=".6"><ellipse cx="531" cy="321" rx="4" ry="5"/><ellipse cx="542" cy="317" rx="4" ry="5"/><ellipse cx="657" cy="276" rx="4" ry="5"/><ellipse cx="668" cy="272" rx="4" ry="5"/></g>
               <path d="m527 333 18-6m109-42 15-5" stroke="#f0a541" stroke-width="3"/>
               <g transform="matrix(1 -.36 .08 1 570 324)"><rect width="65" height="20" rx="2" fill="#ffd85c" stroke="#574c2d"/><text x="5" y="13" fill="#302e24" font-family="ui-monospace,monospace" font-size="7.6" font-weight="800">KL 03 AA 2007</text></g>
               <path d="m508 365 166-60" stroke="#fff0b5" stroke-width="4"/>
-              <path d="m507 217-18-6-6 11m178-47 23-9 12 6" stroke="#122b39" stroke-width="6" stroke-linecap="round"/>
-              <rect x="475" y="216" width="14" height="29" rx="5" fill="#172f3e" stroke="#9bab9c"/><rect x="691" y="167" width="15" height="32" rx="5" fill="#142e3c" stroke="#acbca7"/>
-              <path d="m504 208 14-5m123-45 12 3" stroke="#ffedba" stroke-width="4" stroke-linecap="round"/>
+              <path d="m507 217-18-6-6 11m178-27 23-9 12 6" stroke="#122b39" stroke-width="5" stroke-linecap="round"/>
+              <path d="m507 216-18-6m174-17 21-7" stroke="#99aaa2" stroke-opacity=".5" stroke-width="1"/>
+              <rect x="475" y="216" width="14" height="29" rx="5" fill="url(#coach-chrome)" stroke="#233740"/><rect x="478" y="218" width="9" height="24" rx="3" fill="#19333d"/>
+              <rect x="691" y="187" width="15" height="32" rx="5" fill="url(#coach-chrome)" stroke="#233740"/><rect x="694" y="189" width="9" height="27" rx="3" fill="#203e47"/>
+              <path class="coach-indicators" d="m504 208 14-3m123-27 12 3" stroke="#ffc66a" stroke-width="3" stroke-linecap="round"/>
             </g>
-            <path class="coach-outline" pathLength="1" d="M104 265V133l150-53q9-3 21 0l380 78q13 2 18 28l17 95q3 16-9 23l-176 65zM104 133l397 81 154-56m-154 56 4 155" stroke="#acfff0" stroke-width="1.7"/>
-            <g class="coach-lights"><path d="m529 322 16-6 220 30v48zM655 278l14-5 112 10v30z" fill="url(#coach-lamp)"/><path d="m528 322 16-6m111-38 14-5" stroke="#ffffec" stroke-width="5" stroke-linecap="round"/></g>
+            <path class="coach-outline" pathLength="1" d="M104 265V133l150-33q9-3 21 0l380 78q13 2 18 28l17 75q3 16-9 23l-176 65zM104 133l397 81 154-36m-154 36 4 155" stroke="#acfff0" stroke-width="1.2"/>
+            <g class="coach-lights"><path d="m529 322 16-6 220 30v48zM655 278l14-5 112 10v30z" fill="url(#coach-lamp)" opacity=".45"/><g fill="#fff7dc"><ellipse cx="531" cy="320" rx="2.2" ry="2.8"/><ellipse cx="542" cy="316" rx="2.2" ry="2.8"/><ellipse cx="657" cy="275" rx="2.2" ry="2.8"/><ellipse cx="668" cy="271" rx="2.2" ry="2.8"/></g></g>
           </g>
           <g class="coach-dimensions" stroke="#7edace" stroke-width=".8" opacity=".65"><path d="m105 100 132-47m-139 41 6 12m127-59 8 13M80 149v108m-6-109h12m-12 109h12"/><circle cx="80" cy="204" r="3" fill="#a5fff1"/></g>
         </svg>
@@ -2885,7 +2957,15 @@ section[id], #top, #authors-title { scroll-margin-top: calc(var(--header-height,
         photo.append(portrait, number);
         const caption = document.createElement("figcaption");
         const name = document.createElement("strong");
-        name.textContent = card.querySelector("h3").textContent;
+        const nameWords = card.querySelector("h3").textContent.trim().split(/\s+/);
+        nameWords.forEach((word, wordIndex) => {
+          const part = document.createElement("span");
+          part.className = "signal-name-word";
+          part.style.setProperty("--name-order", wordIndex);
+          part.textContent = word;
+          name.append(part);
+          if (wordIndex < nameWords.length - 1) name.append(" ");
+        });
         const role = document.createElement("small");
         role.className = "film-meta";
         role.textContent = card.querySelector(".authors-role-pill").textContent;
@@ -2902,23 +2982,24 @@ section[id], #top, #authors-title { scroll-margin-top: calc(var(--header-height,
       }
       if (film.dataset.phase !== stage.key) {
         film.dataset.phase = stage.key;
-        log.textContent = stage.caption;
         status.textContent = stage.title;
       }
+      const caption = elapsed >= 6500 ? "Ready for your journey" : stage.caption;
+      if (log.textContent !== caption) log.textContent = caption;
       const charge = Math.min(1, elapsed / revealAt);
       const reading = String(Math.floor(charge * 100)).padStart(3, "0") + "%";
       if (percent.textContent !== reading) {
         percent.textContent = reading;
         film.style.setProperty("--charge", String(charge));
       }
-      film.classList.toggle("is-ending", elapsed >= 8400);
+      film.classList.toggle("is-ending", elapsed >= 9500);
     };
     const tick = (now) => {
       if (!film.open || document.hidden) return;
       if (previousTime !== undefined) elapsed += now - previousTime;
       previousTime = now;
       renderFilm();
-      if (elapsed >= 8800) {
+      if (elapsed >= 9900) {
         focusAfter = title;
         film.close();
       } else {
@@ -2928,6 +3009,7 @@ section[id], #top, #authors-title { scroll-margin-top: calc(var(--header-height,
     const playFilm = (afterEscape) => {
       if (film.open) return;
       fillCredits();
+      film.classList.toggle("is-static", paused || matchMedia("(prefers-reduced-motion: reduce)").matches);
       focusAfter = afterEscape;
       elapsed = 0;
       previousTime = undefined;
@@ -2951,7 +3033,7 @@ section[id], #top, #authors-title { scroll-margin-top: calc(var(--header-height,
       if (!document.hidden) frame = requestAnimationFrame(tick);
     });
     replay.addEventListener("click", () => playFilm(replay));
-    const sessionKey = "bustrack-campus-departure";
+    const sessionKey = "bustrack-campus-departure-v2";
     const startOnArrival = () => {
       try { if (sessionStorage.getItem(sessionKey)) return; } catch {}
       if (location.hash || !canAnimate() || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
