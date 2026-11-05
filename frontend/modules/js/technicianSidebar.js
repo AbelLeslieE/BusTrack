@@ -12,12 +12,12 @@ function navItem([route, label, icon], activeRoute) {
     </a>`;
 }
 
-export function createTechnicianSidebar(activeRoute, onNavigate) {
+export function createTechnicianSidebar(activeRoute, onNavigate, {tracerPortal = false} = {}) {
     const profile = JSON.parse(localStorage.getItem("bus_tracker_profile") || "{}");
-    const isTracer = String(profile.role || "").toLowerCase() === "tracer";
+    const isTracer = tracerPortal || String(profile.role || "").toLowerCase() === "tracer";
     const workspaceItems = isTracer ? [["routeStudio", "Trace assigned bus", "⌁"]] : technicianItems;
     const sidebar = document.createElement("aside");
-    sidebar.className = "sidebar glass-panel";
+    sidebar.className = `sidebar glass-panel${isTracer ? " tracer-sidebar" : " technician-sidebar"}`;
     sidebar.innerHTML = `
         <div class="sidebar-mobile-header">
             <a class="brand" href="${isTracer ? "#routeStudio" : "#technicianDashboard"}"><span class="brand-mark"><img src="/static/assets/images/logo.png?v=20261015logo2" alt="" aria-hidden="true"></span><div class="brand-text"><span class="brand-title">BusTrack</span><span class="brand-subtitle">${isTracer ? "Tracer Portal" : "Technician Portal"}</span></div></a>
@@ -42,6 +42,14 @@ export function createTechnicianSidebar(activeRoute, onNavigate) {
     return sidebar;
 }
 
+export function createTracerSidebar(activeRoute, onNavigate) {
+    return createTechnicianSidebar(activeRoute, onNavigate, {tracerPortal:true});
+}
+
 export function setTechnicianSidebarActive(sidebar, activeRoute) {
     sidebar.querySelectorAll("[data-route]").forEach(link => link.classList.toggle("is-active", link.dataset.route === activeRoute));
+}
+
+export function createTracerSidebar(activeRoute, onNavigate) {
+    return createTechnicianSidebar(activeRoute, onNavigate, {tracerPortal:true});
 }

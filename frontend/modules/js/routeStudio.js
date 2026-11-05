@@ -14,8 +14,8 @@ async function api(path, data, method = 'POST') {
     } finally { clearTimeout(timeout); }
 }
 const profile = JSON.parse(localStorage.getItem('bus_tracker_profile') || '{}');
-const tracer = profile.role === 'Tracer';
-const admin = profile.role === 'Admin';
+const tracer = String(profile.role || '').toLowerCase() === 'tracer';
+const admin = String(profile.role || '').toLowerCase() === 'admin';
 
 function openStore() {
     return new Promise((resolve, reject) => {
@@ -97,7 +97,7 @@ export function render() {
         const el = root.querySelector('.studio-editor');
         if (!selected || tracer) { el.innerHTML = ''; return; }
         el.innerHTML = `<h2>${esc(selected.status)} · revision ${selected.revision}</h2><p>This is a GPS trace, not a verified road-matched route. Review gaps and accuracy before selecting it. Click the map to add a stop; drag stop markers to move them.</p>
-          <div class="studio-controls"><button data-action="undo">Undo</button><button data-action="redo">Redo</button><button data-action="save">Save draft</button><button data-action="copy">New draft version</button><button data-action="reload">Cancel edits</button>${profile.role === 'Admin' ? '<button data-action="traced">Approve and select traced route</button><button data-action="manual">Use original manual route</button>' : ''}</div>
+          <div class="studio-controls"><button data-action="undo">Undo</button><button data-action="redo">Redo</button><button data-action="save">Save draft</button><button data-action="copy">New draft version</button><button data-action="reload">Cancel edits</button>${String(profile.role || '').toLowerCase() === 'admin' ? '<button data-action="traced">Approve and select traced route</button><button data-action="manual">Use original manual route</button>' : ''}</div>
           <div class="studio-controls"><select class="studio-master-stop" aria-label="Existing stop">${masterStops.map((s,i) => `<option value="${i}">${esc(s.name)}</option>`).join('')}</select><button data-action="existing-stop">Add existing stop</button></div><ol class="studio-stops">${selected.stops.map((s,i) => `<li><input data-stop="${i}" value="${esc(s.name)}" aria-label="Stop name"><span>${s.latitude.toFixed(5)}, ${s.longitude.toFixed(5)}</span><button data-up="${i}">↑</button><button data-down="${i}">↓</button><button data-remove="${i}">Remove</button></li>`).join('')}</ol>
           <details><summary>Edit trace coordinates (longitude, latitude)</summary><p>Corrections are unverified GPS geometry. Do not bridge missing sections without evidence.</p><textarea class="studio-geometry" aria-label="Trace coordinates" rows="8" style="width:100%">${esc(JSON.stringify(selected.geometry))}</textarea><button data-action="geometry">Apply coordinate edits</button></details>`;
     }

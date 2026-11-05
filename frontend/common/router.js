@@ -20,8 +20,9 @@ import {
 
 import {
     createTechnicianSidebar,
+    createTracerSidebar,
     setTechnicianSidebarActive
-} from "../modules/js/technicianSidebar.js?v=20261015logo2";
+} from "../modules/js/technicianSidebar.js?v=20261105tracerportal2";
 
 
 import {
@@ -208,7 +209,6 @@ const studentModules = {
 };
 
 const technicianModules = {
-    routeStudio: { title: "Routes · Traced paths", load: () => import("../modules/js/routeStudio.js") },
     technicianDashboard: {
         title: "GPS Integration",
         load: () => import("../modules/js/technicianDashboard.js?v=20261015a")
@@ -218,6 +218,10 @@ const technicianModules = {
         load: () => import("../modules/js/providerHealth.js?v=20261017fix1")
     }
 };
+const tracerModules = {
+    routeStudio: { title: "Trace assigned bus", load: () => import("../modules/js/routeStudio.js?v=20261105tracerportal1") },
+};
+
 let shell;
 let navigationVersion = 0;
 
@@ -239,11 +243,7 @@ const isDriver = activeRole === ROLE_DRIVER;
 // User accounts use the existing student transport-profile tables and views.
 const isStudent = activeRole === ROLE_USER;
 const isTracer = activeRole === "tracer";
-const isTechnician = activeRole === ROLE_TECHNICIAN || isTracer;
-if (isTracer) {
-    delete technicianModules.providerHealth;
-    delete technicianModules.technicianDashboard;
-}
+const isTechnician = activeRole === ROLE_TECHNICIAN;
 
 
 /* ==========================================================
@@ -255,6 +255,8 @@ const modules =
         ? driverModules
         : isStudent
             ? studentModules
+            : isTracer
+                ? tracerModules
             : isTechnician
                 ? technicianModules
             : isAdmin
@@ -377,11 +379,14 @@ function createShell(initialRoute) {
         );
 
     }
+    else if (isTracer) {
+        document.body.classList.add("tracer-theme");
+    }
 
     else if (isTechnician) {
 
         document.body.classList.add(
-            "technician-theme"
+            "technician-theme
         );
 
     }
@@ -453,7 +458,8 @@ function createShell(initialRoute) {
                     initialRoute,
                     navigate
                 )
-
+                : isTracer
+                    ? createTracerSidebar(initialRoute, navigate)
                 : isTechnician
 
                     ? createTechnicianSidebar(
@@ -492,7 +498,7 @@ function createShell(initialRoute) {
                 : createTopbar(
                     toggleSidebar
                 );
-  if (isTechnician) {
+  if (isTechnician || isTracer) {
       topbar.querySelector(".topbar-actions")?.remove();
   } else {
       topbar.querySelector(".notification-button")?.addEventListener("click", () => navigate("notifications"));
@@ -610,8 +616,10 @@ export async function loadModule(requestedRoute) {
             ? "driverDashboard"
             : isStudent
                 ? "studentTracking"
+                : isTracer
+                    ? "routeStudio"
                 : isTechnician
-                    ? (isTracer ? "routeStudio" : "technicianDashboard")
+                    ? "technicianDashboard"
                 : "dashboard";
 
   if (!requestedRoute) {
@@ -675,7 +683,7 @@ export async function loadModule(requestedRoute) {
 
     }
 
-    else if (isTechnician) {
+    else if (isTechnician || isTracer) {
 
         setTechnicianSidebarActive(
             shell.sidebar,
@@ -752,8 +760,10 @@ window.addEventListener(
                 ? "driverDashboard"
                 : isStudent
                     ? "studentTracking"
-                    : isTechnician
-                        ? (isTracer ? "routeStudio" : "technicianDashboard")
+                : isTracer
+                    ? "routeStudio"
+                : isTechnician
+                        ? "technicianDashboard"
                     : "dashboard";
 
 
