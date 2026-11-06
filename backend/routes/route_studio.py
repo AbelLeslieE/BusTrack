@@ -18,7 +18,7 @@ from backend.services.trip_reset import lock_tracking_bus, as_utc
 from backend.routes.models_tracking import LiveTrip
 from backend.services.generated_codes import lock_generated_code_writes, next_route_code
 from backend.services.stop_codes import lock_stop_code_writes, next_stop_code
-from backend.services.road_matching import road_geometry
+from backend.services.road_matching import planned_route, road_geometry
 from backend.audit import record_audit_event
 
 router = APIRouter(prefix="/api/route-studio", tags=["Route Studio"])
@@ -73,20 +73,81 @@ class DraftStop(Strict):
     longitude: float = Field(ge=-180, le=180)
     radius: int = Field(default=50, ge=10, le=1000)
 
+
+class RouteGuide(Strict):
+    segment: int = Field(ge=0, le=198)
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+
+
 class Draft(Strict):
     revision: int
     name: str = Field(min_length=1, max_length=100)
     stops: list[DraftStop] = Field(max_length=200)
     geometry: list[list[float]] = Field(min_length=2, max_length=20000)
+    guide_points: list[RouteGuide] = Field(default_factory=list, max_length=198)
+    geometry_source: Literal["trace", "road"] = "trace"
+    source_geometry: list[list[float]] | None = Field(default=None, min_length=2, max_length=20000)
+
+
+class RoadPlan(Strict):
+    revision: int
+    stops: list[DraftStop] = Field(min_length=2, max_length=200)
+    guide_points: list[RouteGuide] = Field(default_factory=list, max_length=198)
 
 class Select(Strict):
     mode: Literal["manual", "traced"]
     revision: int
 
+def _route_plan(s):
+    """Decode legacy stop lists and the richer, backward-compatible plan."""
+    stored = json.loads(s.stops_json)
+    geometry = json.loads(s.geometry_json)
+    if isinstance(stored, list):
+        return {
+            "stops": stored,
+            "guide_points": [],
+            "geometry_source": "trace",
+            "source_geometry": geometry,
+        }
+    if not isinstance(stored, dict) or not isinstance(stored.get("stops"), list):
+        raise HTTPException(500, "This saved route plan is invalid.")
+    return {
+        "stops": stored["stops"],
+        "guide_points": stored.get("guide_points", []),
+        "geometry_source": stored.get("geometry_source", "trace"),
+        "source_geometry": stored.get("source_geometry") or geometry,
+    }
+
+
+def _encode_route_plan(*, stops, guide_points, geometry_source, source_geometry):
+    return json.dumps({
+        "stops": stops,
+        "guide_points": guide_points,
+        "geometry_source": geometry_source,
+        "source_geometry": source_geometry,
+    })
+
+
+def _ordered_anchors(stops, guides):
+    anchors = []
+    for segment, stop in enumerate(stops[:-1]):
+        anchors.append({"latitude": stop.latitude, "longitude": stop.longitude})
+        anchors.extend(
+            {"latitude": guide.latitude, "longitude": guide.longitude}
+            for guide in guides if guide.segment == segment
+        )
+    anchors.append({"latitude": stops[-1].latitude, "longitude": stops[-1].longitude})
+    return anchors
+
+
 def payload(s):
+    plan = _route_plan(s)
     return {"id": s.id, "bus_id": s.bus_id, "user_id": s.user_id, "name": s.name,
             "status": s.status, "revision": s.revision, "created_at": s.created_at,
-            "geometry": json.loads(s.geometry_json), "stops": json.loads(s.stops_json), "route_id": s.route_id}
+            "geometry": json.loads(s.geometry_json), "stops": plan["stops"],
+            "guide_points": plan["guide_points"], "geometry_source": plan["geometry_source"],
+            "source_geometry": plan["source_geometry"], "route_id": s.route_id}
 
 def owned(db, sid, actor, write=False):
     s = db.get(TraceSession, sid)
@@ -236,7 +297,7 @@ def select_route(sid: str, data: Select, db: Session = Depends(get_db), actor=De
         if not target:
             raise HTTPException(409, "Original manual route is unavailable.")
     else:
-        stops = json.loads(s.stops_json)
+        stops = _route_plan(s)["stops"]
         if len(stops) < 2:
             raise HTTPException(422, "Add at least two confirmed stops before selecting this route.")
         target = db.get(Route, s.route_id) if s.route_id else None
@@ -276,6 +337,25 @@ def select_route(sid: str, data: Select, db: Session = Depends(get_db), actor=De
     db.commit()
     return payload(s)
 
+@router.post("/recordings/{sid}/road-route")
+def build_road_route(sid: str, data: RoadPlan, db: Session = Depends(get_db),
+                     actor=Depends(require_gps_technician), _=Depends(access)):
+    """Preview an OSRM road route through stops and fine-tuning anchors."""
+    s = owned(db, sid, actor)
+    if s.status != "DRAFT" or s.revision != data.revision:
+        raise HTTPException(409, "Reload the current unpublished draft before rebuilding its road route.")
+    if any(guide.segment >= len(data.stops) - 1 for guide in data.guide_points):
+        raise HTTPException(422, "A route guide refers to a stop segment that no longer exists.")
+    anchors = _ordered_anchors(data.stops, data.guide_points)
+    if len(anchors) > 200:
+        raise HTTPException(422, "This route has too many editing points. Remove some guide points and try again.")
+    try:
+        geometry = planned_route(anchors)
+    except Exception as error:
+        raise HTTPException(502, f"OSRM could not connect these points along roads: {error}") from error
+    return {"geometry": geometry, "anchor_count": len(anchors)}
+
+
 @router.put("/recordings/{sid}/draft")
 def edit(sid: str, data: Draft, db: Session = Depends(get_db), actor=Depends(require_gps_technician), _=Depends(access)):
     s = owned(db, sid, actor, True)
@@ -283,9 +363,24 @@ def edit(sid: str, data: Draft, db: Session = Depends(get_db), actor=Depends(req
         raise HTTPException(409, "Only the current unpublished draft can be edited.")
     if any(len(p) != 2 or not -180 <= p[0] <= 180 or not -90 <= p[1] <= 90 for p in data.geometry):
         raise HTTPException(422, "Invalid longitude/latitude path.")
+    if data.source_geometry and any(len(p) != 2 or not -180 <= p[0] <= 180 or not -90 <= p[1] <= 90 for p in data.source_geometry):
+        raise HTTPException(422, "Invalid original tracer geometry.")
     if len({p.name.strip().casefold() for p in data.stops}) != len(data.stops):
         raise HTTPException(422, "Stop names must be unique within a route.")
-    s.name, s.geometry_json, s.stops_json = data.name, json.dumps(data.geometry), json.dumps([p.model_dump() for p in data.stops])
+    if any(guide.segment >= max(0, len(data.stops) - 1) for guide in data.guide_points):
+        raise HTTPException(422, "A route guide refers to a stop segment that no longer exists.")
+    existing = _route_plan(s)
+    source_geometry = data.source_geometry or existing["source_geometry"] or data.geometry
+    if data.geometry_source == "trace":
+        source_geometry = data.geometry
+    s.name = data.name
+    s.geometry_json = json.dumps(data.geometry)
+    s.stops_json = _encode_route_plan(
+        stops=[p.model_dump() for p in data.stops],
+        guide_points=[p.model_dump() for p in data.guide_points],
+        geometry_source=data.geometry_source,
+        source_geometry=source_geometry,
+    )
     s.revision += 1
     record_audit_event(db, category="route_studio", action="draft_saved", actor=actor, subject_label=s.id)
     db.commit()

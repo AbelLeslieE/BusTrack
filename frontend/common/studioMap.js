@@ -25,12 +25,12 @@ function accuracyRing(point, metres) {
     return feature({type:'Polygon',coordinates:[coords]});
 }
 
-export async function createStudioMap(container, {onStop, onMoveStop, onError}) {
+export async function createStudioMap(container, {onStop, onMoveStop, onMoveGuide=()=>{}, onError}) {
     const gl=await loadStudioMapLibrary();
     const map=new gl.Map({container,style:'https://tiles.openfreemap.org/styles/liberty',center:[76,10],zoom:9,attributionControl:true});
     map.addControl(new gl.NavigationControl(),'top-right');
     map.addControl(new gl.ScaleControl({unit:'metric'}),'bottom-left');
-    let ready=false, destroyed=false, path=[], stops=[], editable=false, position=null, accuracy=0, following=true, marker=null, stopMarkers=[];
+    let ready=false, destroyed=false, path=[], stops=[], guides=[], editable=false, guidesEditable=false, position=null, accuracy=0, following=true, marker=null, stopMarkers=[], guideMarkers=[];
     let motionFrame=null, motionRunning=false, motionQueue=[];
     map.on('dragstart',()=>{following=false;});
     map.on('error',()=>{if(!destroyed) onError('Map tiles are unavailable. GPS recording and local storage can continue.');});
@@ -98,9 +98,19 @@ export async function createStudioMap(container, {onStop, onMoveStop, onError}) 
             stops=structuredClone(next);editable=canEdit;
             stopMarkers.forEach(m=>m.remove());stopMarkers=[];
             next.forEach((stop,index)=>{
-                const el=document.createElement('div');el.className='studio-stop-pin';el.textContent=String(index+1);el.title=stop.name;
+                const el=document.createElement('div');el.className='studio-stop-pin';el.textContent=String(index+1);el.title=stop.name;el.addEventListener('click',event=>event.stopPropagation());
                 const m=new gl.Marker({element:el,draggable:canEdit}).setLngLat([stop.longitude,stop.latitude]).setPopup(new gl.Popup().setText(stop.name)).addTo(map);
                 m.on('dragend',()=>{const p=m.getLngLat();onMoveStop(index,{lat:p.lat,lng:p.lng});});stopMarkers.push(m);
+            });
+        },
+        setGuides(next, canEdit) {
+            if(JSON.stringify(guides)===JSON.stringify(next) && guidesEditable===canEdit) return;
+            guides=structuredClone(next);guidesEditable=canEdit;
+            guideMarkers.forEach(m=>m.remove());guideMarkers=[];
+            next.forEach((guide,index)=>{
+                const el=document.createElement('div');el.className='studio-guide-pin';el.textContent=`G${index+1}`;el.title=`Road edit point ${index+1}`;el.addEventListener('click',event=>event.stopPropagation());
+                const m=new gl.Marker({element:el,draggable:canEdit}).setLngLat([guide.longitude,guide.latitude]).setPopup(new gl.Popup().setText(`Fine-tuning point ${index+1} · between stops ${guide.segment+1} and ${guide.segment+2}`)).addTo(map);
+                m.on('dragend',()=>{const p=m.getLngLat();onMoveGuide(index,{lat:p.lat,lng:p.lng});});guideMarkers.push(m);
             });
         },
         setPosition(point, metres) {
@@ -111,6 +121,6 @@ export async function createStudioMap(container, {onStop, onMoveStop, onError}) 
             motionQueue.push({point:[point[0],point[1]],metres,duration});runMotionQueue();
         },
         follow(){following=true;if(position)map.easeTo({center:position,zoom:16,duration:500});},
-        remove(){destroyed=true;stopMotion();marker?.remove();stopMarkers.forEach(m=>m.remove());map.remove();}
+        remove(){destroyed=true;stopMotion();marker?.remove();stopMarkers.forEach(m=>m.remove());guideMarkers.forEach(m=>m.remove());map.remove();}
     };
 }

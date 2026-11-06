@@ -94,6 +94,50 @@ class RouteStudioTest(unittest.TestCase):
         self.assertEqual(self.db.get(Route,self.route.id).bus_id,self.bus.id)
         self.assertIsNone(published_geometry(self.db,s['route_id'],self.bus.id))
 
+    def test_osrm_road_plan_connects_stops_and_guides_in_order(self):
+        s=self.start(); api.upload(s['id'],api.Batch(points=self.points()),self.db,self.tracer)
+        s=api.action(s['id'],api.Action(action='finish',final_sequence=2),self.db,self.tracer)
+        stops=[
+            api.DraftStop(name='One',latitude=10.0,longitude=76.0),
+            api.DraftStop(name='Two',latitude=10.1,longitude=76.1),
+            api.DraftStop(name='Three',latitude=10.2,longitude=76.2),
+        ]
+        guides=[api.RouteGuide(segment=0,latitude=10.05,longitude=76.06)]
+        geometry=[[76.0,10.0],[76.04,10.03],[76.2,10.2]]
+        with patch('backend.routes.route_studio.planned_route',return_value=geometry) as route:
+            result=api.build_road_route(
+                s['id'],api.RoadPlan(revision=1,stops=stops,guide_points=guides),self.db,self.admin
+            )
+        self.assertEqual(result['geometry'],geometry)
+        self.assertEqual(result['anchor_count'],4)
+        route.assert_called_once_with([
+            {'latitude':10.0,'longitude':76.0},
+            {'latitude':10.05,'longitude':76.06},
+            {'latitude':10.1,'longitude':76.1},
+            {'latitude':10.2,'longitude':76.2},
+        ])
+
+    def test_route_plan_persists_edit_points_and_original_trace(self):
+        s=self.start(); api.upload(s['id'],api.Batch(points=self.points()),self.db,self.tracer)
+        s=api.action(s['id'],api.Action(action='finish',final_sequence=2),self.db,self.tracer)
+        source=s['geometry']
+        stops=[api.DraftStop(name=f'Stop {i}',latitude=10+i*.001,longitude=76) for i in range(2)]
+        road=[[76,10],[76.0002,10.0004],[76,10.001]]
+        guide=api.RouteGuide(segment=0,latitude=10.0004,longitude=76.0002)
+        saved=api.edit(s['id'],api.Draft(
+            revision=1,name=s['name'],stops=stops,geometry=road,
+            guide_points=[guide],geometry_source='road',source_geometry=source,
+        ),self.db,self.admin)
+        self.assertEqual(saved['geometry_source'],'road')
+        self.assertEqual(saved['guide_points'][0]['segment'],0)
+        self.assertEqual(saved['source_geometry'],source)
+        stored=json.loads(self.db.get(TraceSession,s['id']).stops_json)
+        self.assertEqual(stored['stops'][0]['name'],'Stop 0')
+        self.assertEqual(stored['geometry_source'],'road')
+        copied=api.copy_version(s['id'],self.db,self.admin)
+        self.assertEqual(copied['source_geometry'],source)
+        self.assertEqual(copied['guide_points'],saved['guide_points'])
+
     def test_midnight_once_catchup_and_coordinates_preserved(self):
         now=datetime(2026,11,6,0,1,tzinfo=IST)
         trip=LiveTrip(bus_id=self.bus.id,route_id=self.route.id,status='Running',route_direction='reverse',

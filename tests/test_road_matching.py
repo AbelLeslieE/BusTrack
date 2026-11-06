@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
-from backend.services.road_matching import _clean, road_geometry
+from backend.services.road_matching import _clean, planned_route, road_geometry
 
 
 class RoadMatchingMovementTest(unittest.TestCase):
@@ -60,6 +60,26 @@ class RoadMatchingMovementTest(unittest.TestCase):
         with patch.dict('os.environ', {'ROUTE_STUDIO_ROAD_MATCHING_ENABLED': 'true'}), \
              patch('backend.services.road_matching._request', return_value=detour):
             self.assertEqual(road_geometry(fixes), (expected, False))
+
+    def test_planned_route_preserves_order_and_requires_osrm_geometry(self):
+        anchors = [
+            {"latitude": 10.0, "longitude": 76.0},
+            {"latitude": 10.1, "longitude": 76.1},
+            {"latitude": 10.2, "longitude": 76.2},
+        ]
+        geometry = [[76.0, 10.0], [76.05, 10.05], [76.2, 10.2]]
+        with patch('backend.services.road_matching._request', return_value=geometry) as request:
+            self.assertEqual(planned_route(anchors), geometry)
+        request.assert_called_once_with("route", anchors)
+
+    def test_planned_route_rejects_invalid_or_excessive_anchors(self):
+        with self.assertRaises(ValueError):
+            planned_route([{"latitude": 10.0, "longitude": 76.0}])
+        with self.assertRaises(ValueError):
+            planned_route([
+                {"latitude": 10.0, "longitude": 76.0},
+                {"latitude": float("nan"), "longitude": 76.1},
+            ])
 
 
 if __name__ == "__main__":

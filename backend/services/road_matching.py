@@ -178,6 +178,32 @@ def _request(service: str, points: list[dict]) -> list[list[float]]:
     return output
 
 
+def planned_route(points: list[dict]) -> list[list[float]]:
+    """Route an ordered set of administrator-selected anchors along roads.
+
+    Unlike tracer map matching, this operation is deliberately explicit: it
+    runs only after an administrator asks Route Studio to connect the named
+    stops (and any fine-tuning guide points).  The public/configured OSRM
+    service remains the source of road geometry; no straight-line fallback is
+    returned because that could silently publish an invalid bus route.
+    """
+    if not 2 <= len(points) <= 200:
+        raise ValueError("Choose between 2 and 200 ordered route anchors.")
+    normalized: list[dict] = []
+    for point in points:
+        try:
+            latitude = float(point["latitude"])
+            longitude = float(point["longitude"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise ValueError("Every route anchor needs valid coordinates.") from error
+        if not all(math.isfinite(value) for value in (latitude, longitude)):
+            raise ValueError("Route anchor coordinates must be finite.")
+        if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+            raise ValueError("Route anchor coordinates are outside the map.")
+        normalized.append({"latitude": latitude, "longitude": longitude})
+    return _request("route", normalized)
+
+
 def road_geometry(raw: list[dict]) -> tuple[list[list[float]], bool]:
     """Return filtered GPS geometry, refined by OSRM only when it stays credible."""
     cleaned = _clean(raw)

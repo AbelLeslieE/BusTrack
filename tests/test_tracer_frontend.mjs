@@ -55,6 +55,17 @@ function fixture({denied=false}={}){
 test('Route Studio has its required lazy-loaded stylesheet',()=>{
     assert.ok(existsSync(new URL('../frontend/modules/css/routeStudio.css',import.meta.url)));
 });
+test('admin road editor keeps OSRM server-side and exposes precise map controls',()=>{
+    const mapSource=readFileSync(new URL('../frontend/common/studioMap.js',import.meta.url),'utf8');
+    assert.match(source,/data-action="build-road"/);
+    assert.match(source,/data-action="edit-route"/);
+    assert.match(source,/data-action="restore-trace"/);
+    assert.match(source,/\/road-route/);
+    assert.match(source,/guide_points/);
+    assert.match(mapSource,/setGuides\(next, canEdit\)/);
+    assert.match(mapSource,/onMoveGuide/);
+    assert.doesNotMatch(source,/router\.project-osrm\.org/);
+});
 test('opening and closing Tracer never starts GPS or upload timers',async()=>{
     const f=fixture();await f.init();assert.equal(f.watched,0);assert.equal(f.intervals.size,0);f.root.cleanup();assert.equal(f.cleared,0);
 });
