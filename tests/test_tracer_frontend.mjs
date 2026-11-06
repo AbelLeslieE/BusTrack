@@ -9,13 +9,17 @@ const settle=async()=>{for(let i=0;i<15;i++) await new Promise(setImmediate);};
 
 function fixture({denied=false}={}){
     const values=new Map(), intervals=new Map(), nodes=new Map(), frames=[];
-    let gpsCallback, watched=0, cleared=0, offline=false, tick=0, next=0;
+    let gpsCallback, watched=0, cleared=0, offline=false, tick=0, next=0, clock=Date.now();
+    class TestDate extends Date {
+        constructor(...args){super(...(args.length ? args : [clock]));}
+        static now(){return clock;}
+    }
     const positions=[],paths=[];
     const element=()=>({innerHTML:'',textContent:'',value:'Test journey',disabled:false,listeners:{},dataset:{},
         addEventListener(k,fn){this.listeners[k]=fn;},
         querySelector(k){if(!nodes.has(k)) nodes.set(k,element());return nodes.get(k);}});
     const root=element();
-    const context=vm.createContext({console,JSON,Date,Promise,Number,Array,Error,Math,AbortController,structuredClone,
+    const context=vm.createContext({console,JSON,Date:TestDate,Promise,Number,Array,Error,Math,AbortController,structuredClone,
         esc:v=>String(v),createStudioMap:async()=>({setPath:p=>paths.push(structuredClone(p)),setStops(){},setPosition:p=>positions.push(p),follow(){},remove(){}}),crypto:{randomUUID:()=> '11111111-1111-4111-8111-111111111111'},
         setTimeout,clearTimeout,setInterval:fn=>{intervals.set(++next,fn);return next;},clearInterval:id=>intervals.delete(id),
         localStorage:{getItem:()=>JSON.stringify({id:7,role:'Tracer'})},
@@ -30,6 +34,10 @@ function fixture({denied=false}={}){
         L:{map:()=>({setView(){return this;},on(){},remove(){},removeLayer(){},fitBounds(){}}),
             tileLayer:()=>({addTo(){}}),polyline:()=>({addTo(){return this;},getBounds(){return {};}})},
         fetch:async(url,options)=>{
+            if(url.startsWith('https://router.project-osrm.org/route/')) {
+                const points=url.split('/driving/')[1].split('?')[0].split(';').map(pair=>pair.split(',').map(Number));
+                return {ok:true,json:async()=>({routes:[{geometry:{coordinates:points}}]})};
+            }
             if(url.endsWith('/points')){if(offline)throw new Error('Network unavailable');return {ok:true,json:async()=>({acknowledged:JSON.parse(options.body).points.map(p=>p.sequence)})};}
             if(url.endsWith('/recordings'))return {ok:true,json:async()=>({id:'11111111-1111-4111-8111-111111111111',name:'Test journey',status:'RECORDING',geometry:[],stops:[]})};
             return {ok:true,json:async()=>({recordings:[],assignment:{bus_id:1,bus_number:'BUS-1'},buses:[],tracers:[]})};
@@ -39,7 +47,11 @@ function fixture({denied=false}={}){
     return {values,intervals,root,frames,context,positions,paths,get watched(){return watched;},get cleared(){return cleared;},
         offline(value){offline=value;},async init(){await frames.shift()();await settle();},
         async click(action){const button={dataset:{action},disabled:false};root.listeners.click({target:{closest:()=>button}});await settle();},
-        async fix(){gpsCallback({timestamp:Date.now(),coords:{latitude:10,longitude:76,accuracy:5,speed:0,heading:null}});await settle();},
+        async fix({latitude=10,longitude=76,accuracy=5,speed=0,seconds=4}={}){
+            clock+=seconds*1000;
+            gpsCallback({timestamp:clock,coords:{latitude,longitude,accuracy,speed,heading:null}});
+            await settle();
+        },
         async sync(){for(const fn of intervals.values())fn();await settle();}};
 }
 
@@ -74,4 +86,15 @@ test('accepted GPS fixes update the visible path and recording metrics',async()=
     assert.equal(f.root.querySelector('.studio-samples').textContent,'1');
     assert.equal(f.root.querySelector('.studio-record-badge').dataset.live,'true');
     assert.equal(f.values.get(7).pending.length,1);f.root.cleanup();
+});
+test('stationary drift holds the line until successive fixes confirm travel',async()=>{
+    const f=fixture();await f.init();await f.click('start');
+    await f.fix();
+    await f.fix({latitude:10.0001});
+    await f.fix({latitude:10.0002});
+    assert.deepEqual(JSON.parse(JSON.stringify(f.paths.at(-1))),[[76,10]]);
+    await f.fix({latitude:10.0004});
+    assert.deepEqual(JSON.parse(JSON.stringify(f.paths.at(-1))),[[76,10],[76,10.0002],[76,10.0004]]);
+    assert.equal(f.values.get(7).pending.length,4);
+    f.root.cleanup();
 });

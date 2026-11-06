@@ -201,6 +201,8 @@ def action(sid: str, data: Action, db: Session = Depends(get_db), actor=Depends(
             raise HTTPException(422, "At least two GPS samples are required.")
         raw = [json.loads(p.payload) for p in points]
         geometry, matched = road_geometry(raw)
+        if len(geometry) < 2:
+            raise HTTPException(422, "The GPS samples do not show enough reliable movement to make a route. Continue recording with precise location enabled.")
         s.geometry_json = json.dumps(geometry)
         s.ended_at = datetime.now(timezone.utc)
         record_audit_event(db, category="route_studio", action="recording_finished", actor=actor,

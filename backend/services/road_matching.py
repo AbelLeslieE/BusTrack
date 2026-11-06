@@ -10,6 +10,7 @@ import json
 import logging
 import math
 import os
+from datetime import datetime
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -33,8 +34,13 @@ def _distance(a: dict, b: dict) -> float:
 
 
 def _clean(raw: list[dict]) -> list[dict]:
-    """Remove unusable fixes and impossible jumps without altering stored raw data."""
+    """Keep credible movement, not the street loops made by stationary GPS drift.
+
+    This only selects points for route geometry. Every original fix remains in
+    route_studio_points for audit and later review.
+    """
     result: list[dict] = []
+    pending: dict | None = None
     for point in raw:
         try:
             latitude = float(point["latitude"])
@@ -44,12 +50,44 @@ def _clean(raw: list[dict]) -> list[dict]:
             continue
         if not all(math.isfinite(value) for value in (latitude, longitude, accuracy)):
             continue
-        if not (-90 <= latitude <= 90 and -180 <= longitude <= 180) or accuracy > 150:
+        if not (-90 <= latitude <= 90 and -180 <= longitude <= 180) or accuracy < 0 or accuracy > 35:
             continue
         candidate = {**point, "latitude": latitude, "longitude": longitude, "accuracy": accuracy}
-        if result and _distance(result[-1], candidate) < 1:
+        if not result:
+            result.append(candidate)
             continue
-        result.append(candidate)
+        anchor = result[-1]
+        distance = _distance(anchor, candidate)
+        uncertainty = anchor["accuracy"] + accuracy
+        if distance <= max(18, 1.8 * uncertainty):
+            pending = None
+            continue
+        try:
+            start = datetime.fromisoformat(str(anchor["recorded_at"]).replace("Z", "+00:00"))
+            end = datetime.fromisoformat(str(candidate["recorded_at"]).replace("Z", "+00:00"))
+            elapsed = (end - start).total_seconds()
+        except (KeyError, ValueError, TypeError):
+            elapsed = 0
+        if elapsed <= 0 or (distance - 2 * uncertainty) / elapsed > 38:
+            pending = None
+            continue
+        speed = candidate.get("speed")
+        if speed is not None and math.isfinite(float(speed)) and float(speed) >= 1.5:
+            result.append(candidate)
+            pending = None
+            continue
+        # Some phones report zero or no speed while moving. Wait for another
+        # fix that continues away from the anchor before accepting that motion.
+        if pending:
+            forward = distance - _distance(anchor, pending)
+            step = _distance(pending, candidate)
+            required = max(12, 0.8 * (pending["accuracy"] + accuracy))
+            if forward >= required and step >= required:
+                result.extend((pending, candidate))
+                pending = None
+                continue
+        if pending is None:
+            pending = candidate
     return result
 
 
@@ -136,24 +174,16 @@ def _request(service: str, points: list[dict]) -> list[list[float]]:
 
 def road_geometry(raw: list[dict]) -> tuple[list[list[float]], bool]:
     """Return road-following geometry and whether matching succeeded."""
-    original = [[float(point["longitude"]), float(point["latitude"])] for point in raw]
-    if not _enabled():
-        return original, False
     cleaned = _clean(raw)
-    # If every fix is weak, retain the available endpoints and let the router at
-    # least produce a road-following line instead of a diagonal map chord.
+    geometry = [[p["longitude"], p["latitude"]] for p in cleaned]
     if len(cleaned) < 2:
-        cleaned = [
-            {**point, "latitude": float(point["latitude"]), "longitude": float(point["longitude"]),
-             "accuracy": min(50, float(point.get("accuracy", 50)))}
-            for point in raw
-        ]
-    if len(cleaned) < 2:
-        return original, False
+        return geometry, False
+    if not _enabled():
+        return geometry, False
     waypoints = _routing_points(cleaned)
     for service in ("match", "route"):
         try:
             return _request(service, waypoints), True
         except Exception as error:  # Raw geometry is the safe fallback.
             logger.warning("Route Studio %s request failed: %s", service, error)
-    return original, False
+    return geometry, False

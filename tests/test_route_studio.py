@@ -41,7 +41,7 @@ class RouteStudioTest(unittest.TestCase):
 
     def points(self):
         now=datetime.now(timezone.utc)
-        return [api.Point(sequence=i+1,latitude=10+i*.001,longitude=76,accuracy=5,recorded_at=now+timedelta(seconds=i)) for i in range(2)]
+        return [api.Point(sequence=i+1,latitude=10+i*.001,longitude=76,accuracy=5,speed=7,recorded_at=now+timedelta(seconds=i*15)) for i in range(2)]
 
     def test_off_and_role_gate(self):
         with patch.dict('os.environ', {'ENABLE_ROUTE_STUDIO':'false'}):
@@ -59,6 +59,20 @@ class RouteStudioTest(unittest.TestCase):
         self.assertEqual(result['status'],'DRAFT')
         self.assertEqual(self.route.bus_id,self.bus.id)
         self.assertEqual(self.db.query(LiveTrip).count(),0)
+
+    def test_stationary_samples_cannot_be_published_as_a_route(self):
+        session = self.start()
+        now = datetime.now(timezone.utc)
+        points = [api.Point(sequence=index + 1, latitude=10 + index * .0001,
+                            longitude=76, accuracy=5, speed=0,
+                            recorded_at=now + timedelta(seconds=index * 5))
+                  for index in range(2)]
+        api.upload(session['id'], api.Batch(points=points), self.db, self.tracer)
+        with self.assertRaises(HTTPException) as error:
+            api.action(session['id'], api.Action(action='finish', final_sequence=2), self.db, self.tracer)
+        self.assertEqual(error.exception.status_code, 422)
+        self.assertEqual(self.db.query(TracePoint).count(), 2)
+        self.assertEqual(self.db.get(TraceSession, session['id']).status, 'RECORDING')
 
     def test_other_tracer_and_conflicting_batch_rejected(self):
         s=self.start(); batch=api.Batch(points=self.points())

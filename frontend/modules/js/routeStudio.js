@@ -58,6 +58,7 @@ export function render() {
     let closed = false, map, selected = null, local = null, watch = null, timer = null, syncing = false, busy = false;
     let chain = Promise.resolve(), lastSample = 0, retries = 0, nextRetry = 0, overview, undo = [], redo = [], releaseLock = null, masterStops = [];
     let placingStop = false, rawGeometry = [], roadGeometry = [], roadAnchor = 0;
+    let routeFixes = [], pendingRouteFix = null;
     let roadRequest = null, roadQueued = false, roadTimer = null, roadUpdatedAt = 0, roadAbort = null;
     const name = () => root.querySelector('.studio-name')?.value.trim() || selected?.name || 'Bus trace';
     let lastFix = null, lastAcceptedPoint = null, locationPermission = 'prompt';
@@ -67,6 +68,34 @@ export function render() {
         const bounded=Math.max(0,Math.min(1,x));
         return 6371000*2*Math.atan2(Math.sqrt(bounded),Math.sqrt(1-bounded));
     };
+    function addMovementFix(point) {
+        // Raw samples are saved separately. Only credible movement advances the
+        // road line, so a stationary phone cannot trace loops around its GPS fix.
+        if(!Number.isFinite(point.accuracy) || point.accuracy < 0 || point.accuracy > 35) return false;
+        if(!routeFixes.length) {
+            routeFixes.push(point);rawGeometry.push([point.longitude,point.latitude]);return true;
+        }
+        const anchor=routeFixes.at(-1);
+        const distance=distanceMetres(anchor,point);
+        const uncertainty=anchor.accuracy+point.accuracy;
+        if(distance <= Math.max(18,1.8*uncertainty)) {pendingRouteFix=null;return false;}
+        const elapsed=(Date.parse(point.recorded_at)-Date.parse(anchor.recorded_at))/1000;
+        if(!Number.isFinite(elapsed) || elapsed <= 0 || (distance-2*uncertainty)/elapsed > 38) {
+            pendingRouteFix=null;return false;
+        }
+        if(Number.isFinite(point.speed) && point.speed >= 1.5) {
+            routeFixes.push(point);rawGeometry.push([point.longitude,point.latitude]);pendingRouteFix=null;return true;
+        }
+        if(pendingRouteFix) {
+            const required=Math.max(12,.8*(pendingRouteFix.accuracy+point.accuracy));
+            if(distance-distanceMetres(anchor,pendingRouteFix) >= required && distanceMetres(pendingRouteFix,point) >= required) {
+                routeFixes.push(pendingRouteFix,point);
+                rawGeometry.push([pendingRouteFix.longitude,pendingRouteFix.latitude],[point.longitude,point.latitude]);
+                pendingRouteFix=null;return true;
+            }
+        } else pendingRouteFix=point;
+        return false;
+    }
     function metrics() {
         const badge=root.querySelector('.studio-record-badge');
         if(!badge) return;
@@ -143,6 +172,7 @@ export function render() {
         if(end <= start) return Promise.resolve();
         const segment=rawGeometry.slice(start,end+1);
         roadAbort?.abort();roadAbort=new AbortController();
+        let failed=false;
         roadRequest=requestRoadSegment(segment,roadAbort.signal).then(result=>{
             if(closed || !selected) return;
             roadGeometry=roadGeometry.length ? [...roadGeometry,...result.slice(1)] : result;
@@ -152,10 +182,16 @@ export function render() {
             const mapStatus=root.querySelector('.studio-map-status');
             if(mapStatus) mapStatus.textContent='Live road-following line updated · original GPS samples remain safely stored';
         }).catch(error=>{
-            if(error.name !== 'AbortError') console.warn('Live road matching is temporarily unavailable; showing raw GPS points.',error);
+            if(error.name !== 'AbortError') {
+                failed=true;
+                roadUpdatedAt=Date.now();
+                console.warn('Live road matching is temporarily unavailable; retaining confirmed GPS points.',error);
+                const mapStatus=root.querySelector('.studio-map-status');
+                if(mapStatus) mapStatus.textContent='Road matching unavailable · confirmed GPS samples saved · will retry after the next fix';
+            }
         }).finally(()=>{
             roadRequest=null;
-            if(roadQueued || roadAnchor < rawGeometry.length-1) {roadQueued=false;void scheduleRoadTrace();}
+            if(roadQueued || (!failed && roadAnchor < rawGeometry.length-1)) {roadQueued=false;void scheduleRoadTrace();}
         });
         return roadRequest;
     }
@@ -216,7 +252,8 @@ export function render() {
         const points=new Map((saved.points || []).map(p=>[p.sequence,p]));
         local.pending.forEach(p=>points.set(p.sequence,p));
         const ordered=[...points.values()].sort((a,b)=>a.sequence-b.sequence);
-        rawGeometry=ordered.map(p=>[p.longitude,p.latitude]);
+        routeFixes=[];pendingRouteFix=null;rawGeometry=[];
+        ordered.forEach(addMovementFix);
         roadGeometry=[];roadAnchor=0;selected.geometry=[...rawGeometry];
         lastAcceptedPoint=ordered.at(-1) || null;
         draw(true);
@@ -241,7 +278,6 @@ export function render() {
                 if (local.sequence >= 20000) throw new Error('Recording reached 20,000 samples. Finish this path before starting another.');
                 const c = position.coords;
                 lastFix=position;
-                map?.setPosition([c.longitude,c.latitude],c.accuracy);
                 if (![c.latitude,c.longitude,c.accuracy].every(Number.isFinite) || c.accuracy > 150) {
                     status(`Waiting for a better GPS fix · current accuracy ±${Math.round(c.accuracy || 0)}m · point not recorded`);
                     return;
@@ -260,11 +296,18 @@ export function render() {
                 await storage(local, true);
                 lastAcceptedPoint=point;
                 if (selected?.id === local.id) {
-                    rawGeometry.push([point.longitude,point.latitude]);showLiveGeometry();void scheduleRoadTrace();
                     const mapStatus=root.querySelector('.studio-map-status');
-                    if(rawGeometry.length > 1 && mapStatus) mapStatus.textContent='GPS point captured · fitting the latest movement to the road…';
+                    if(addMovementFix(point)) {
+                        map?.setPosition(rawGeometry.at(-1),c.accuracy);
+                        showLiveGeometry();void scheduleRoadTrace();
+                        if(rawGeometry.length > 1 && mapStatus) mapStatus.textContent='Movement confirmed · fitting the traveled road…';
+                    } else if(mapStatus) {
+                        mapStatus.textContent=c.accuracy > 35
+                            ? 'GPS fix saved · waiting for better accuracy before extending the route'
+                            : 'GPS fix saved · route held until movement is confirmed';
+                    }
                 }
-                status(`Recording ON · accuracy ${Math.round(c.accuracy)}m · ${local.pending.length} pending samples`);
+                status(`Recording ON · accuracy ${Math.round(c.accuracy)}m · ${local.pending.length} pending samples${c.accuracy > 35 ? ' · waiting for precise GPS to extend route' : ''}`);
             });
         }, error => { stopWatch(); if(error.code===1) root.querySelector('.studio-permission-state').textContent='Location permission revoked. Allow Location in browser site settings.'; status(`Recording interrupted: ${error.message}. Saved samples are recoverable.`); }, {enableHighAccuracy:true, maximumAge:0, timeout:15000});
         if (!timer) timer = setInterval(() => { void flush(); }, 12000);
@@ -289,7 +332,7 @@ export function render() {
             if(!overview?.assignment) throw new Error('A technician must assign your bus before recording.');
             await requestLocation();
             lastAcceptedPoint=null;
-            rawGeometry=[];roadGeometry=[];roadAnchor=0;roadUpdatedAt=0;
+            rawGeometry=[];routeFixes=[];pendingRouteFix=null;roadGeometry=[];roadAnchor=0;roadUpdatedAt=0;
             local = {id:crypto.randomUUID(), sequence:0, pending:[], finished:false, name:name() || 'Bus trace'};
             await storage(local, true);
             selected = await api('/recordings', {request_id:local.id, name:local.name});
