@@ -405,6 +405,20 @@ function renderActions(actions = []){
 
         button.addEventListener("click", async () => {
 
+            if (button.dataset.busy === "true") return;
+
+            const actionButtons = [
+                ...modalState.footer.querySelectorAll("button")
+            ];
+
+            if (action.onClick) {
+                button.dataset.busy = "true";
+                button.setAttribute("aria-busy", "true");
+                actionButtons.forEach(actionButton => {
+                    actionButton.disabled = true;
+                });
+            }
+
             try {
                 if(action.onClick){
                     await action.onClick();
@@ -417,6 +431,16 @@ function renderActions(actions = []){
                 // Keep the current form and its values intact. This is the
                 // common fallback for every modal-backed async action.
                 showActionError(error?.message || "The action could not be completed.");
+            } finally {
+                // Restore the same modal only. Successful actions often open
+                // a replacement success/error modal with a new footer.
+                if (modalState.footer.contains(button)) {
+                    button.dataset.busy = "false";
+                    button.removeAttribute("aria-busy");
+                    actionButtons.forEach((actionButton, index) => {
+                        actionButton.disabled = Boolean(actions[index]?.disabled);
+                    });
+                }
             }
 
         });

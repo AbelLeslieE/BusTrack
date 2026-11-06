@@ -1,4 +1,4 @@
-const RELEASE = "20261106-pwa1";
+const RELEASE = "20261106-delete1";
 const SHELL_CACHE = `bustrack-shell-${RELEASE}`;
 const ASSET_CACHE = `bustrack-assets-${RELEASE}`;
 const OWNED_CACHE_PREFIX = "bustrack-";
@@ -57,6 +57,17 @@ async function staleWhileRevalidateStatic(request) {
     return cached || (await network) || Response.error();
 }
 
+async function networkFirstStatic(request) {
+    const cache = await caches.open(ASSET_CACHE);
+    try {
+        const response = await fetch(request);
+        if (response.ok && response.type === "basic") void cache.put(request, response.clone());
+        return response;
+    } catch {
+        return (await cache.match(request)) || Response.error();
+    }
+}
+
 self.addEventListener("fetch", event => {
     const request = event.request;
     if (request.method !== "GET") return;
@@ -69,7 +80,17 @@ self.addEventListener("fetch", event => {
         return;
     }
 
-    if (url.pathname.startsWith("/static/") || url.pathname === "/manifest.webmanifest") {
+    if (url.pathname.startsWith("/static/")) {
+        // Versioned assets are immutable for their release. Unversioned ES
+        // module imports use network-first so an installed PWA never runs an
+        // old shared dependency with a newly released caller.
+        event.respondWith(url.search
+            ? staleWhileRevalidateStatic(request)
+            : networkFirstStatic(request));
+        return;
+    }
+
+    if (url.pathname === "/manifest.webmanifest") {
         event.respondWith(staleWhileRevalidateStatic(request));
     }
 });

@@ -105,6 +105,7 @@ Assert-AssetContains -Path "/" -ExpectedText "auth.js?v=20261105tracer2"
 Assert-AssetContains -Path "/" -ExpectedText "rel=`"manifest`" href=`"/manifest.webmanifest`""
 Assert-AssetContains -Path "/manifest.webmanifest" -ExpectedText '"display": "standalone"'
 Assert-AssetContains -Path "/service-worker.js" -ExpectedText 'pathname.startsWith("/api/")'
+Assert-AssetContains -Path "/service-worker.js" -ExpectedText '20261106-delete1'
 Assert-AssetContains -Path "/offline.html" -ExpectedText "You’re offline"
 Invoke-Check -Path "/static/assets/images/pwa-icon-192.png" -ExpectedStatuses @(200)
 Assert-AssetContains -Path "/static/common/auth.js?v=20261105tracer2" -ExpectedText "account_exists"
@@ -114,12 +115,14 @@ Assert-AssetContains -Path "/static/common/login.css?v=20261103route1" -Expected
 Assert-AssetContains -Path "/google-signup" -ExpectedText "googleSignup.js?v=20261103errors1"
 Assert-AssetContains -Path "/static/common/googleSignup.js?v=20261103errors1" -ExpectedText "Spaces are not allowed"
 Assert-AssetContains -Path "/dashboard" -ExpectedText "fleetGlass.css?v=20261103fleetglass7"
-Assert-AssetContains -Path "/dashboard" -ExpectedText "bootstrap.js?v=20261106pwa1"
+Assert-AssetContains -Path "/dashboard" -ExpectedText "bootstrap.js?v=20261106delete1"
 Assert-AssetContains -Path "/dashboard" -ExpectedText "<title>Bus Tracker"
 Assert-AssetContains -Path "/static/modules/css/fleetGlass.css?v=20261103fleetglass7" -ExpectedText ".modal:has(#official-pass-name)"
-Assert-AssetContains -Path "/static/common/bootstrap.js?v=20261106pwa1" -ExpectedText "router.js?v=20261106pwa1"
-Assert-AssetContains -Path "/static/common/router.js?v=20261106pwa1" -ExpectedText "routeStudio.js?v=20261106pwa1"
-Assert-AssetContains -Path "/static/common/router.js?v=20261106pwa1" -ExpectedText "technicianDashboard.js?v=20261105pagination1"
+Assert-AssetContains -Path "/static/common/bootstrap.js?v=20261106delete1" -ExpectedText "router.js?v=20261106delete1"
+Assert-AssetContains -Path "/static/common/router.js?v=20261106delete1" -ExpectedText "routeStudio.js?v=20261106pwa1"
+Assert-AssetContains -Path "/static/common/router.js?v=20261106delete1" -ExpectedText "technicianDashboard.js?v=20261105pagination1"
+Assert-AssetContains -Path "/static/common/router.js?v=20261106delete1" -ExpectedText "users.js?v=20261106delete1"
+Assert-AssetContains -Path "/static/modules/js/users.js?v=20261106delete1" -ExpectedText "let deletionPending = false"
 Assert-AssetContains -Path "/static/modules/js/routeStudio.js?v=20261106pwa1" -ExpectedText "navigator.wakeLock.request"
 Assert-AssetContains -Path "/static/common/studioMap.js?v=20261106trail1" -ExpectedText "tracePosition(point, metres"
 Assert-AssetContains -Path "/static/modules/js/technicianDashboard.js?v=20261105pagination1" -ExpectedText "data-audit-page"

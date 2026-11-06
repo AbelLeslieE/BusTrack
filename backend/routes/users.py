@@ -4,7 +4,10 @@ User Management API.
 Handles CRUD operations for BusTrack users.
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from backend.auth import (
@@ -32,6 +35,11 @@ from backend.services.generated_codes import (
     next_driver_code,
     next_student_code,
 )
+from backend.audit import record_audit_event
+from backend.services.user_deletion import delete_user_graph, lock_user_account_writes
+
+
+logger = logging.getLogger("bustrack.users")
 
 
 # ==========================================================
@@ -448,6 +456,8 @@ def update_user(
     _current_user: User = Depends(require_admin),
 ):
 
+    lock_user_account_writes(db)
+
     user = db.get(
         User,
         user_id,
@@ -568,7 +578,6 @@ def update_user(
 
 @router.delete(
     "/{user_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
 )
 def delete_user(
     user_id: int,
@@ -576,74 +585,74 @@ def delete_user(
     current_user: User = Depends(require_admin),
 ):
 
-    user = db.get(
-        User,
-        user_id,
-    )
+    lock_user_account_writes(db)
+
+    # Lock the target so concurrent retries cannot run two cleanup graphs.
+    user = db.query(User).filter(User.id == user_id).with_for_update().one_or_none()
 
     if user is None:
 
-        raise HTTPException(
-            status_code=404,
-            detail="User not found.",
-        )
+        # DELETE is idempotent: a retry after a lost response is still a
+        # success and does not show a misleading failure to the administrator.
+        return {
+            "deleted": False,
+            "already_deleted": True,
+            "user_id": user_id,
+            "message": "The user was already deleted.",
+        }
 
 
     if user.id == current_user.id:
         raise HTTPException(status_code=400, detail="Use account status management instead of deleting your own account.")
-    if is_admin_role(user.role):
+    if is_admin_role(user.role) and user.status == "Active":
+        # Serialize active-admin deletion. Two administrators deleting each
+        # other concurrently must never leave the system without an admin.
         active_admins = db.query(User).filter(
             User.status == "Active",
             User.role == ROLE_ADMIN,
-        ).count()
-        if active_admins <= 1:
+        ).order_by(User.id).with_for_update().all()
+        if len(active_admins) <= 1:
             raise HTTPException(status_code=409, detail="The last active administrator cannot be deleted.")
 
-    # ======================================================
-    # DELETE DRIVER PROFILE
-    # ======================================================
-
-    driver = (
-        db.query(Driver)
-        .filter(
-            Driver.user_id == user.id
+    snapshot = {
+        "id": user.id,
+        "username": user.username,
+        "role": user.role,
+        "status": user.status,
+    }
+    try:
+        counts = delete_user_graph(db, user)
+        record_audit_event(
+            db,
+            category="users",
+            action="user_deleted",
+            actor=current_user,
+            subject_type="user",
+            subject_id=snapshot["id"],
+            subject_label=snapshot["username"],
+            details={"role": snapshot["role"], "status": snapshot["status"], "cleanup": counts},
         )
-        .first()
-    )
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        logger.exception("User %s deletion was blocked by a linked database record.", user_id)
+        raise HTTPException(
+            status_code=409,
+            detail="This user still has a protected linked record. No changes were saved; refresh and try again.",
+        ) from error
+    except SQLAlchemyError as error:
+        db.rollback()
+        logger.exception("User %s deletion failed and was rolled back.", user_id)
+        raise HTTPException(
+            status_code=503,
+            detail="User deletion could not be completed. No changes were saved; please retry.",
+        ) from error
 
-    if driver:
-        db.query(Route).filter(Route.driver_id == driver.id).update(
-            {Route.driver_id: None}, synchronize_session=False
-        )
-
-        db.query(Bus).filter(Bus.driver_id == driver.id).update(
-            {Bus.driver_id: None}, synchronize_session=False
-        )
-        driver.bus_id = None
-        db.delete(driver)
-
-
-    # ======================================================
-    # DELETE STUDENT PROFILE
-    # ======================================================
-
-    student = (
-        db.query(Student)
-        .filter(
-            Student.user_id == user.id
-        )
-        .first()
-    )
-
-    if student:
-
-        db.delete(student)
-
-
-    # ======================================================
-    # DELETE USER
-    # ======================================================
-
-    db.delete(user)
-
-    db.commit()
+    return {
+        "deleted": True,
+        "already_deleted": False,
+        "user_id": snapshot["id"],
+        "username": snapshot["username"],
+        "message": "User and linked active records deleted successfully.",
+        "cleanup": counts,
+    }

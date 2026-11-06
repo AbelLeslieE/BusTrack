@@ -976,18 +976,6 @@ export function getUserFormData() {
             .getValue();
 
 
-    console.log(
-        "ROLE VALUE:",
-        role
-    );
-
-
-    console.log(
-        "STATUS VALUE:",
-        status
-    );
-
-
     /* ----------------------------------------------------------
        Driver Bus
     ---------------------------------------------------------- */
@@ -1115,16 +1103,6 @@ export function getUserFormData() {
 
 
     };
-
-
-    /* ----------------------------------------------------------
-       DEBUG
-    ---------------------------------------------------------- */
-
-    console.log(
-        "FINAL USER FORM DATA:",
-        formData
-    );
 
 
     return formData;

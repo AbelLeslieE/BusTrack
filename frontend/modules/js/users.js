@@ -10,7 +10,7 @@ import {
     createUserForm,
     getUserFormData,
     validateUserForm
-} from "./userForm.js?v=20261105tracer1";
+} from "./userForm.js?v=20261106delete1";
 
 import {
     getUsers,
@@ -1028,17 +1028,9 @@ function renderPage() {
 
 async function openCreateUserModal() {
 
-    console.log("1. openCreateUserModal()");
-
     try {
 
-        console.log("2. Creating form...");
-
         const form = await createUserForm();
-
-        console.log("3. Form created", form);
-
-        console.log("4. Opening modal...");
 
         Modal.form({
 
@@ -1059,8 +1051,6 @@ async function openCreateUserModal() {
             }
 
         });
-
-        console.log("5. Modal opened");
 
     }
 
@@ -1251,12 +1241,6 @@ async function saveUser(userId = null) {
 
             const formData = getUserFormData();
 
-            console.log("========== EDIT FORM ==========");
-            console.log(formData);
-            console.log("ROLE =", formData.role);
-            console.log("STATUS =", formData.status);
-            console.log("===============================");
-
             user = {
                 full_name: formData.full_name,
                 email: formData.email,
@@ -1284,30 +1268,14 @@ async function saveUser(userId = null) {
 
             user = validateUserForm();
 
-            console.log("USER SENT:", user);
-
             savedUser = await createUser(user);
 
-            console.log("CREATE RESULT:", savedUser);
-
         }
-
-        console.log("1. Closing modal");
         Modal.close();
-
-        console.log("2. Reloading users");
         await loadUsers();
-
-        console.log("3. Refresh statistics");
         refreshStatistics();
-
-        console.log("4. Refresh table");
         refreshTable();
-
-        console.log("5. Refresh pagination");
         refreshPagination();
-
-        console.log("6. Finished");
         Modal.success({
 
             eyebrow: "USER MANAGEMENT",
@@ -1355,6 +1323,11 @@ async function saveUser(userId = null) {
 
 function confirmDeleteUser(userId) {
 
+    const user = getUserById(userId);
+    const displayName = escapeHtml(user?.full_name || "this user");
+    const username = escapeHtml(user?.username || String(userId));
+    let deletionPending = false;
+
     Modal.confirm({
 
         eyebrow: "USER MANAGEMENT",
@@ -1367,7 +1340,13 @@ function confirmDeleteUser(userId) {
 
             <p>
 
-                Are you sure you want to delete this user?
+                Delete <strong>${displayName}</strong> (${username})?
+
+            </p>
+
+            <p>
+
+                Their sign-in sessions and active role records will be removed. Historical audit records remain detached from the account.
 
             </p>
 
@@ -1379,9 +1358,12 @@ function confirmDeleteUser(userId) {
 
         onConfirm: async () => {
 
+            if (deletionPending) return;
+            deletionPending = true;
+
             try {
 
-                await deleteUser(userId);
+                const result = await deleteUser(userId);
 
                 Modal.close();
 
@@ -1399,7 +1381,9 @@ function confirmDeleteUser(userId) {
 
                     title: "User Deleted",
 
-                    subtitle: "The user has been deleted successfully."
+                    subtitle: result?.already_deleted
+                        ? "The user was already deleted. The list is now up to date."
+                        : "The user and linked active records were deleted successfully."
 
                 });
 
@@ -1412,6 +1396,10 @@ function confirmDeleteUser(userId) {
                     subtitle: error.message
 
                 });
+
+            } finally {
+
+                deletionPending = false;
 
             }
 
@@ -1496,13 +1484,10 @@ function bindToolbarEvents() {
     --------------------------------------------------------- */
 
     const addButton = elements.page.querySelector("#add-user-btn");
-    console.log("Add Button:", addButton);
 
     if (addButton) {
 
         addButton.addEventListener("click", () => {
-
-            console.log("Add User clicked");
 
             openCreateUserModal();
 

@@ -98,7 +98,7 @@ const adminModules = {
 
     users: {
         title: "Users",
-        load: () => import("../modules/js/users.js?v=20261105tracer1")
+        load: () => import("../modules/js/users.js?v=20261106delete1")
     },
 
     activeUsers: {
