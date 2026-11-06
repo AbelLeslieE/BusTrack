@@ -140,10 +140,6 @@ if (-not $SkipProjectSetup) {
     }
 }
 
-# Scheduled jobs are part of every production deployment, including CI runs
-# that skip the one-time project bootstrap.
-Invoke-Gcloud services enable cloudscheduler.googleapis.com --project $ProjectId
-
 $secretBindings = @(
     "DATABASE_URL=$DatabaseSecret`:$DatabaseSecretVersion",
     "JWT_SECRET_KEY=$JwtSecret`:$JwtSecretVersion",
