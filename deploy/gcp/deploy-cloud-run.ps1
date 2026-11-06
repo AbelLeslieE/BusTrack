@@ -270,14 +270,12 @@ Invoke-Gcloud run jobs add-iam-policy-binding $PeakWorkerJobName `
     --region $Region `
     --member "serviceAccount:$serviceAccountEmail" `
     --role roles/run.invoker `
-    --condition None `
     --quiet
 Invoke-Gcloud run jobs add-iam-policy-binding $StandbyWorkerJobName `
     --project $ProjectId `
     --region $Region `
     --member "serviceAccount:$serviceAccountEmail" `
     --role roles/run.invoker `
-    --condition None `
     --quiet
 
 Set-CloudSchedulerJob -Name $PeakMorningScheduleName -Schedule "0 7 * * *" -TargetJob $PeakWorkerJobName
