@@ -118,6 +118,8 @@ class GPSWorkerDeploymentTest(unittest.TestCase):
         deployment = (root / "deploy" / "gcp" / "deploy-cloud-run.ps1").read_text(encoding="utf-8")
         self.assertIn("run jobs deploy $PeakWorkerJobName", deployment)
         self.assertIn("run jobs deploy $StandbyWorkerJobName", deployment)
+        self.assertIn("--args=-m,backend.gps_worker,--mode,peak", deployment)
+        self.assertIn("--args=-m,backend.gps_worker,--mode,standby", deployment)
         self.assertIn('GPS_PEAK_POLL_INTERVAL_SECONDS=10', deployment)
         self.assertIn('--time-zone "Asia/Kolkata"', deployment)
         self.assertIn('-Schedule "0 7 * * *"', deployment)
