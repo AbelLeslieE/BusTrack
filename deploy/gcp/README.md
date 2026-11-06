@@ -2,14 +2,18 @@
 
 The application and frontend remain on GCP Cloud Run. Production state is now
 in GCP Cloud SQL PostgreSQL; only the database connection changed from Neon.
-Public requests and singleton background loops remain separate. The cutover
-did not change route, stop, GPS, or portal business logic.
+Public requests and scheduled background collection remain separate. The
+cutover did not change route, stop, GPS, or portal business logic.
 
 ## Architecture
 
 - `bustrack-web`: public Cloud Run service, autoscaled, background jobs off.
-- `bustrack-worker`: internal Cloud Run service, exactly one continuously
-  allocated instance, background jobs on.
+- `bustrack-gps-peak`: finite Cloud Run Job, scheduled for 07:00–09:15 and
+  16:15–19:15 IST, polling providers every 10 seconds.
+- `bustrack-gps-standby`: one-shot Cloud Run Job, scheduled every 30 minutes
+  from 09:00–20:00 IST outside peak windows and at 00:01 for maintenance.
+- Cloud Scheduler: authenticated IST triggers for both job definitions. The
+  retired `bustrack-worker` service is deleted after these triggers are ready.
 - Cloud SQL PostgreSQL instance `bustrack-production:us-west1:bustrack-postgres`:
   the production data store, with backups and point-in-time recovery enabled.
 - Secret Manager: database URL, JWT secret, bus-pass private key, bootstrap
@@ -89,7 +93,8 @@ to GCP; create separate Secret Manager values for the target project.
    `KINGSTRACK_ACCOUNTS=bustrack-kingstrack-accounts:1`.
 
 4. The October 24 cutover imported the existing data. Never run the initial
-   import over the live database. Keep only the GCP worker polling providers.
+   import over the live database. Keep only the two scheduled GCP jobs polling
+   providers.
 5. Run the complete automated test suite and a PostgreSQL staging smoke test.
 
 ## Build and deploy
@@ -101,13 +106,14 @@ one-time Google Cloud and GitHub setup below, every push to `main` will:
 
 1. run the backend and browser-module tests in Cloud Build;
 2. build and push an immutable commit-tagged image to Artifact Registry; and
-3. deploy the public `bustrack-web` service and the singleton
-   `bustrack-worker` service.
+3. deploy the public `bustrack-web` service, both finite GPS jobs, and their
+   authenticated Cloud Scheduler triggers.
 
 The workflow uses GitHub OIDC + Google Workload Identity Federation. Do not
 store a long-lived service-account JSON key in GitHub.
 
 Create a deployer service account with `roles/run.admin`,
+`roles/cloudscheduler.admin`,
 `roles/cloudbuild.builds.editor`, and
 `roles/serviceusage.serviceUsageConsumer` and `roles/storage.bucketViewer`
 on the project. Grant it `roles/iam.serviceAccountUser` on both the runtime
@@ -170,10 +176,10 @@ The script's default database secret version is still `1` for older deployments.
 Always pass `-DatabaseSecretVersion 2` for this production project. When a
 secret is rotated, pass the corresponding `-...SecretVersion` parameter
 explicitly and redeploy; never use the mutable `latest` alias.
-Both Cloud Run services use second-generation execution and instance-based CPU
-allocation for their health probes. The worker keeps one instance running, so
-review its continuous compute cost before deployment; the web service may
-scale to zero with the default `WebMinInstances=0`.
+The web service uses request-based CPU allocation and may scale to zero with
+the default `WebMinInstances=0`. GPS jobs allocate CPU only while they execute;
+the peak job exits at each window boundary and standby exits after one pass.
+See `docs/gps-worker-schedule-and-savings.md` for the request and compute model.
 
 The Cloud Run runtime service account needs `roles/cloudsql.client` and access
 to its required secrets. Human IAM, billing roles, and DNS permissions remain

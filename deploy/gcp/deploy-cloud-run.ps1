@@ -12,6 +12,12 @@ param(
     [string]$Region = "asia-south1",
     [string]$WebServiceName = "bustrack-web",
     [string]$WorkerServiceName = "bustrack-worker",
+    [string]$PeakWorkerJobName = "bustrack-gps-peak",
+    [string]$StandbyWorkerJobName = "bustrack-gps-standby",
+    [string]$PeakMorningScheduleName = "bustrack-gps-peak-morning",
+    [string]$PeakEveningScheduleName = "bustrack-gps-peak-evening",
+    [string]$StandbyDayScheduleName = "bustrack-gps-standby-day",
+    [string]$MidnightMaintenanceScheduleName = "bustrack-maintenance-midnight",
     [string]$RuntimeServiceAccount = "bustrack-runtime",
     [string]$DatabaseSecret = "bustrack-database-url",
     [ValidateRange(1, 2147483647)]
@@ -52,6 +58,29 @@ function Invoke-Gcloud {
     }
 }
 
+function Set-CloudSchedulerJob {
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string]$Schedule,
+        [Parameter(Mandatory = $true)][string]$TargetJob
+    )
+
+    $targetUri = "https://run.googleapis.com/v2/projects/$ProjectId/locations/$Region/jobs/$TargetJob`:run"
+    & gcloud scheduler jobs describe $Name --project $ProjectId --location $Region *> $null
+    $action = if ($LASTEXITCODE -eq 0) { "update" } else { "create" }
+    Invoke-Gcloud scheduler jobs $action http $Name `
+        --project $ProjectId `
+        --location $Region `
+        --schedule $Schedule `
+        --time-zone "Asia/Kolkata" `
+        --uri $targetUri `
+        --http-method POST `
+        --oauth-service-account-email $serviceAccountEmail `
+        --oauth-token-scope "https://www.googleapis.com/auth/cloud-platform" `
+        --attempt-deadline 320s `
+        --quiet
+}
+
 if (-not (Get-Command gcloud -ErrorAction SilentlyContinue)) {
     throw "The Google Cloud CLI (gcloud) is required."
 }
@@ -90,7 +119,7 @@ if (-not $PSCmdlet.ShouldProcess($ProjectId, "configure APIs, IAM, and deploy Bu
 
 if (-not $SkipProjectSetup) {
     Invoke-Gcloud config set project $ProjectId
-    Invoke-Gcloud services enable run.googleapis.com sqladmin.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com logging.googleapis.com monitoring.googleapis.com
+    Invoke-Gcloud services enable run.googleapis.com cloudscheduler.googleapis.com sqladmin.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com logging.googleapis.com monitoring.googleapis.com
 
     & gcloud iam service-accounts describe $serviceAccountEmail --project $ProjectId *> $null
     if ($LASTEXITCODE -ne 0) {
@@ -110,6 +139,10 @@ if (-not $SkipProjectSetup) {
         Invoke-Gcloud secrets add-iam-policy-binding $secretName --project $ProjectId --member "serviceAccount:$serviceAccountEmail" --role roles/secretmanager.secretAccessor --condition None --quiet
     }
 }
+
+# Scheduled jobs are part of every production deployment, including CI runs
+# that skip the one-time project bootstrap.
+Invoke-Gcloud services enable cloudscheduler.googleapis.com --project $ProjectId
 
 $secretBindings = @(
     "DATABASE_URL=$DatabaseSecret`:$DatabaseSecretVersion",
@@ -155,6 +188,8 @@ $commonEnvironment = @(
     "ADMIN_LIVE_STREAM_ENABLED=true"
 ) -join ','
 
+$workerEnvironment = "$commonEnvironment,BACKGROUND_JOBS_ENABLED=false,GPS_SCHEDULE_TIMEZONE=Asia/Kolkata,GPS_PEAK_POLL_INTERVAL_SECONDS=10,GPS_STANDBY_POLL_INTERVAL_MINUTES=30"
+
 # Cloud Run can retain a ready revision when only a mutable image tag changes.
 # A unique suffix makes every release pull and serve its newly built image.
 $revisionSuffix = "r$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())-$((Get-Random -Maximum 10000).ToString('0000'))"
@@ -177,7 +212,7 @@ Invoke-Gcloud run deploy $WebServiceName `
     --timeout 3600 `
     --min-instances $WebMinInstances `
     --max-instances $WebMaxInstances `
-    --no-cpu-throttling `
+    --cpu-throttling `
     --allow-unauthenticated `
     --startup-probe "httpGet.path=/ready,httpGet.port=8080,initialDelaySeconds=0,failureThreshold=60,timeoutSeconds=2,periodSeconds=5" `
     --liveness-probe "httpGet.path=/health,httpGet.port=8080,initialDelaySeconds=10,failureThreshold=3,timeoutSeconds=2,periodSeconds=30" `
@@ -192,32 +227,76 @@ Invoke-Gcloud run services update-traffic $WebServiceName `
     --to-revisions "${WebServiceName}-${revisionSuffix}=100" `
     --quiet
 
-# One continuously allocated instance owns polling/reminders. The service is
-# internal-only because browsers and GPS providers must use the web service.
-Invoke-Gcloud run deploy $WorkerServiceName `
+# The peak job exists only during the two daily bus windows. It polls every ten
+# seconds and exits exactly when the current IST window closes.
+Invoke-Gcloud run jobs deploy $PeakWorkerJobName `
     --project $ProjectId `
     --region $Region `
-    --platform managed `
     --image $Image `
-    --revision-suffix $revisionSuffix `
-    --execution-environment gen2 `
-    --port 8080 `
     --service-account $serviceAccountEmail `
     @databaseArguments `
     --set-secrets $secretArgument `
-    --set-env-vars "$commonEnvironment,BACKGROUND_JOBS_ENABLED=true" `
+    --set-env-vars $workerEnvironment `
+    --command python `
+    --args "-m,backend.gps_worker,--mode,peak" `
     --cpu 1 `
     --memory 512Mi `
-    --concurrency 1 `
-    --timeout 3600 `
-    --min-instances 1 `
-    --max-instances 1 `
-    --no-cpu-throttling `
-    --ingress internal `
-    --no-allow-unauthenticated `
-    --startup-probe "httpGet.path=/ready,httpGet.port=8080,initialDelaySeconds=0,failureThreshold=60,timeoutSeconds=2,periodSeconds=5" `
-    --liveness-probe "httpGet.path=/health,httpGet.port=8080,initialDelaySeconds=10,failureThreshold=3,timeoutSeconds=2,periodSeconds=30" `
-    --deploy-health-check `
+    --tasks 1 `
+    --parallelism 1 `
+    --max-retries 1 `
+    --task-timeout 4h `
     --quiet
+
+# The standby job is a one-shot process. Scheduler calls it every 30 minutes;
+# the application rejects peak-window overlaps and the 20:30 boundary.
+Invoke-Gcloud run jobs deploy $StandbyWorkerJobName `
+    --project $ProjectId `
+    --region $Region `
+    --image $Image `
+    --service-account $serviceAccountEmail `
+    @databaseArguments `
+    --set-secrets $secretArgument `
+    --set-env-vars $workerEnvironment `
+    --command python `
+    --args "-m,backend.gps_worker,--mode,standby" `
+    --cpu 1 `
+    --memory 512Mi `
+    --tasks 1 `
+    --parallelism 1 `
+    --max-retries 1 `
+    --task-timeout 10m `
+    --quiet
+
+# Scheduler signs each invocation as the runtime identity. Bind only these two
+# jobs instead of granting a project-wide invocation role.
+Invoke-Gcloud run jobs add-iam-policy-binding $PeakWorkerJobName `
+    --project $ProjectId `
+    --region $Region `
+    --member "serviceAccount:$serviceAccountEmail" `
+    --role roles/run.invoker `
+    --condition None `
+    --quiet
+Invoke-Gcloud run jobs add-iam-policy-binding $StandbyWorkerJobName `
+    --project $ProjectId `
+    --region $Region `
+    --member "serviceAccount:$serviceAccountEmail" `
+    --role roles/run.invoker `
+    --condition None `
+    --quiet
+
+Set-CloudSchedulerJob -Name $PeakMorningScheduleName -Schedule "0 7 * * *" -TargetJob $PeakWorkerJobName
+Set-CloudSchedulerJob -Name $PeakEveningScheduleName -Schedule "15 16 * * *" -TargetJob $PeakWorkerJobName
+Set-CloudSchedulerJob -Name $StandbyDayScheduleName -Schedule "0,30 9-20 * * *" -TargetJob $StandbyWorkerJobName
+Set-CloudSchedulerJob -Name $MidnightMaintenanceScheduleName -Schedule "1 0 * * *" -TargetJob $StandbyWorkerJobName
+
+# Remove the superseded 24-hour, minimum-one-instance worker only after both
+# jobs, their IAM bindings, and every trigger have been configured successfully.
+& gcloud run services describe $WorkerServiceName --project $ProjectId --region $Region *> $null
+if ($LASTEXITCODE -eq 0) {
+    Invoke-Gcloud run services delete $WorkerServiceName `
+        --project $ProjectId `
+        --region $Region `
+        --quiet
+}
 
 Invoke-Gcloud run services describe $WebServiceName --project $ProjectId --region $Region --format "value(status.url)"

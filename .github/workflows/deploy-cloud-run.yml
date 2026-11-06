@@ -66,7 +66,7 @@ jobs:
             --substitutions "_REGION=$REGION,_REPOSITORY=$REPOSITORY,_IMAGE=$IMAGE_NAME,_TAG=$IMAGE_TAG" \
             .
 
-      - name: Deploy Cloud Run services
+      - name: Deploy Cloud Run service and scheduled jobs
         shell: pwsh
         env:
           IMAGE_TAG: ${{ github.sha }}

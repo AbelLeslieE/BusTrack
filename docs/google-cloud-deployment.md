@@ -59,20 +59,21 @@ estimate. Verify Free Tier eligibility and the remaining costs in the console.
 
 ## Cloud Run configuration to review
 
-Deploy the same image as two separately configured services:
+Deploy the same image as one public service and two scheduled jobs:
 
 - Public web service: `BACKGROUND_JOBS_ENABLED=false`, request-based billing,
   and normal autoscaling. It handles browser/API traffic without starting GPS,
   retention, or document-reminder loops in every instance.
-- Background service: `BACKGROUND_JOBS_ENABLED=true`, instance-based billing,
-  with minimum and maximum instances both set to one. It owns provider polling,
-  telemetry/request-log retention, and document reminders.
+- Peak GPS job: starts at 07:00 and 16:15 IST, polls every 10 seconds, and
+  exits at 09:15 or 19:15 respectively.
+- Standby GPS job: performs one provider refresh every 30 minutes from
+  09:00–20:00 IST outside the peak windows. Its 00:01 IST invocation performs
+  direction recovery and document reminders without polling providers.
 
-The background service still exposes the application health endpoint because
-Cloud Run services must listen on the configured port. Restrict ingress and do
-not route public browser traffic to it. During revision replacement Cloud Run
-can briefly overlap two background instances, so a provider webhook or a
-distributed lease remains the preferred long-term singleton guarantee.
+Cloud Scheduler invokes the two private jobs with OAuth. PostgreSQL advisory
+locking prevents an overlapping delayed/manual execution from issuing a
+duplicate provider refresh. The legacy continuously allocated worker service
+is deleted only after both jobs and all schedules are configured.
 
 Keep `STUDENT_LIVE_STREAM_ENABLED=true` on the public service. Student tracking
 uses a cookie-authenticated Server-Sent Events response, renews it before the
@@ -95,8 +96,8 @@ once a minute without creating another browser HTTP request. The idle-session
 browser monitor runs hourly; every normal API call still rejects a revoked
 session immediately.
 
-This always-running setup incurs charges. Review the actual region-specific cost
-before creating resources. Platform restarts remain possible.
+Only active job execution is billed for background compute. Review the actual
+region-specific cost before creating resources. Platform restarts remain possible.
 
 Keep PostgreSQL on durable hosting; do not copy the local development SQLite
 database into the image. Keep existing bus IDs, route assignments and trip data.

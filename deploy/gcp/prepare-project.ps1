@@ -25,7 +25,7 @@ if (-not $PSCmdlet.ShouldProcess($ProjectId, "enable APIs and prepare Artifact R
 }
 
 Invoke-Gcloud config set project $ProjectId
-Invoke-Gcloud services enable run.googleapis.com sqladmin.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com logging.googleapis.com monitoring.googleapis.com iam.googleapis.com
+Invoke-Gcloud services enable run.googleapis.com cloudscheduler.googleapis.com sqladmin.googleapis.com secretmanager.googleapis.com artifactregistry.googleapis.com cloudbuild.googleapis.com logging.googleapis.com monitoring.googleapis.com iam.googleapis.com
 
 & gcloud artifacts repositories describe $Repository --project $ProjectId --location $Region *> $null
 if ($LASTEXITCODE -ne 0) {

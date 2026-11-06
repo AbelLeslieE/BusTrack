@@ -1352,18 +1352,22 @@ def get_provider_health(
         for state_name in ("healthy", "delayed", "offline", "error", "clock_error", "no_data")
     }
     try:
-        poll_interval = max(
-            20,
-            int(os.getenv(
-                "GPS_PROVIDER_POLL_INTERVAL_SECONDS",
-                os.getenv("AIROTRACK_POLL_INTERVAL_SECONDS", "20"),
-            )),
+        poll_interval = min(
+            10,
+            max(5, int(os.getenv("GPS_PEAK_POLL_INTERVAL_SECONDS", "10"))),
         )
     except ValueError:
-        poll_interval = 20
+        poll_interval = 10
     return {
         "generated_at": now,
         "poll_interval_seconds": poll_interval,
+        "polling_schedule": {
+            "timezone": "Asia/Kolkata",
+            "peak_windows": ["07:00-09:15", "16:15-19:15"],
+            "peak_interval_seconds": poll_interval,
+            "standby_window": "09:00-20:00",
+            "standby_interval_minutes": 30,
+        },
         "history_retention_minutes": provider_history_retention_minutes(),
         "counts": counts,
         "buses": rows,

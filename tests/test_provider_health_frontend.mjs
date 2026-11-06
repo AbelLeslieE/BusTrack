@@ -71,6 +71,30 @@ test('provider health clearly labels and filters Kingstrack independently', asyn
     assert.match(page.innerHTML, /provider-source-pill kingstrack/);
 });
 
+test('provider health explains the finite IST collection schedule', async () => {
+    const {context, page} = portal(async path => {
+        if (path.includes('/positions')) return {positions: []};
+        return {
+            counts: {},
+            buses: [],
+            poll_interval_seconds: 10,
+            polling_schedule: {
+                peak_windows: ['07:00-09:15', '16:15-19:15'],
+                peak_interval_seconds: 10,
+                standby_window: '09:00-20:00',
+                standby_interval_minutes: 30,
+            },
+            history_retention_minutes: 1440,
+        };
+    });
+    vm.runInContext('state.loading = false;', context);
+
+    await vm.runInContext('refreshData()', context);
+
+    assert.match(page.innerHTML, /07:00-09:15 and 16:15-19:15 IST every 10 seconds/);
+    assert.match(page.innerHTML, /every 30 minutes from 09:00-20:00 IST/);
+});
+
 
 test('manual refresh uses the combined providers endpoint and selected source', async () => {
     const requests = [];
