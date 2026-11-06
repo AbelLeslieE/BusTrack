@@ -6,7 +6,13 @@ import unittest
 from unittest.mock import patch
 
 from backend.database import validate_database_configuration
-from backend.main import health_check, readiness_check
+from backend.main import (
+    health_check,
+    offline_page,
+    readiness_check,
+    service_worker,
+    web_app_manifest,
+)
 
 
 class _HealthySession:
@@ -50,6 +56,20 @@ class ProductionReadinessTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(json.loads(response.body), {"status": "ok", "service": "bustrack"})
         self.assertEqual(response.headers["cache-control"], "no-store")
+
+    def test_pwa_files_have_safe_content_types_and_cache_headers(self):
+        manifest = asyncio.run(web_app_manifest())
+        self.assertEqual(manifest.media_type, "application/manifest+json")
+        self.assertEqual(manifest.headers["cache-control"], "no-cache")
+
+        worker = asyncio.run(service_worker())
+        self.assertEqual(worker.media_type, "application/javascript")
+        self.assertEqual(worker.headers["service-worker-allowed"], "/")
+        self.assertIn("no-store", worker.headers["cache-control"])
+
+        fallback = asyncio.run(offline_page())
+        self.assertEqual(fallback.media_type, "text/html")
+        self.assertEqual(fallback.headers["cache-control"], "no-cache")
 
     @patch("backend.main.restore_in_progress", return_value=False)
     @patch("backend.main.SessionLocal", return_value=_HealthySession())

@@ -378,6 +378,41 @@ async def login_page() -> FileResponse:
     return FileResponse(FRONTEND_DIR / "login.html")
 
 
+@app.get("/manifest.webmanifest", include_in_schema=False)
+async def web_app_manifest() -> FileResponse:
+    """Return the install metadata with the browser-required manifest MIME type."""
+
+    return FileResponse(
+        FRONTEND_DIR / "manifest.webmanifest",
+        media_type="application/manifest+json",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+@app.get("/service-worker.js", include_in_schema=False)
+async def service_worker() -> FileResponse:
+    """Serve the worker at the origin root so it can control every portal."""
+
+    return FileResponse(
+        FRONTEND_DIR / "service-worker.js",
+        media_type="application/javascript",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Service-Worker-Allowed": "/",
+        },
+    )
+
+
+@app.get("/offline.html", include_in_schema=False)
+async def offline_page() -> FileResponse:
+    """Return the public offline fallback cached by the service worker."""
+
+    return FileResponse(
+        FRONTEND_DIR / "offline.html",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
 @app.get("/google-signup", include_in_schema=False)
 async def google_signup_page() -> FileResponse:
     """Return credential setup after Google verifies a Sahrdaya account."""

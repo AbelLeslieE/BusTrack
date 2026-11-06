@@ -201,7 +201,7 @@ class RequestSecurityMiddleware:
             b"script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
             if is_api_docs
             else (
-                b"script-src 'self' 'sha256-9EsfcvbGy9PbAQzP+wC6yS0vydqo1YQc0PN2tDJ3kcw=' "
+                b"script-src 'self' 'sha256-2C+xgIoW1R6QoirP1Nx5y4SvLfDze4K5W+QJCxdi/cI=' "
                 b"https://unpkg.com; "
                 if is_authors_page
                 else b"script-src 'self' https://unpkg.com; "
@@ -227,7 +227,7 @@ class RequestSecurityMiddleware:
             (b"x-content-type-options", b"nosniff"),
             (b"x-frame-options", b"DENY"),
             (b"referrer-policy", b"strict-origin-when-cross-origin"),
-            (b"permissions-policy", b"camera=(self), microphone=(), payment=()"),
+            (b"permissions-policy", b"camera=(self), geolocation=(self), screen-wake-lock=(self), microphone=(), payment=()"),
             (b"cross-origin-opener-policy", b"same-origin"),
             (b"cross-origin-resource-policy", b"same-origin"),
             (b"x-permitted-cross-domain-policies", b"none"),
@@ -242,7 +242,7 @@ class RequestSecurityMiddleware:
                     + b"font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
                     + img_src
                     + b"connect-src 'self' https://unpkg.com https://tiles.openfreemap.org https://router.project-osrm.org https://nominatim.openstreetmap.org; "
-                    + b"worker-src 'self' blob:"
+                    + b"worker-src 'self' blob:; manifest-src 'self'"
                 ),
             ),
         ]

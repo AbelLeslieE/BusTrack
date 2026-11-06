@@ -4,8 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#191d3b">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="BusTrack">
   <meta name="description" content="Meet the creators behind the BusTrack college bus management system.">
   <title>Meet the Creators | BusTrack</title>
+  <link rel="icon" type="image/png" href="/static/assets/images/logo.png?v=20261015logo2">
+  <link rel="apple-touch-icon" href="/static/assets/images/pwa-icon-192.png">
+  <link rel="manifest" href="/manifest.webmanifest">
   <style>
 :root {
   --authors-bg: #191d3b;
@@ -3129,6 +3136,13 @@ section[id], #top, #authors-title { scroll-margin-top: calc(var(--header-height,
     film.removeAttribute("open");
     replay.style.display = "none";
     revealPage();
+  }
+  if ("serviceWorker" in navigator && window.isSecureContext) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/service-worker.js", { scope: "/", updateViaCache: "none" })
+        .then(registration => registration.update())
+        .catch(error => console.warn("BusTrack offline support could not start:", error));
+    }, { once: true });
   }
 })();
   </script>

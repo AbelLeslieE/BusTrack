@@ -19,12 +19,8 @@ async function clearBrowserSideData() {
                 .then(keys => Promise.all(keys.map(key => window.caches.delete(key))))
         );
     }
-    if ("serviceWorker" in navigator) {
-        tasks.push(
-            navigator.serviceWorker.getRegistrations()
-                .then(registrations => Promise.all(registrations.map(registration => registration.unregister())))
-        );
-    }
+    // Keep the BusTrack PWA registration installed. Clearing Cache Storage is
+    // enough for the service worker to repopulate current, versioned assets.
     await Promise.allSettled(tasks);
 }
 

@@ -8,9 +8,18 @@
     <meta name="viewport"
           content="width=device-width, initial-scale=1.0">
 
+    <meta name="theme-color" content="#102a48">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="BusTrack">
+
     <title>BusTrack | Fleet Command Center</title>
 
     <link rel="icon" type="image/png" href="/static/assets/images/logo.png?v=20261015logo2">
+    <link rel="apple-touch-icon" href="/static/assets/images/pwa-icon-192.png">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="stylesheet" href="/static/common/pwa.css?v=20261106pwa1">
 
     <link rel="preload" as="image" href="/static/assets/images/portal-background.png">
     <link rel="preload" as="style" href="/static/common/login.css?v=20261103route1">
@@ -180,6 +189,8 @@
 
     <script type="module"
             src="/static/common/auth.js?v=20261105tracer2"></script>
+
+    <script type="module" src="/static/common/pwa.js?v=20261106pwa1"></script>
 
     
 

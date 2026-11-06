@@ -56,7 +56,7 @@ export function render() {
       <div class="studio-editor"></div>`;
     const status = message => { if (!closed) { root.querySelector('.studio-status').textContent = message; metrics(); } };
     let closed = false, map, selected = null, local = null, watch = null, timer = null, syncing = false, busy = false;
-    let chain = Promise.resolve(), lastSample = 0, retries = 0, nextRetry = 0, overview, undo = [], redo = [], releaseLock = null, masterStops = [];
+    let chain = Promise.resolve(), lastSample = 0, retries = 0, nextRetry = 0, overview, undo = [], redo = [], releaseLock = null, wakeLock = null, masterStops = [];
     let placingStop = false, rawGeometry = [];
     let routeFixes = [], pendingRouteFix = null;
     const name = () => root.querySelector('.studio-name')?.value.trim() || selected?.name || 'Bus trace';
@@ -130,7 +130,22 @@ export function render() {
             throw new Error(message);
         }
     }
-    const stopWatch = () => { if (watch !== null) navigator.geolocation.clearWatch(watch); watch = null; releaseLock?.(); releaseLock = null; };
+    async function requestScreenWakeLock() {
+        if (!("wakeLock" in navigator) || document.hidden || wakeLock) return;
+        try {
+            wakeLock = await navigator.wakeLock.request("screen");
+            wakeLock.addEventListener("release", () => { wakeLock = null; }, {once:true});
+        } catch {
+            // Wake Lock is an enhancement. GPS recording remains available on
+            // browsers or power modes that do not permit it.
+        }
+    }
+    const stopWatch = () => {
+        if (watch !== null) navigator.geolocation.clearWatch(watch);
+        watch = null;
+        if (wakeLock) { void wakeLock.release().catch(() => {}); wakeLock = null; }
+        releaseLock?.(); releaseLock = null;
+    };
     const queue = fn => { chain = chain.then(fn).catch(error => { stopWatch(); status(error.message); }); return chain; };
     const remember = () => { undo.push(JSON.stringify(selected)); if (undo.length > 50) undo.shift(); redo = []; };
     function draw(fit = false) {
@@ -266,8 +281,9 @@ export function render() {
                 status(`Recording ON · accuracy ${Math.round(c.accuracy)}m · ${local.pending.length} pending samples${c.accuracy > 35 ? ' · waiting for precise GPS to extend route' : ''}`);
             });
         }, error => { stopWatch(); if(error.code===1) root.querySelector('.studio-permission-state').textContent='Location permission revoked. Allow Location in browser site settings.'; status(`Recording interrupted: ${error.message}. Saved samples are recoverable.`); }, {enableHighAccuracy:true, maximumAge:0, timeout:15000});
+        void requestScreenWakeLock();
         if (!timer) timer = setInterval(() => { void flush(); }, 12000);
-        status('Recording ON · waiting for phone GPS');
+        status('Recording ON · waiting for phone GPS · screen kept awake where supported');
     }
     async function act(action) {
         if(action === 'permission') { await requestLocation(); status('Location enabled. Press Start to begin recording your assigned bus.'); return; }

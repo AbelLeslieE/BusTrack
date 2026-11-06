@@ -4,6 +4,11 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#102a48">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="BusTrack">
     <title>Bus Tracker</title>
     <style>
       /* Keep the first screen styled while authentication and page assets load. */
@@ -66,6 +71,9 @@
       }
     </style>
     <link rel="icon" type="image/png" href="/static/assets/images/logo.png?v=20261015logo2">
+    <link rel="apple-touch-icon" href="/static/assets/images/pwa-icon-192.png">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="stylesheet" href="/static/common/pwa.css?v=20261106pwa1">
     <link rel="stylesheet" href="/static/common/theme.css?v=20261015bg1">
     <link rel="stylesheet" href="/static/common/layout.css?v=20261102loader2">
     <link rel="stylesheet" href="/static/common/sidebar.css?v=20261015logo2">
@@ -109,6 +117,7 @@
         BUSTRACK APPLICATION
     ========================================================== -->
 
-    <script type="module" src="/static/common/bootstrap.js?v=20261106trail1"></script>
+    <script type="module" src="/static/common/bootstrap.js?v=20261106pwa1"></script>
+    <script type="module" src="/static/common/pwa.js?v=20261106pwa1"></script>
   </body>
 </html>
