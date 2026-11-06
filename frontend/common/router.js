@@ -44,7 +44,7 @@ import {
 // ==========================================================
 
 const adminModules = {
-    maintainRoute: { title: "Maintain route", load: () => import("../modules/js/routeStudio.js?v=20261106drift1") },
+    maintainRoute: { title: "Maintain route", load: () => import("../modules/js/routeStudio.js?v=20261106trail1") },
 
     dashboard: {
         title: "Overview",
@@ -223,7 +223,7 @@ const technicianModules = {
     }
 };
 const tracerModules = {
-    routeStudio: { title: "Trace assigned bus", load: () => import("../modules/js/routeStudio.js?v=20261106drift1") },
+    routeStudio: { title: "Trace assigned bus", load: () => import("../modules/js/routeStudio.js?v=20261106trail1") },
 };
 
 let shell;

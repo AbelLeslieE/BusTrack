@@ -1,4 +1,4 @@
-"""Best-effort road matching for completed Route Studio recordings.
+"""Filter phone GPS and use OSRM to road-match completed recordings.
 
 Raw phone fixes remain stored in ``route_studio_points``.  This module only
 builds the display/route geometry, so a routing-provider outage can never
@@ -59,8 +59,12 @@ def _clean(raw: list[dict]) -> list[dict]:
         anchor = result[-1]
         distance = _distance(anchor, candidate)
         uncertainty = anchor["accuracy"] + accuracy
-        if distance <= max(18, 1.8 * uncertainty):
-            pending = None
+        speed = candidate.get("speed")
+        moving = speed is not None and math.isfinite(float(speed)) and float(speed) >= 1.2
+        movement_floor = max(2.5, min(8, 0.3 * uncertainty)) if moving else max(10, 0.8 * uncertainty)
+        if distance <= movement_floor:
+            if not moving:
+                pending = None
             continue
         try:
             start = datetime.fromisoformat(str(anchor["recorded_at"]).replace("Z", "+00:00"))
@@ -68,11 +72,10 @@ def _clean(raw: list[dict]) -> list[dict]:
             elapsed = (end - start).total_seconds()
         except (KeyError, ValueError, TypeError):
             elapsed = 0
-        if elapsed <= 0 or (distance - 2 * uncertainty) / elapsed > 38:
+        if elapsed <= 0 or distance / elapsed > 45 or (speed is not None and float(speed) > 55):
             pending = None
             continue
-        speed = candidate.get("speed")
-        if speed is not None and math.isfinite(float(speed)) and float(speed) >= 1.5:
+        if moving:
             result.append(candidate)
             pending = None
             continue
@@ -141,8 +144,9 @@ def _request(service: str, points: list[dict]) -> list[list[float]]:
             "geometries": "geojson",
             "steps": "false",
             "tidy": "true",
-            "gaps": "ignore",
+            "gaps": "split",
             "radiuses": ";".join(str(max(5, min(50, round(point["accuracy"])))) for point in points),
+            "timestamps": ";".join(str(round(datetime.fromisoformat(str(point["recorded_at"]).replace("Z", "+00:00")).timestamp())) for point in points),
         })
         url = f"{base}/match/v1/driving/{coordinates}?{query}"
     else:
@@ -155,6 +159,8 @@ def _request(service: str, points: list[dict]) -> list[list[float]]:
     if data.get("code") != "Ok":
         raise ValueError(f'Road service returned {data.get("code", "an invalid response")}.')
     geometries = data.get("matchings") if service == "match" else data.get("routes")
+    if service == "match" and len(geometries or []) != 1:
+        raise ValueError("OSRM split the trace into disconnected road matches.")
     output: list[list[float]] = []
     for item in geometries or []:
         geometry = item.get("geometry", {}).get("coordinates", [])
@@ -173,7 +179,7 @@ def _request(service: str, points: list[dict]) -> list[list[float]]:
 
 
 def road_geometry(raw: list[dict]) -> tuple[list[list[float]], bool]:
-    """Return road-following geometry and whether matching succeeded."""
+    """Return filtered GPS geometry, refined by OSRM only when it stays credible."""
     cleaned = _clean(raw)
     geometry = [[p["longitude"], p["latitude"]] for p in cleaned]
     if len(cleaned) < 2:
@@ -181,9 +187,21 @@ def road_geometry(raw: list[dict]) -> tuple[list[list[float]], bool]:
     if not _enabled():
         return geometry, False
     waypoints = _routing_points(cleaned)
-    for service in ("match", "route"):
-        try:
-            return _request(service, waypoints), True
-        except Exception as error:  # Raw geometry is the safe fallback.
-            logger.warning("Route Studio %s request failed: %s", service, error)
+    try:
+        matched = _request("match", waypoints)
+        raw_length = sum(_distance(cleaned[index - 1], cleaned[index]) for index in range(1, len(cleaned)))
+        matched_points = [{"longitude": point[0], "latitude": point[1]} for point in matched]
+        matched_length = sum(_distance(matched_points[index - 1], matched_points[index]) for index in range(1, len(matched_points)))
+        if matched_length > max(raw_length * 1.8, raw_length + 300) or matched_length < raw_length * 0.45:
+            raise ValueError("OSRM match length is inconsistent with the filtered GPS trail.")
+        for waypoint in waypoints:
+            corridor_distance = min(
+                _point_segment_distance(waypoint, matched_points[index - 1], matched_points[index])
+                for index in range(1, len(matched_points))
+            )
+            if corridor_distance > max(50, waypoint["accuracy"] * 3):
+                raise ValueError("OSRM match left the trusted GPS corridor.")
+        return matched, True
+    except Exception as error:  # Filtered GPS geometry is the safe fallback.
+        logger.warning("Route Studio OSRM match rejected: %s", error)
     return geometry, False

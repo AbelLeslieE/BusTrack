@@ -31,13 +31,50 @@ export async function createStudioMap(container, {onStop, onMoveStop, onError}) 
     map.addControl(new gl.NavigationControl(),'top-right');
     map.addControl(new gl.ScaleControl({unit:'metric'}),'bottom-left');
     let ready=false, destroyed=false, path=[], stops=[], editable=false, position=null, accuracy=0, following=true, marker=null, stopMarkers=[];
+    let motionFrame=null, motionRunning=false, motionQueue=[];
     map.on('dragstart',()=>{following=false;});
     map.on('error',()=>{if(!destroyed) onError('Map tiles are unavailable. GPS recording and local storage can continue.');});
     map.on('click',event=>onStop({lat:event.lngLat.lat,lng:event.lngLat.lng}));
-    function drawPath() {
+    function drawPath(livePoint=null) {
         if (!ready) return;
-        map.getSource('studio-trace').setData(path.length>1 ? feature({type:'LineString',coordinates:path}) : empty());
+        const visiblePath=livePoint && path.length ? [...path,livePoint] : path;
+        map.getSource('studio-trace').setData(visiblePath.length>1 ? feature({type:'LineString',coordinates:visiblePath}) : empty());
         map.getSource('studio-accuracy').setData(position ? accuracyRing(position,accuracy) : empty());
+    }
+    function ensureMarker(point) {
+        if(marker) return;
+        const el=document.createElement('div');el.className='studio-live-pin';el.setAttribute('aria-label','Latest phone GPS position');
+        marker=new gl.Marker({element:el}).setLngLat(point).addTo(map);
+    }
+    function placePosition(point, metres, livePoint=null) {
+        position=point;accuracy=metres;ensureMarker(point);marker.setLngLat(point);drawPath(livePoint);
+    }
+    function stopMotion(clearQueue=true) {
+        if(motionFrame!==null) cancelAnimationFrame(motionFrame);
+        motionFrame=null;motionRunning=false;
+        if(clearQueue) motionQueue=[];
+    }
+    function runMotionQueue() {
+        if(destroyed || motionRunning || !motionQueue.length) return;
+        motionRunning=true;
+        const next=motionQueue.shift();
+        const from=position || next.point;
+        if(!path.length) path=[from];
+        const started=performance.now();
+        const duration=Math.max(180,Math.min(1200,next.duration || 700));
+        if(following) map.easeTo({center:next.point,zoom:Math.max(map.getZoom(),15),duration});
+        const frame=now=>{
+            if(destroyed) return;
+            const elapsed=Math.min(1,(now-started)/duration);
+            const eased=1-Math.pow(1-elapsed,3);
+            const live=[from[0]+(next.point[0]-from[0])*eased,from[1]+(next.point[1]-from[1])*eased];
+            placePosition(live,next.metres,live);
+            if(elapsed<1) {motionFrame=requestAnimationFrame(frame);return;}
+            if(!path.length || path.at(-1)[0]!==next.point[0] || path.at(-1)[1]!==next.point[1]) path.push(next.point);
+            placePosition(next.point,next.metres);
+            motionFrame=null;motionRunning=false;runMotionQueue();
+        };
+        motionFrame=requestAnimationFrame(frame);
     }
     map.on('load',()=>{
         if(destroyed) return;
@@ -50,7 +87,7 @@ export async function createStudioMap(container, {onStop, onMoveStop, onError}) 
     });
     return {
         setPath(coords, {fit=false}={}) {
-            path=coords;drawPath();
+            stopMotion();path=coords.map(point=>[point[0],point[1]]);drawPath();
             if(fit && coords.length) {
                 const bounds=coords.reduce((b,p)=>b.extend(p),new gl.LngLatBounds(coords[0],coords[0]));
                 map.fitBounds(bounds,{padding:55,maxZoom:16,duration:500});
@@ -67,12 +104,13 @@ export async function createStudioMap(container, {onStop, onMoveStop, onError}) 
             });
         },
         setPosition(point, metres) {
-            position=point;accuracy=metres;drawPath();
-            if(!marker) { const el=document.createElement('div');el.className='studio-live-pin';el.setAttribute('aria-label','Latest phone GPS position');marker=new gl.Marker({element:el}).setLngLat(point).addTo(map); }
-            marker.setLngLat(point);
+            stopMotion();placePosition(point,metres);
             if(following) map.easeTo({center:point,zoom:Math.max(map.getZoom(),15),duration:800});
         },
+        tracePosition(point, metres, {duration=700}={}) {
+            motionQueue.push({point:[point[0],point[1]],metres,duration});runMotionQueue();
+        },
         follow(){following=true;if(position)map.easeTo({center:position,zoom:16,duration:500});},
-        remove(){destroyed=true;marker?.remove();stopMarkers.forEach(m=>m.remove());map.remove();}
+        remove(){destroyed=true;stopMotion();marker?.remove();stopMarkers.forEach(m=>m.remove());map.remove();}
     };
 }

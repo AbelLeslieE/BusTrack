@@ -1,5 +1,6 @@
 import unittest
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
 from backend.services.road_matching import _clean, road_geometry
 
@@ -34,6 +35,31 @@ class RoadMatchingMovementTest(unittest.TestCase):
         fixes = [self.point(10, 0), self.point(10.0004, 10, accuracy=60, speed=7),
                  self.point(10.0006, 15, speed=7)]
         self.assertEqual(_clean(fixes), [fixes[0], fixes[2]])
+
+    def test_multiple_impossible_spikes_are_dropped_before_good_points_resume(self):
+        fixes = [self.point(10, 0, speed=8), self.point(10.0001, 1, speed=8),
+                 self.point(11, 2, speed=8), self.point(15, 3, speed=8),
+                 self.point(10.0002, 4, speed=8)]
+        self.assertEqual(_clean(fixes), [fixes[0], fixes[1], fixes[4]])
+
+    def test_osrm_map_matching_is_retained_after_filtering(self):
+        fixes = [self.point(10, 0, speed=8), self.point(10.0001, 1, speed=8),
+                 self.point(10.0002, 2, speed=8)]
+        matched = [[76.0, 10.0], [76.0, 10.0001], [76.0, 10.0002]]
+        with patch.dict('os.environ', {'ROUTE_STUDIO_ROAD_MATCHING_ENABLED': 'true'}), \
+             patch('backend.services.road_matching._request', return_value=matched) as request:
+            self.assertEqual(road_geometry(fixes), (matched, True))
+        request.assert_called_once()
+        self.assertEqual(request.call_args.args[0], 'match')
+
+    def test_implausible_osrm_detour_falls_back_to_filtered_gps(self):
+        fixes = [self.point(10, 0, speed=8), self.point(10.0001, 1, speed=8),
+                 self.point(10.0002, 2, speed=8)]
+        detour = [[76.0, 10.0], [77.0, 11.0], [76.0, 10.0002]]
+        expected = [[point['longitude'], point['latitude']] for point in fixes]
+        with patch.dict('os.environ', {'ROUTE_STUDIO_ROAD_MATCHING_ENABLED': 'true'}), \
+             patch('backend.services.road_matching._request', return_value=detour):
+            self.assertEqual(road_geometry(fixes), (expected, False))
 
 
 if __name__ == "__main__":

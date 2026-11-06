@@ -207,7 +207,8 @@ def action(sid: str, data: Action, db: Session = Depends(get_db), actor=Depends(
         s.ended_at = datetime.now(timezone.utc)
         record_audit_event(db, category="route_studio", action="recording_finished", actor=actor,
                            details={"trace_id": s.id, "raw_samples": len(raw),
-                                    "geometry_points": len(geometry), "road_matched": matched})
+                                    "geometry_points": len(geometry), "road_matched": matched,
+                                    "geometry_mode": "osrm_match" if matched else "filtered_gps_trail"})
     s.status = target_status
     db.commit()
     return payload(s)
