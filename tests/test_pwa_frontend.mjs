@@ -34,5 +34,9 @@ assert.doesNotMatch(cacheRefresh, /registration\.unregister/);
 
 assert.match(tracer, /navigator\.wakeLock\.request\("screen"\)/);
 assert.match(tracer, /wakeLock\.release\(\)/);
+assert.match(tracer, /Recording remains armed in the background/);
+assert.match(tracer, /Recording resumed after background\/lock screen/);
+assert.match(tracer, /Date\.now\(\) - lastSample > 30000/);
+assert.doesNotMatch(tracer, /document\.hidden && watch !== null\) \{ stopWatch\(/);
 
 console.log('PWA install, cache safety, and tracer Wake Lock checks passed.');

@@ -8,8 +8,8 @@ const source=readFileSync(new URL('../frontend/modules/js/routeStudio.js',import
 const settle=async()=>{for(let i=0;i<15;i++) await new Promise(setImmediate);};
 
 function fixture({denied=false}={}){
-    const values=new Map(), intervals=new Map(), nodes=new Map(), frames=[];
-    let gpsCallback, watched=0, cleared=0, offline=false, tick=0, next=0, clock=Date.now(), externalFetches=0;
+    const values=new Map(), intervals=new Map(), nodes=new Map(), frames=[], documentHandlers=new Map();
+    let gpsCallback, gpsError, watched=0, cleared=0, offline=false, tick=0, next=0, clock=Date.now(), externalFetches=0;
     class TestDate extends Date {
         constructor(...args){super(...(args.length ? args : [clock]));}
         static now(){return clock;}
@@ -23,11 +23,11 @@ function fixture({denied=false}={}){
         esc:v=>String(v),createStudioMap:async()=>({setPath:p=>paths.push(structuredClone(p)),setStops(){},setPosition:p=>positions.push(p),tracePosition:p=>traces.push(structuredClone(p)),follow(){},remove(){}}),crypto:{randomUUID:()=> '11111111-1111-4111-8111-111111111111'},
         setTimeout,clearTimeout,setInterval:fn=>{intervals.set(++next,fn);return next;},clearInterval:id=>intervals.delete(id),
         localStorage:{getItem:()=>JSON.stringify({id:7,role:'Tracer'})},
-        document:{hidden:false,createElement:()=>root,addEventListener(){},removeEventListener(){}},
+        document:{hidden:false,createElement:()=>root,addEventListener(name,fn){documentHandlers.set(name,fn);},removeEventListener(name){documentHandlers.delete(name);}},
         window:{isSecureContext:true},requestAnimationFrame:fn=>frames.push(fn),confirm:()=>true,
         navigator:{locks:{request:async(_name,_options,fn)=>fn({})},geolocation:{
             getCurrentPosition:(ok,fail)=>denied?fail({code:1}):ok({timestamp:Date.now(),coords:{latitude:10,longitude:76,accuracy:5}}),
-            watchPosition:fn=>{gpsCallback=fn;watched++;return 42;},clearWatch:()=>cleared++}},
+            watchPosition:(fn,fail)=>{gpsCallback=fn;gpsError=fail;watched++;return 42;},clearWatch:()=>cleared++}},
         indexedDB:{open(){const r={};setImmediate(()=>{r.result={close(){},transaction(){
             const tx={objectStore:()=>({get(key){const q={result:structuredClone(values.get(key))};setImmediate(()=>tx.oncomplete());return q;},
                 put(value,key){const q={result:key};values.set(key,structuredClone(value));setImmediate(()=>tx.oncomplete());return q;}})};return tx;}};r.onsuccess();});return r;}},
@@ -43,12 +43,14 @@ function fixture({denied=false}={}){
     vm.runInContext(source+'\n globalThis.page=render();',context);
     return {values,intervals,root,frames,context,positions,paths,traces,get watched(){return watched;},get cleared(){return cleared;},get externalFetches(){return externalFetches;},
         offline(value){offline=value;},async init(){await frames.shift()();await settle();},
+        async visibility(hidden){context.document.hidden=hidden;documentHandlers.get('visibilitychange')?.();await settle();},
         async click(action){const button={dataset:{action},disabled:false};root.listeners.click({target:{closest:()=>button}});await settle();},
         async fix({latitude=10,longitude=76,accuracy=5,speed=0,seconds=4}={}){
             clock+=seconds*1000;
             gpsCallback({timestamp:clock,coords:{latitude,longitude,accuracy,speed,heading:null}});
             await settle();
         },
+        async gpsFailure({code=3,message='Timed out'}={}){gpsError({code,message});await settle();},
         async sync(){for(const fn of intervals.values())fn();await settle();}};
 }
 
@@ -74,6 +76,26 @@ test('GPS is persisted before upload and offline pending samples survive',async(
     await f.fix();assert.equal(f.values.get(7).pending.length,1);
     f.offline(true);await f.sync();assert.equal(f.values.get(7).pending.length,1);
     f.root.cleanup();assert.equal(f.cleared,1);assert.equal(f.intervals.size,0);assert.equal(f.values.get(7).pending.length,1);
+});
+test('backgrounding or locking the phone keeps the tracer watcher armed',async()=>{
+    const f=fixture();await f.init();await f.click('start');await f.fix();
+    await f.visibility(true);
+    assert.equal(f.watched,1);assert.equal(f.cleared,0);
+    await f.fix({latitude:10.0001,speed:8});
+    assert.equal(f.values.get(7).pending.length,2);
+    assert.match(f.root.querySelector('.studio-status').textContent,/Recording ON/);
+    await f.visibility(false);
+    assert.equal(f.watched,1);assert.equal(f.cleared,0);
+    assert.equal(f.root.querySelector('.studio-record-badge').dataset.live,'true');
+    f.root.cleanup();assert.equal(f.cleared,1);
+});
+test('temporary GPS errors do not terminate an active recording',async()=>{
+    const f=fixture();await f.init();await f.click('start');
+    await f.gpsFailure();
+    assert.equal(f.cleared,0);assert.equal(f.root.querySelector('.studio-record-badge').dataset.live,'true');
+    assert.match(f.root.querySelector('.studio-status').textContent,/temporarily unavailable/);
+    await f.fix();assert.equal(f.values.get(7).pending.length,1);
+    f.root.cleanup();assert.equal(f.cleared,1);
 });
 test('only acknowledged samples are removed after successful upload',async()=>{
     const f=fixture();await f.init();await f.click('start');await f.fix();await f.sync();

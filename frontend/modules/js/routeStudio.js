@@ -48,7 +48,7 @@ export function render() {
       <section class="studio-map-card studio-admin-map"><div class="studio-map-toolbar"><span>Route workshop <small>Stops set the order · OSRM follows the roads · guide points fine-tune the line</small></span><div class="studio-map-actions"><input class="studio-new-stop-name" aria-label="New stop name" placeholder="Name this stop"><button data-action="add-stop">Add stop</button><button data-action="build-road">Connect stops by road</button><button data-action="edit-route" aria-pressed="false">Fine-tune line</button><button data-action="fit">Show whole route</button></div></div><div class="studio-route-tools" aria-label="Route editing tools"><button data-action="undo">Undo</button><button data-action="redo">Redo</button><button data-action="remove-guide">Remove last edit point</button><button data-action="clear-guides">Clear edit points</button><button data-action="restore-trace">Restore tracer trail</button><span class="studio-route-mode">Choose a recorded path to begin.</span></div><p class="studio-map-status" role="status">Choose a recorded path above.</p><div class="studio-map" aria-label="Recorded bus route map"></div></section>
       <div class="studio-editor"></div>` : `
       <header class="studio-header"><div><p class="studio-eyebrow">BUSTRACK / ${tracer ? 'TRACER PORTAL' : admin ? 'ROUTE APPROVAL' : 'TECHNICIAN PORTAL'}</p><h1>${tracer ? 'Every turn, captured.' : admin ? 'Maintain route' : 'Routes · Traced paths'}</h1><p>${tracer ? 'Watch your journey take shape as you travel.' : admin ? 'Review technician-prepared paths and choose the route maintained for this bus.' : 'Review recorded paths, refine stops, and prepare routes for approval.'}</p></div><span class="studio-record-badge">● Recording off</span></header>
-      ${tracer ? `<section class="studio-permission"><div><h2>Your location, your control</h2><p>Allow precise location to trace your assigned bus. Samples are saved on this phone and synchronized to BusTrack. Keep this page visible and your phone unlocked.</p></div><button data-action="permission">Enable location</button><span class="studio-permission-state">Permission not requested</span></section>` : ''}
+      ${tracer ? `<section class="studio-permission"><div><h2>Your location, your control</h2><p>Allow precise location to trace your assigned bus. Samples are saved on this phone and synchronized to BusTrack. Install the PWA and leave this recording open; BusTrack keeps the screen awake when Android permits it and safely resumes after background interruptions.</p></div><button data-action="permission">Enable location</button><span class="studio-permission-state">Permission not requested</span></section>` : ''}
       <div class="studio-metrics"><div><span>Assigned bus</span><strong class="studio-bus-label">—</strong></div><div><span>GPS accuracy</span><strong class="studio-accuracy">Waiting</strong></div><div><span>Samples captured</span><strong class="studio-samples">0</strong></div><div><span>Pending upload</span><strong class="studio-pending">0</strong></div><div><span>Last GPS fix</span><strong class="studio-last-fix">—</strong></div></div>
       <p role="status" class="studio-status">Loading…</p><div class="studio-controls studio-management"></div>
       <div class="studio-controls"><input class="studio-name" aria-label="Path name" placeholder="Path name"><select class="studio-history" aria-label="Saved recordings"><option value="">Choose a recording</option></select><button data-action="refresh">Refresh</button></div>
@@ -283,6 +283,73 @@ export function render() {
         draw(true);
         if(rawGeometry.length) map?.setPosition(rawGeometry.at(-1),routeFixes.at(-1).accuracy);
     }
+    function acceptPosition(position) {
+        if (closed || watch === null || Date.now() - lastSample < 750) return;
+        lastSample = Date.now();
+        queue(async () => {
+            if (local.sequence >= 20000) throw new Error('Recording reached 20,000 samples. Finish this path before starting another.');
+            const c = position.coords;
+            lastFix=position;
+            if (![c.latitude,c.longitude,c.accuracy].every(Number.isFinite) || c.accuracy > 75) {
+                status(`Waiting for a better GPS fix · current accuracy ±${Math.round(c.accuracy || 0)}m · point not recorded`);
+                return;
+            }
+            const point = {sequence: local.sequence + 1, latitude:c.latitude, longitude:c.longitude, accuracy:c.accuracy,
+                speed:c.speed !== null && c.speed >= 0 ? c.speed : null, heading:c.heading, recorded_at:new Date(position.timestamp).toISOString()};
+            if(lastAcceptedPoint) {
+                const elapsed=Math.max(1,(new Date(point.recorded_at)-new Date(lastAcceptedPoint.recorded_at))/1000);
+                const distance=distanceMetres(lastAcceptedPoint,point);
+                const impossibleSpeed=distance/elapsed > 45;
+                const impossibleReportedSpeed=Number.isFinite(point.speed) && point.speed > 55;
+                if((distance > Math.max(60,3*(lastAcceptedPoint.accuracy+c.accuracy)) && impossibleSpeed) || impossibleReportedSpeed) {
+                    status(`Impossible GPS jump rejected · ${Math.round(distance)}m in ${Math.round(elapsed)}s · route unchanged`);
+                    return;
+                }
+            }
+            local.sequence = point.sequence; local.pending.push(point);
+            await storage(local, true);
+            lastAcceptedPoint=point;
+            if (selected?.id === local.id) {
+                const mapStatus=root.querySelector('.studio-map-status');
+                const added=addMovementFix(point);
+                if(added.length) {
+                    selected.geometry=[...rawGeometry];
+                    if(rawGeometry.length===added.length) {
+                        map?.setPath(rawGeometry);
+                        map?.setPosition(rawGeometry[0],added[0].accuracy);
+                    } else {
+                        for(const accepted of added) {
+                            const previous=routeFixes[routeFixes.indexOf(accepted)-1];
+                            const elapsed=previous ? Date.parse(accepted.recorded_at)-Date.parse(previous.recorded_at) : 700;
+                            map?.tracePosition([accepted.longitude,accepted.latitude],accepted.accuracy,{duration:Math.max(250,Math.min(1100,elapsed))});
+                        }
+                    }
+                    if(rawGeometry.length > 1 && mapStatus) mapStatus.textContent='Live GPS trail · blue line grows behind the moving phone';
+                } else if(mapStatus) {
+                    mapStatus.textContent=c.accuracy > 35
+                        ? 'GPS fix saved · waiting for better accuracy before extending the route'
+                        : 'GPS fix saved · route held until movement is confirmed';
+                }
+            }
+            status(`Recording ON · accuracy ${Math.round(c.accuracy)}m · ${local.pending.length} pending samples${c.accuracy > 35 ? ' · waiting for precise GPS to extend route' : ''}`);
+        });
+    }
+    function locationError(error) {
+        if(error.code===1) {
+            stopWatch();
+            root.querySelector('.studio-permission-state').textContent='Location permission revoked. Allow Location in browser site settings.';
+            status('Recording stopped because location permission was revoked. Saved samples are recoverable.');
+            return;
+        }
+        // Android can briefly report TIMEOUT or POSITION_UNAVAILABLE while
+        // switching networks, entering a tunnel, or waking from the lock
+        // screen. The watch remains armed so the next valid fix is retained.
+        status(`GPS temporarily unavailable: ${error.message}. Recording remains armed and saved samples are safe.`);
+    }
+    function startLocationWatch() {
+        watch = navigator.geolocation.watchPosition(acceptPosition, locationError,
+            {enableHighAccuracy:true, maximumAge:0, timeout:15000});
+    }
     async function capture() {
         if (!window.isSecureContext || !navigator.geolocation) throw new Error('Phone recording requires HTTPS and location access.');
         if (watch !== null) return;
@@ -293,62 +360,12 @@ export function render() {
                 await new Promise(release => { releaseLock = release; resolve(); });
             }).catch(reject);
         });
-        if (closed || document.hidden) { stopWatch(); throw new Error('Keep the recording page visible.'); }
+        if (closed) { stopWatch(); throw new Error('The recording page was closed.'); }
         lastSample = 0;
-        watch = navigator.geolocation.watchPosition(position => {
-            if (closed || watch === null || Date.now() - lastSample < 750) return;
-            lastSample = Date.now();
-            queue(async () => {
-                if (local.sequence >= 20000) throw new Error('Recording reached 20,000 samples. Finish this path before starting another.');
-                const c = position.coords;
-                lastFix=position;
-                if (![c.latitude,c.longitude,c.accuracy].every(Number.isFinite) || c.accuracy > 75) {
-                    status(`Waiting for a better GPS fix · current accuracy ±${Math.round(c.accuracy || 0)}m · point not recorded`);
-                    return;
-                }
-                const point = {sequence: local.sequence + 1, latitude:c.latitude, longitude:c.longitude, accuracy:c.accuracy,
-                    speed:c.speed !== null && c.speed >= 0 ? c.speed : null, heading:c.heading, recorded_at:new Date(position.timestamp).toISOString()};
-                if(lastAcceptedPoint) {
-                    const elapsed=Math.max(1,(new Date(point.recorded_at)-new Date(lastAcceptedPoint.recorded_at))/1000);
-                    const distance=distanceMetres(lastAcceptedPoint,point);
-                    const impossibleSpeed=distance/elapsed > 45;
-                    const impossibleReportedSpeed=Number.isFinite(point.speed) && point.speed > 55;
-                    if((distance > Math.max(60,3*(lastAcceptedPoint.accuracy+c.accuracy)) && impossibleSpeed) || impossibleReportedSpeed) {
-                        status(`Impossible GPS jump rejected · ${Math.round(distance)}m in ${Math.round(elapsed)}s · route unchanged`);
-                        return;
-                    }
-                }
-                local.sequence = point.sequence; local.pending.push(point);
-                await storage(local, true);
-                lastAcceptedPoint=point;
-                if (selected?.id === local.id) {
-                    const mapStatus=root.querySelector('.studio-map-status');
-                    const added=addMovementFix(point);
-                    if(added.length) {
-                        selected.geometry=[...rawGeometry];
-                        if(rawGeometry.length===added.length) {
-                            map?.setPath(rawGeometry);
-                            map?.setPosition(rawGeometry[0],added[0].accuracy);
-                        } else {
-                            for(const accepted of added) {
-                                const previous=routeFixes[routeFixes.indexOf(accepted)-1];
-                                const elapsed=previous ? Date.parse(accepted.recorded_at)-Date.parse(previous.recorded_at) : 700;
-                                map?.tracePosition([accepted.longitude,accepted.latitude],accepted.accuracy,{duration:Math.max(250,Math.min(1100,elapsed))});
-                            }
-                        }
-                        if(rawGeometry.length > 1 && mapStatus) mapStatus.textContent='Live GPS trail · blue line grows behind the moving phone';
-                    } else if(mapStatus) {
-                        mapStatus.textContent=c.accuracy > 35
-                            ? 'GPS fix saved · waiting for better accuracy before extending the route'
-                            : 'GPS fix saved · route held until movement is confirmed';
-                    }
-                }
-                status(`Recording ON · accuracy ${Math.round(c.accuracy)}m · ${local.pending.length} pending samples${c.accuracy > 35 ? ' · waiting for precise GPS to extend route' : ''}`);
-            });
-        }, error => { stopWatch(); if(error.code===1) root.querySelector('.studio-permission-state').textContent='Location permission revoked. Allow Location in browser site settings.'; status(`Recording interrupted: ${error.message}. Saved samples are recoverable.`); }, {enableHighAccuracy:true, maximumAge:0, timeout:15000});
+        startLocationWatch();
         void requestScreenWakeLock();
         if (!timer) timer = setInterval(() => { void flush(); }, 12000);
-        status('Recording ON · waiting for phone GPS · screen kept awake where supported');
+        status('Recording ON · background-ready · waiting for phone GPS · screen kept awake where supported');
     }
     async function act(action) {
         if(action === 'permission') { await requestLocation(); status('Location enabled. Press Start to begin recording your assigned bus.'); return; }
@@ -462,7 +479,23 @@ export function render() {
         if (event.target.matches('.studio-history') && event.target.value) load(event.target.value).catch(e => status(e.message));
         if (event.target.dataset.stop !== undefined && selected?.status === 'DRAFT') { remember(); selected.stops[Number(event.target.dataset.stop)].name=event.target.value; draw(); }
     });
-    const visibility = () => { if (document.hidden && watch !== null) { stopWatch(); status('Recording interrupted while page was hidden. Use Recover when ready.'); } };
+    const visibility = () => {
+        if (watch === null) return;
+        if (document.hidden) {
+            status('Recording remains armed in the background · samples stay on this phone until uploaded.');
+            return;
+        }
+        void requestScreenWakeLock();
+        // A suspended Android browser can keep an obsolete watch ID without
+        // delivering fixes. Re-arm it when the app returns after a long gap.
+        if (!lastSample || Date.now() - lastSample > 30000) {
+            navigator.geolocation.clearWatch(watch);
+            watch = null;
+            startLocationWatch();
+        }
+        void flush();
+        status('Recording resumed after background/lock screen · waiting for the next precise GPS fix.');
+    };
     document.addEventListener('visibilitychange', visibility);
     root.cleanup = () => { closed=true; stopWatch(); clearInterval(timer); document.removeEventListener('visibilitychange',visibility); map?.remove(); };
     requestAnimationFrame(async () => {
