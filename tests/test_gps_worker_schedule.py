@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 import os
 from pathlib import Path
@@ -13,6 +14,7 @@ from backend.gps_worker import (
     active_peak_window,
     midnight_maintenance_due,
     peak_poll_interval_seconds,
+    refresh_providers_once,
     run_peak_worker,
     run_standby_worker,
     standby_refresh_allowed,
@@ -48,6 +50,33 @@ class GPSWorkerScheduleTest(unittest.TestCase):
             with self.subTest(configured=configured):
                 with patch.dict(os.environ, {"GPS_PEAK_POLL_INTERVAL_SECONDS": configured}):
                     self.assertEqual(peak_poll_interval_seconds(), expected)
+
+    def test_both_worker_modes_use_shared_live_tracking_refresh(self) -> None:
+        database_session = object()
+
+        @contextmanager
+        def provider_session():
+            yield database_session
+
+        provider_result = {
+            "updated": [{"active_trip_id": 42}],
+            "errors": [],
+            "skipped": [],
+        }
+        with (
+            patch("backend.gps_worker.restore_in_progress", return_value=False),
+            patch("backend.gps_worker.provider_polling_configured", return_value=True),
+            patch("backend.gps_worker._provider_session", side_effect=provider_session),
+            patch(
+                "backend.gps_worker.refresh_gps_providers",
+                return_value=provider_result,
+            ) as refresh,
+        ):
+            self.assertTrue(refresh_providers_once("peak"))
+            self.assertTrue(refresh_providers_once("standby"))
+
+        self.assertEqual(refresh.call_count, 2)
+        self.assertTrue(all(call.args == (database_session,) for call in refresh.call_args_list))
 
     @patch("backend.gps_worker.refresh_providers_once")
     @patch("backend.gps_worker.run_direction_recovery")

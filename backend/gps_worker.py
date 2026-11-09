@@ -155,10 +155,16 @@ def refresh_providers_once(label: str) -> bool:
                 logger.warning("Skipping %s GPS refresh because another worker owns the lock.", label)
                 return False
             result = refresh_gps_providers(database_session)
+        live_trip_updates = sum(
+            1
+            for item in result["updated"]
+            if isinstance(item, dict) and item.get("active_trip_id") is not None
+        )
         logger.info(
-            "GPS providers %s: %s updated, %s errors, %s skipped.",
+            "GPS providers %s: %s updated, %s live trips updated, %s errors, %s skipped.",
             label,
             len(result["updated"]),
+            live_trip_updates,
             len(result["errors"]),
             len(result["skipped"]),
         )
