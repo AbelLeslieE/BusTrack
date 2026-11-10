@@ -234,7 +234,7 @@ Invoke-Gcloud run jobs deploy $PeakWorkerJobName `
     --set-secrets $secretArgument `
     --set-env-vars $workerEnvironment `
     --command python `
-    --args=-m,backend.gps_worker,--mode,peak `
+    --args="-m,backend.gps_worker,--mode,peak" `
     --cpu 1 `
     --memory 512Mi `
     --tasks 1 `
@@ -254,7 +254,7 @@ Invoke-Gcloud run jobs deploy $StandbyWorkerJobName `
     --set-secrets $secretArgument `
     --set-env-vars $workerEnvironment `
     --command python `
-    --args=-m,backend.gps_worker,--mode,standby `
+    --args="-m,backend.gps_worker,--mode,standby" `
     --cpu 1 `
     --memory 512Mi `
     --tasks 1 `

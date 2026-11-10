@@ -147,8 +147,11 @@ class GPSWorkerDeploymentTest(unittest.TestCase):
         deployment = (root / "deploy" / "gcp" / "deploy-cloud-run.ps1").read_text(encoding="utf-8")
         self.assertIn("run jobs deploy $PeakWorkerJobName", deployment)
         self.assertIn("run jobs deploy $StandbyWorkerJobName", deployment)
-        self.assertIn("--args=-m,backend.gps_worker,--mode,peak", deployment)
-        self.assertIn("--args=-m,backend.gps_worker,--mode,standby", deployment)
+        # PowerShell otherwise splits unquoted commas into separate native
+        # command arguments, preventing Python from receiving ``-m`` and the
+        # worker module as distinct values.
+        self.assertIn('--args="-m,backend.gps_worker,--mode,peak"', deployment)
+        self.assertIn('--args="-m,backend.gps_worker,--mode,standby"', deployment)
         self.assertIn('GPS_PEAK_POLL_INTERVAL_SECONDS=10', deployment)
         self.assertIn('--time-zone "Asia/Kolkata"', deployment)
         self.assertIn('-Schedule "0 7 * * *"', deployment)
