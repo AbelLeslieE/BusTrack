@@ -176,9 +176,10 @@ The script's default database secret version is still `1` for older deployments.
 Always pass `-DatabaseSecretVersion 2` for this production project. When a
 secret is rotated, pass the corresponding `-...SecretVersion` parameter
 explicitly and redeploy; never use the mutable `latest` alias.
-The web service uses request-based CPU allocation and may scale to zero with
-the default `WebMinInstances=0`. GPS jobs allocate CPU only while they execute;
-the peak job exits at each window boundary and standby exits after one pass.
+The web service uses request-based CPU allocation and keeps one warm instance
+by default (`WebMinInstances=1`) to avoid cold starts. GPS jobs allocate CPU
+only while they execute; the peak job exits at each window boundary and standby
+exits after one pass.
 See `docs/gps-worker-schedule-and-savings.md` for the request and compute model.
 
 The Cloud Run runtime service account needs `roles/cloudsql.client` and access

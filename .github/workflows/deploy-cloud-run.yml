@@ -93,6 +93,7 @@ jobs:
             -BusPassSecret $env:BUS_PASS_SECRET `
             -BootstrapAdminSecret $env:BOOTSTRAP_ADMIN_SECRET `
             -OptionalSecretBindings $optional `
+            -WebMinInstances 1 `
             -SkipProjectSetup
 
       - name: Verify public service

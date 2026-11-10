@@ -43,7 +43,7 @@ param(
     [string[]]$OptionalSecretBindings = @(),
     [switch]$SkipProjectSetup,
     [ValidateRange(0, 20)]
-    [int]$WebMinInstances = 0,
+    [int]$WebMinInstances = 1,
     [ValidateRange(1, 100)]
     [int]$WebMaxInstances = 3
 )
