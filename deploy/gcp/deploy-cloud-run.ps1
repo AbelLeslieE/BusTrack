@@ -140,6 +140,18 @@ if (-not $SkipProjectSetup) {
     }
 }
 
+# Optional provider secrets may be added after the initial project setup. Keep
+# their accessor grants current even when deployment intentionally skips the
+# broader project setup phase.
+$optionalSecretNames = @()
+foreach ($binding in $OptionalSecretBindings) {
+    $optionalSecretNames += (($binding -split '=', 2)[1] -split ':', 2)[0]
+}
+foreach ($secretName in ($optionalSecretNames | Where-Object { $_ } | Sort-Object -Unique)) {
+    Invoke-Gcloud secrets describe $secretName --project $ProjectId
+    Invoke-Gcloud secrets add-iam-policy-binding $secretName --project $ProjectId --member "serviceAccount:$serviceAccountEmail" --role roles/secretmanager.secretAccessor --condition None --quiet
+}
+
 $secretBindings = @(
     "DATABASE_URL=$DatabaseSecret`:$DatabaseSecretVersion",
     "JWT_SECRET_KEY=$JwtSecret`:$JwtSecretVersion",
