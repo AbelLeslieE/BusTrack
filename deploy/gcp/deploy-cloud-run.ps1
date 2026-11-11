@@ -148,8 +148,11 @@ foreach ($binding in $OptionalSecretBindings) {
     $optionalSecretNames += (($binding -split '=', 2)[1] -split ':', 2)[0]
 }
 foreach ($secretName in ($optionalSecretNames | Where-Object { $_ } | Sort-Object -Unique)) {
-    Invoke-Gcloud secrets describe $secretName --project $ProjectId
-    Invoke-Gcloud secrets add-iam-policy-binding $secretName --project $ProjectId --member "serviceAccount:$serviceAccountEmail" --role roles/secretmanager.secretAccessor --condition None --quiet
+    # Only newly managed provider secrets need a grant here. Existing optional
+    # bindings can belong to separate integrations with their own IAM owner.
+    if ($secretName -eq 'bustrack-kingstrack-accounts') {
+        Invoke-Gcloud secrets add-iam-policy-binding $secretName --project $ProjectId --member "serviceAccount:$serviceAccountEmail" --role roles/secretmanager.secretAccessor --condition None --quiet
+    }
 }
 
 $secretBindings = @(
