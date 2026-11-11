@@ -81,6 +81,10 @@ jobs:
           if ($env:OPTIONAL_SECRET_BINDINGS) {
             $optional = $env:OPTIONAL_SECRET_BINDINGS -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }
           }
+          # Kingstrack is enabled for production through Secret Manager. Keep
+          # the binding in deployment code so both finite GPS jobs receive it
+          # even when the optional GitHub variable is empty.
+          $optional += 'KINGSTRACK_ACCOUNTS=bustrack-kingstrack-accounts:1'
           $optional = $optional | Sort-Object -Unique
           ./deploy/gcp/deploy-cloud-run.ps1 `
             -ProjectId $env:PROJECT_ID `
