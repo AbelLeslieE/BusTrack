@@ -1567,3 +1567,150 @@ body::before{
     }
 
 }
+
+/* Compact sign-in layout: keep the primary task obvious and secondary
+   account actions lightweight on both desktop and mobile. */
+.login-card:not(.signup-card){
+    width:min(430px,100%);
+    max-width:430px;
+    max-height:none;
+    padding:26px 28px 24px;
+    overflow:visible;
+}
+
+.login-card:not(.signup-card) .login-logo{
+    gap:4px;
+    margin-bottom:12px;
+}
+
+.login-card:not(.signup-card) .login-logo img{
+    width:58px;
+    height:58px;
+    border-radius:16px;
+}
+
+.login-card:not(.signup-card) .login-logo h1{
+    font-size:2.05rem;
+}
+
+.login-card:not(.signup-card) .login-header{
+    margin-bottom:16px;
+}
+
+.login-card:not(.signup-card) .login-header h2{
+    font-size:1.5rem;
+}
+
+.login-card:not(.signup-card) #login-form{
+    gap:11px;
+}
+
+.login-card:not(.signup-card) .login-help{
+    font-size:.76rem;
+}
+
+.login-card:not(.signup-card) .login-message:not(:empty){
+    padding:9px 11px;
+    border:1px solid rgba(251,191,36,.22);
+    border-radius:10px;
+    background:rgba(92,57,9,.24);
+    font-size:.78rem;
+    line-height:1.4;
+}
+
+.login-alt-actions{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:8px;
+    margin-top:15px;
+    padding-top:14px;
+    border-top:1px solid rgba(255,255,255,.13);
+}
+
+.google-login-link{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    min-height:38px;
+    padding:0 14px;
+    border:1px solid rgba(255,255,255,.18);
+    border-radius:10px;
+    background:rgba(255,255,255,.09);
+    color:rgba(255,255,255,.9);
+    font-size:.8rem;
+    font-weight:700;
+    text-decoration:none;
+    transition:background .18s ease,border-color .18s ease,transform .18s ease;
+}
+
+.google-login-link:hover{
+    transform:translateY(-1px);
+    border-color:rgba(125,211,252,.45);
+    background:rgba(255,255,255,.14);
+}
+
+.google-login-link:focus-visible,
+.login-new-account a:focus-visible{
+    outline:2px solid #7dd3fc;
+    outline-offset:3px;
+}
+
+.google-login-link svg{
+    width:17px;
+    height:17px;
+    flex:0 0 auto;
+}
+
+.login-new-account{
+    margin:0;
+    color:rgba(255,255,255,.62);
+    font-size:.76rem;
+}
+
+.login-new-account a{
+    color:#7dd3fc;
+    font-weight:700;
+    text-decoration:none;
+}
+
+.login-new-account a:hover{
+    text-decoration:underline;
+}
+
+.login-card:not(.signup-card)>.signup-cancel{
+    margin-top:13px;
+    font-size:.76rem;
+}
+
+@media (max-width:768px){
+    .login-container{
+        align-items:flex-start;
+    }
+
+    .login-card:not(.signup-card){
+        margin-block:auto;
+        padding:22px 20px 20px;
+        overflow:visible;
+    }
+
+    .login-card:not(.signup-card):hover{
+        transform:none;
+    }
+}
+
+@media (max-width:480px){
+    .login-card:not(.signup-card){
+        padding:20px 18px 18px;
+    }
+
+    .login-card:not(.signup-card) .login-logo img{
+        width:54px;
+        height:54px;
+    }
+
+    .login-card:not(.signup-card) .login-logo h1{
+        font-size:1.9rem;
+    }
+}

@@ -6,12 +6,16 @@ const login = read("frontend/login.html");
 const signup = read("frontend/google-signup.html");
 const signupScript = read("frontend/common/googleSignup.js");
 const authScript = read("frontend/common/auth.js");
+const loginStyles = read("frontend/common/login.css");
 
 assert.match(login, /href="\/api\/auth\/google\/signup"/);
-assert.match(login, /Sign up with Google/);
+assert.match(login, /New to BusTrack\?[\s\S]*href="\/api\/auth\/google\/signup">Sign up/);
+assert.doesNotMatch(login, /Sign up with Google/);
 assert.match(login, /href="\/api\/auth\/google\/login"/);
 assert.match(login, /Continue with Google/);
-assert.match(login, /@sahrdaya\.ac\.in/);
+assert.match(login, /class="google-login-link"/);
+assert.match(loginStyles, /\.google-login-link\{/);
+assert.match(loginStyles, /min-height:38px/);
 assert.match(signup, /Complete your student account/);
 assert.match(signup, /Account role[\s\S]*Student/);
 assert.match(signup, /autocomplete="new-password"/);
@@ -29,7 +33,7 @@ assert.match(signupScript, /Please choose your bus route before creating the acc
 assert.match(signupScript, /Password needs at least one uppercase letter\./);
 assert.doesNotMatch(signupScript, /String should match pattern/);
 assert.doesNotMatch(signupScript, /localStorage|sessionStorage/);
-assert.match(authScript, /account_exists: "An account already exists for this Google email/);
+assert.match(authScript, /account_exists: "Account found\. Use Continue with Google/);
 assert.match(authScript, /account_not_found: "No BusTrack account exists for this college email/);
 assert.match(authScript, /account_inactive: "This BusTrack account is inactive/);
 

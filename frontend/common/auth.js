@@ -196,7 +196,7 @@ if (googleError && message) {
     cancelled: "Google sign-in was cancelled.",
     wrong_domain: "Use a verified @sahrdaya.ac.in Google account.",
     email_not_verified: "Google could not verify that email address.",
-    account_exists: "An account already exists for this Google email. Continue with Google or sign in with your password.",
+    account_exists: "Account found. Use Continue with Google or your password.",
     account_not_found: "No BusTrack account exists for this college email. New students should use Sign up with Google.",
     account_inactive: "This BusTrack account is inactive. Contact the transport administrator.",
     account_requires_signup: "Finish creating your student account with Sign up with Google first.",
