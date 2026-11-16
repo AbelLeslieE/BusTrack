@@ -9,6 +9,8 @@ const authScript = read("frontend/common/auth.js");
 
 assert.match(login, /href="\/api\/auth\/google\/signup"/);
 assert.match(login, /Sign up with Google/);
+assert.match(login, /href="\/api\/auth\/google\/login"/);
+assert.match(login, /Continue with Google/);
 assert.match(login, /@sahrdaya\.ac\.in/);
 assert.match(signup, /Complete your student account/);
 assert.match(signup, /Account role[\s\S]*Student/);
@@ -28,5 +30,7 @@ assert.match(signupScript, /Password needs at least one uppercase letter\./);
 assert.doesNotMatch(signupScript, /String should match pattern/);
 assert.doesNotMatch(signupScript, /localStorage|sessionStorage/);
 assert.match(authScript, /account_exists: "An account already exists for this Google email/);
+assert.match(authScript, /account_not_found: "No BusTrack account exists for this college email/);
+assert.match(authScript, /account_inactive: "This BusTrack account is inactive/);
 
 console.log("Google student signup frontend tests passed.");

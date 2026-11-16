@@ -193,11 +193,14 @@ const loginParameters = new URLSearchParams(window.location.search);
 const googleError = loginParameters.get("google_error");
 if (googleError && message) {
   const googleMessages = {
-    cancelled: "Google signup was cancelled.",
+    cancelled: "Google sign-in was cancelled.",
     wrong_domain: "Use a verified @sahrdaya.ac.in Google account.",
     email_not_verified: "Google could not verify that email address.",
-    account_exists: "An account already exists for this Google email. Sign in with your username and password.",
-    not_configured: "Google signup is not available yet. Contact the transport administrator.",
+    account_exists: "An account already exists for this Google email. Continue with Google or sign in with your password.",
+    account_not_found: "No BusTrack account exists for this college email. New students should use Sign up with Google.",
+    account_inactive: "This BusTrack account is inactive. Contact the transport administrator.",
+    account_requires_signup: "Finish creating your student account with Sign up with Google first.",
+    not_configured: "Google sign-in is not available yet. Contact the transport administrator.",
     google_failed: "Google verification could not be completed. Please try again.",
   };
   message.textContent = googleMessages[googleError] || googleMessages.google_failed;

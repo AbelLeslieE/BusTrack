@@ -52,8 +52,9 @@ function Assert-AssetContains {
     Write-Host "PASS $Path -> current release asset"
 }
 
-function Assert-GoogleSignupConfigured {
-    $path = "/api/auth/google/signup"
+function Assert-GoogleOAuthConfigured {
+    param([string]$Path)
+    $path = $Path
     $nullDevice = if ($IsWindows) { "NUL" } else { "/dev/null" }
     $result = @(& curl `
         --silent `
@@ -99,16 +100,19 @@ Invoke-Check -Path "/" -ExpectedStatuses @(200)
 Invoke-Check -Path "/docs" -ExpectedStatuses @(404)
 Invoke-Check -Path "/openapi.json" -ExpectedStatuses @(404)
 Invoke-Check -Path "/api/routes" -ExpectedStatuses @(401, 403)
-Assert-GoogleSignupConfigured
+Assert-GoogleOAuthConfigured -Path "/api/auth/google/signup"
+Assert-GoogleOAuthConfigured -Path "/api/auth/google/login"
 Assert-AssetContains -Path "/" -ExpectedText "loginSplash.js?v=20261103fullready1"
-Assert-AssetContains -Path "/" -ExpectedText "auth.js?v=20261105tracer2"
+Assert-AssetContains -Path "/" -ExpectedText "auth.js?v=20261116googlelogin1"
+Assert-AssetContains -Path "/" -ExpectedText "Continue with Google"
+Assert-AssetContains -Path "/" -ExpectedText 'href="/api/auth/google/login"'
 Assert-AssetContains -Path "/" -ExpectedText "rel=`"manifest`" href=`"/manifest.webmanifest`""
 Assert-AssetContains -Path "/manifest.webmanifest" -ExpectedText '"display": "standalone"'
 Assert-AssetContains -Path "/service-worker.js" -ExpectedText 'pathname.startsWith("/api/")'
 Assert-AssetContains -Path "/service-worker.js" -ExpectedText '20261106-delete1'
 Assert-AssetContains -Path "/offline.html" -ExpectedText "You’re offline"
 Invoke-Check -Path "/static/assets/images/pwa-icon-192.png" -ExpectedStatuses @(200)
-Assert-AssetContains -Path "/static/common/auth.js?v=20261105tracer2" -ExpectedText "account_exists"
+Assert-AssetContains -Path "/static/common/auth.js?v=20261116googlelogin1" -ExpectedText "account_not_found"
 Assert-AssetContains -Path "/static/common/loginSplash.js?v=20261103fullready1" -ExpectedText 'window.addEventListener("load"'
 Assert-AssetContains -Path "/static/common/loginSplash.js?v=20261103fullready1" -ExpectedText "login.css?v=20261103route1"
 Assert-AssetContains -Path "/static/common/login.css?v=20261103route1" -ExpectedText ".form-group select"

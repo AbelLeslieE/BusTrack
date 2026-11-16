@@ -12,7 +12,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from backend.auth import authenticate_user, get_password_hash
+from backend.auth import SESSION_COOKIE_NAME, authenticate_user, get_password_hash
 from backend.database import Base
 from backend.models import Bus, Route, Student, User, UserSession
 import backend.routes.models_tracking  # noqa: F401  # Register live-trip tables.
@@ -20,6 +20,7 @@ from backend.routes.auth import (
     GOOGLE_OAUTH_COOKIE,
     GOOGLE_SIGNUP_COOKIE,
     complete_google_signup,
+    google_login_start,
     google_signup_callback,
     google_signup_start,
     read_google_signup,
@@ -118,6 +119,80 @@ class GoogleSignupTest(unittest.TestCase):
         flow_cookie = self._response_cookie(response, GOOGLE_OAUTH_COOKIE)
         self.assertIsNotNone(flow_cookie)
         return parameters["state"][0], flow_cookie
+
+    def _begin_google_login_flow(self) -> tuple[str, str]:
+        response = google_login_start(self._request("/api/auth/google/login"))
+        self.assertEqual(response.status_code, 302)
+        authorization_url = urlparse(response.headers["location"])
+        self.assertEqual(authorization_url.netloc, "accounts.google.com")
+        parameters = parse_qs(authorization_url.query)
+        self.assertEqual(parameters["hd"], ["sahrdaya.ac.in"])
+        self.assertEqual(parameters["code_challenge_method"], ["S256"])
+        flow_cookie = self._response_cookie(response, GOOGLE_OAUTH_COOKIE)
+        self.assertIsNotNone(flow_cookie)
+        return parameters["state"][0], flow_cookie
+
+    @patch("backend.routes.auth._fetch_google_identity")
+    def test_existing_account_can_continue_with_google(self, fetch_identity) -> None:
+        fetch_identity.return_value = {
+            "sub": "existing-login-user",
+            "email": "college.login@sahrdaya.ac.in",
+            "email_verified": True,
+            "hd": "sahrdaya.ac.in",
+            "name": "College Login",
+        }
+        with self.session_factory() as database_session:
+            user = User(
+                username="college.login",
+                email="college.login@sahrdaya.ac.in",
+                full_name="College Login",
+                password_hash=get_password_hash("ExistingPassword12!"),
+                role="User",
+                status="Active",
+                must_change_password=False,
+            )
+            database_session.add(user)
+            database_session.commit()
+            user_id = user.id
+
+        state, flow_cookie = self._begin_google_login_flow()
+        with self.session_factory() as database_session:
+            callback = google_signup_callback(
+                self._request("/api/auth/google/callback", {GOOGLE_OAUTH_COOKIE: flow_cookie}),
+                database_session,
+                code="one-time-code",
+                state=state,
+            )
+
+        self.assertEqual(callback.status_code, 303)
+        self.assertEqual(callback.headers["location"], "/dashboard")
+        self.assertIsNotNone(self._response_cookie(callback, SESSION_COOKIE_NAME))
+        with self.session_factory() as database_session:
+            signed_in = database_session.get(User, user_id)
+            self.assertIsNotNone(signed_in.last_login)
+            self.assertEqual(database_session.query(UserSession).filter_by(user_id=user_id).count(), 1)
+
+    @patch("backend.routes.auth._fetch_google_identity")
+    def test_continue_with_google_requires_an_existing_account(self, fetch_identity) -> None:
+        fetch_identity.return_value = {
+            "sub": "unregistered-login-user",
+            "email": "new.login@sahrdaya.ac.in",
+            "email_verified": True,
+            "hd": "sahrdaya.ac.in",
+            "name": "New Login",
+        }
+        state, flow_cookie = self._begin_google_login_flow()
+        with self.session_factory() as database_session:
+            callback = google_signup_callback(
+                self._request("/api/auth/google/callback", {GOOGLE_OAUTH_COOKIE: flow_cookie}),
+                database_session,
+                code="one-time-code",
+                state=state,
+            )
+
+        self.assertEqual(callback.status_code, 303)
+        self.assertEqual(callback.headers["location"], "/?google_error=account_not_found")
+        self.assertIsNone(self._response_cookie(callback, SESSION_COOKIE_NAME))
 
     @patch("backend.routes.auth._fetch_google_identity")
     def test_verified_sahrdaya_account_creates_student_with_normal_login(self, fetch_identity) -> None:

@@ -140,6 +140,117 @@ def _student_name(google_name: object, email: str) -> str:
     return full_name if len(full_name) >= 2 else "Sahrdaya Student"
 
 
+def _start_google_oauth(request: Request, intent: str) -> RedirectResponse:
+    """Start one PKCE-protected Google flow for login or student signup."""
+
+    if intent not in {"login", "signup"}:
+        raise ValueError("Unsupported Google OAuth intent.")
+    try:
+        client_id, _, allowed_domain = _google_configuration()
+    except RuntimeError:
+        return _google_error_redirect("not_configured")
+
+    state_value = secrets.token_urlsafe(32)
+    code_verifier = secrets.token_urlsafe(64)
+    redirect_uri = _google_redirect_uri(request)
+    code_challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(code_verifier.encode("ascii")).digest()
+    ).rstrip(b"=").decode("ascii")
+    state_token = create_temporary_token(
+        "google-oauth-state",
+        {
+            "state": state_value,
+            "verifier": code_verifier,
+            "redirect_uri": redirect_uri,
+            "intent": intent,
+        },
+        expires_in_minutes=10,
+    )
+    authorization_url = f"{GOOGLE_AUTHORIZE_URL}?{urlencode({
+        'client_id': client_id,
+        'redirect_uri': redirect_uri,
+        'response_type': 'code',
+        'scope': 'openid email profile',
+        'state': state_value,
+        'code_challenge': code_challenge,
+        'code_challenge_method': 'S256',
+        'hd': allowed_domain,
+        'prompt': 'select_account',
+    })}"
+    response = RedirectResponse(url=authorization_url, status_code=status.HTTP_302_FOUND)
+    response.set_cookie(
+        GOOGLE_OAUTH_COOKIE,
+        state_token,
+        max_age=10 * 60,
+        httponly=True,
+        secure=_secure_cookie(),
+        samesite="lax",
+        path="/api/auth/google",
+    )
+    response.delete_cookie(GOOGLE_SIGNUP_COOKIE, path="/api/auth/google")
+    return response
+
+
+def _complete_google_login(
+    user: User,
+    request: Request,
+    database_session: DatabaseSession,
+) -> RedirectResponse:
+    """Issue the same tracked BusTrack session used by password login."""
+
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    user.last_login = now
+    request.state.audit_actor_user_id = user.id
+    request.state.audit_actor_username = user.username
+    request.state.audit_actor_role = user.role
+    session = UserSession(
+        session_id=secrets.token_urlsafe(32),
+        user_id=user.id,
+        client_ip=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent", "")[:500] or None,
+        expires_at=expires_at,
+    )
+    database_session.add(session)
+    resolved_role = canonical_role(user.role) or user.role
+    record_audit_event(
+        database_session,
+        category="portal",
+        action="portal_entered",
+        actor=user,
+        subject_type="portal",
+        subject_label=f"{resolved_role} portal",
+        details={
+            "portal_role": resolved_role,
+            "session": "created",
+            "authentication": "google_workspace",
+        },
+        request=request,
+    )
+    token = create_access_token(
+        user.username,
+        expires_at=expires_at,
+        auth_version=user.auth_version,
+        session_id=session.session_id,
+    )
+    database_session.commit()
+    response = RedirectResponse(url="/dashboard", status_code=status.HTTP_303_SEE_OTHER)
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=token,
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        httponly=True,
+        secure=_secure_cookie(),
+        samesite="lax",
+        path="/",
+    )
+    response.delete_cookie(GOOGLE_OAUTH_COOKIE, path="/api/auth/google")
+    response.delete_cookie(GOOGLE_SIGNUP_COOKIE, path="/api/auth/google")
+    return response
+
+
 @router.post("/login", response_model=TokenResponse)
 def login(
     form_data: LoginForm,
@@ -215,45 +326,14 @@ def login(
 def google_signup_start(request: Request) -> RedirectResponse:
     """Send a new student through Google Workspace account verification."""
 
-    try:
-        client_id, _, allowed_domain = _google_configuration()
-    except RuntimeError:
-        return _google_error_redirect("not_configured")
+    return _start_google_oauth(request, "signup")
 
-    state_value = secrets.token_urlsafe(32)
-    code_verifier = secrets.token_urlsafe(64)
-    redirect_uri = _google_redirect_uri(request)
-    code_challenge = base64.urlsafe_b64encode(
-        hashlib.sha256(code_verifier.encode("ascii")).digest()
-    ).rstrip(b"=").decode("ascii")
-    state_token = create_temporary_token(
-        "google-oauth-state",
-        {"state": state_value, "verifier": code_verifier, "redirect_uri": redirect_uri},
-        expires_in_minutes=10,
-    )
-    authorization_url = f"{GOOGLE_AUTHORIZE_URL}?{urlencode({
-        'client_id': client_id,
-        'redirect_uri': redirect_uri,
-        'response_type': 'code',
-        'scope': 'openid email profile',
-        'state': state_value,
-        'code_challenge': code_challenge,
-        'code_challenge_method': 'S256',
-        'hd': allowed_domain,
-        'prompt': 'select_account',
-    })}"
-    response = RedirectResponse(url=authorization_url, status_code=status.HTTP_302_FOUND)
-    response.set_cookie(
-        GOOGLE_OAUTH_COOKIE,
-        state_token,
-        max_age=10 * 60,
-        httponly=True,
-        secure=_secure_cookie(),
-        samesite="lax",
-        path="/api/auth/google",
-    )
-    response.delete_cookie(GOOGLE_SIGNUP_COOKIE, path="/api/auth/google")
-    return response
+
+@router.get("/google/login")
+def google_login_start(request: Request) -> RedirectResponse:
+    """Sign an existing BusTrack account in with its college Google email."""
+
+    return _start_google_oauth(request, "login")
 
 
 @router.get("/google/callback", name="google_signup_callback")
@@ -274,8 +354,11 @@ def google_signup_callback(
         expected_state = flow.get("state")
         verifier = flow.get("verifier")
         redirect_uri = flow.get("redirect_uri")
+        intent = flow.get("intent", "signup")
         if not all(isinstance(value, str) and value for value in (code, state, expected_state, verifier, redirect_uri)):
             raise ValueError("Incomplete Google callback.")
+        if intent not in {"login", "signup"}:
+            raise ValueError("Invalid Google OAuth intent.")
         if not secrets.compare_digest(state, expected_state):
             raise ValueError("Google OAuth state mismatch.")
         identity = _fetch_google_identity(code, redirect_uri, verifier)
@@ -301,6 +384,15 @@ def google_signup_callback(
         .filter(func.lower(User.email) == email)
         .first()
     )
+    if intent == "login":
+        if existing_account is None:
+            return _google_error_redirect("account_not_found")
+        if existing_account.status != "Active":
+            return _google_error_redirect("account_inactive")
+        if canonical_role(existing_account.role) == ROLE_USER and existing_account.must_change_password:
+            return _google_error_redirect("account_requires_signup")
+        return _complete_google_login(existing_account, request, database_session)
+
     claimable_imported_student = (
         existing_account is not None
         and canonical_role(existing_account.role) == ROLE_USER
