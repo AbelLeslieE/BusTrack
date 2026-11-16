@@ -144,11 +144,46 @@ def _read_backup_archive(archive: bytes, metadata: MetaData) -> dict[str, list[d
 
     expected_schema = _schema(metadata)
     # Exact pre-Studio schema remains accepted; only known new tables may be absent.
-    additive = {"daily_direction_checkpoints", "route_studio_assignments", "route_studio_sessions", "route_studio_points", "route_studio_choices"}
+    additive = {
+        "daily_direction_checkpoints",
+        "route_studio_assignments",
+        "route_studio_sessions",
+        "route_studio_points",
+        "route_studio_choices",
+        "route_studio_provider_trace_settings",
+    }
     legacy_schema = [item for item in expected_schema if item["name"] not in additive]
     if manifest.get("schema") == legacy_schema and isinstance(payload, dict) and set(payload) == {item["name"] for item in legacy_schema}:
         manifest["schema"] = expected_schema
         payload.update({name: [] for name in additive if name in metadata.tables})
+    # Route Studio backups made before provider GPS capture have every earlier
+    # table, but lack the new settings table and the two additive session
+    # columns. Normalize only this exact known predecessor schema.
+    legacy_provider_schema = []
+    for item in expected_schema:
+        if item["name"] == "route_studio_provider_trace_settings":
+            continue
+        if item["name"] == "route_studio_sessions":
+            legacy_provider_schema.append({
+                "name": item["name"],
+                "columns": [
+                    column for column in item["columns"]
+                    if column not in {"source", "capture_window"}
+                ],
+            })
+        else:
+            legacy_provider_schema.append(item)
+    if (
+        manifest.get("schema") == legacy_provider_schema
+        and isinstance(payload, dict)
+        and set(payload) == {item["name"] for item in legacy_provider_schema}
+    ):
+        for row in payload.get("route_studio_sessions", []):
+            if isinstance(row, dict):
+                row["source"] = "phone"
+                row["capture_window"] = None
+        payload["route_studio_provider_trace_settings"] = []
+        manifest["schema"] = expected_schema
     if (
         manifest.get("application") != "BusTrack"
         or manifest.get("format_version") != BACKUP_FORMAT_VERSION

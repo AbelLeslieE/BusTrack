@@ -36,6 +36,7 @@ from backend.services.gps_timestamp import (
     select_effective_observation_time,
 )
 from backend.services.provider_health import record_provider_error, record_provider_success
+from backend.services.provider_trace import safely_record_provider_trace_observation
 from backend.services.trip_reset import lock_tracking_bus
 from backend.services.gps_data_reset import (
     advance_reset_boundary,
@@ -287,6 +288,19 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
             _position_from_current_state(state),
             bus.id,
             now,
+        )
+    if apply:
+        safely_record_provider_trace_observation(
+            db,
+            bus=bus,
+            protocol="kingstrack",
+            latitude=latitude,
+            longitude=longitude,
+            recorded_at=effective_time,
+            accuracy=history.accuracy,
+            speed_kmh=speed,
+            heading=history.course,
+            received_at=now,
         )
 
     return {

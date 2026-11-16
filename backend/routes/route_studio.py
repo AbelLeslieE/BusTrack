@@ -12,13 +12,24 @@ from sqlalchemy import or_, and_
 
 from backend.database import get_db
 from backend.models import Bus, User, Route, Stop, RouteStop, Student
-from backend.models_route_studio import TracerAssignment, TraceSession, TracePoint, TraceChoice
+from backend.models_route_studio import (
+    ProviderTraceSetting,
+    TracerAssignment,
+    TraceSession,
+    TracePoint,
+    TraceChoice,
+)
 from backend.security import require_authenticated, require_gps_technician, require_admin
 from backend.services.trip_reset import lock_tracking_bus, as_utc
 from backend.routes.models_tracking import LiveTrip
 from backend.services.generated_codes import lock_generated_code_writes, next_route_code
 from backend.services.stop_codes import lock_stop_code_writes, next_stop_code
 from backend.services.road_matching import planned_route, road_geometry
+from backend.services.provider_trace import (
+    PROVIDER_TRACE_SOURCE,
+    capture_schedule_payload,
+    finalize_provider_traces,
+)
 from backend.audit import record_audit_event
 
 router = APIRouter(prefix="/api/route-studio", tags=["Route Studio"])
@@ -46,6 +57,11 @@ class Strict(BaseModel):
 class Assignment(Strict):
     user_id: int
     bus_id: int
+
+
+class ProviderCaptureUpdate(Strict):
+    morning_enabled: bool
+    evening_enabled: bool
 
 class Start(Strict):
     request_id: uuid.UUID
@@ -147,7 +163,8 @@ def payload(s):
             "status": s.status, "revision": s.revision, "created_at": s.created_at,
             "geometry": json.loads(s.geometry_json), "stops": plan["stops"],
             "guide_points": plan["guide_points"], "geometry_source": plan["geometry_source"],
-            "source_geometry": plan["source_geometry"], "route_id": s.route_id}
+            "source_geometry": plan["source_geometry"], "route_id": s.route_id,
+            "source": s.source, "capture_window": s.capture_window}
 
 def owned(db, sid, actor, write=False):
     s = db.get(TraceSession, sid)
@@ -181,6 +198,87 @@ def overview(db: Session = Depends(get_db), actor=Depends(access)):
             "buses": [{"id": b.id, "name": b.bus_number} for b in db.query(Bus).all()] if actor.role != "Tracer" else [],
             "tracers": [{"id": u.id, "name": u.full_name} for u in db.query(User).filter(User.role == "Tracer", User.status == "Active")] if actor.role != "Tracer" else []}
 
+
+def _provider_capture_overview(db: Session) -> dict:
+    schedule = capture_schedule_payload()
+    settings = {
+        item.bus_id: item
+        for item in db.query(ProviderTraceSetting).all()
+    }
+    latest: dict[int, TraceSession] = {}
+    for session in db.query(TraceSession).filter(
+        TraceSession.source == PROVIDER_TRACE_SOURCE,
+    ).order_by(TraceSession.created_at.desc()).all():
+        latest.setdefault(session.bus_id, session)
+    schedule["buses"] = [
+        {
+            "id": bus.id,
+            "bus_number": bus.bus_number,
+            "registration_number": bus.registration_number,
+            "provider": bus.gps_provider or "auto",
+            "morning_enabled": bool(settings.get(bus.id) and settings[bus.id].morning_enabled),
+            "evening_enabled": bool(settings.get(bus.id) and settings[bus.id].evening_enabled),
+            "last_trace": (
+                {
+                    "id": latest[bus.id].id,
+                    "name": latest[bus.id].name,
+                    "status": latest[bus.id].status,
+                    "capture_window": latest[bus.id].capture_window,
+                }
+                if bus.id in latest else None
+            ),
+        }
+        for bus in db.query(Bus).order_by(Bus.bus_number).all()
+    ]
+    return schedule
+
+
+@router.get("/provider-capture")
+def provider_capture_overview(
+    db: Session = Depends(get_db),
+    actor=Depends(require_gps_technician),
+    _=Depends(access),
+):
+    return _provider_capture_overview(db)
+
+
+@router.put("/provider-capture/{bus_id}")
+def update_provider_capture(
+    bus_id: int,
+    data: ProviderCaptureUpdate,
+    db: Session = Depends(get_db),
+    actor=Depends(require_gps_technician),
+    _=Depends(access),
+):
+    bus = lock_tracking_bus(db, bus_id)
+    if bus is None:
+        raise HTTPException(404, "Bus not found.")
+    setting = db.get(ProviderTraceSetting, bus_id)
+    if setting is None:
+        setting = ProviderTraceSetting(bus_id=bus_id)
+        db.add(setting)
+    setting.morning_enabled = data.morning_enabled
+    setting.evening_enabled = data.evening_enabled
+    setting.updated_by = actor.id
+    setting.updated_at = datetime.now(timezone.utc)
+    # Turning off the active window safely closes what was recorded so far.
+    finalized = finalize_provider_traces(db, bus_id=bus_id)
+    record_audit_event(
+        db,
+        category="route_studio",
+        action="provider_trace_setting_updated",
+        actor=actor,
+        subject_label=bus.bus_number,
+        details={
+            "bus_id": bus.id,
+            "morning_enabled": data.morning_enabled,
+            "evening_enabled": data.evening_enabled,
+            "finalized_trace_ids": finalized,
+        },
+    )
+    db.commit()
+    return _provider_capture_overview(db)
+
 @router.put("/assignment")
 def assign(data: Assignment, db: Session = Depends(get_db), actor=Depends(require_gps_technician), _=Depends(access)):
     u, b = db.get(User, data.user_id), lock_tracking_bus(db, data.bus_id)
@@ -213,7 +311,10 @@ def start(data: Start, db: Session = Depends(get_db), actor=Depends(access)):
         return payload(owned(db, existing.id, actor))
     if db.query(TraceSession).filter(TraceSession.bus_id == a.bus_id, TraceSession.status.in_(["RECORDING", "PAUSED"])).first():
         raise HTTPException(409, "This bus already has an unfinished recording.")
-    s = TraceSession(id=str(data.request_id), user_id=actor.id, bus_id=a.bus_id, name=data.name)
+    s = TraceSession(
+        id=str(data.request_id), user_id=actor.id, bus_id=a.bus_id,
+        name=data.name, source="phone",
+    )
     db.add(s)
     db.commit()
     return payload(s)
@@ -393,7 +494,8 @@ def copy_version(sid: str, db: Session = Depends(get_db), actor=Depends(require_
     if source.status not in {"DRAFT", "PUBLISHED"}:
         raise HTTPException(409, "Finish recording before creating a draft version.")
     draft = TraceSession(id=str(uuid.uuid4()), user_id=actor.id, bus_id=source.bus_id, name=source.name,
-                         status="DRAFT", geometry_json=source.geometry_json, stops_json=source.stops_json)
+                         status="DRAFT", geometry_json=source.geometry_json, stops_json=source.stops_json,
+                         source=source.source)
     db.add(draft)
     record_audit_event(db, category="route_studio", action="draft_copied", actor=actor,
                        details={"previous_version": sid, "new_version": draft.id})

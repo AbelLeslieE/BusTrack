@@ -24,6 +24,7 @@ from backend.services.trip_reset import lock_tracking_bus
 from backend.routes.gps_provider import _position_from_current_state, _update_active_trip_from_vehicle
 from backend.routes.models_tracking import BusGPSState, GPSDeviceMapping, ProviderGPSPosition
 from backend.services.provider_health import record_provider_error, record_provider_success
+from backend.services.provider_trace import safely_record_provider_trace_observation
 from backend.services.vehicle_gps import GPS_OFFLINE_GRACE_SECONDS
 from backend.services.gps_timestamp import (
     DEVICE_TIME_BASIS,
@@ -299,6 +300,19 @@ def _store_position(db: Session, bus: Bus, data: dict[str, Any]) -> dict[str, An
             _position_from_current_state(state),
             bus.id,
             now,
+        )
+    if apply:
+        safely_record_provider_trace_observation(
+            db,
+            bus=bus,
+            protocol="airotrack",
+            latitude=latitude,
+            longitude=longitude,
+            recorded_at=effective_time,
+            accuracy=history.accuracy,
+            speed_kmh=speed,
+            heading=history.course,
+            received_at=now,
         )
     return {
         "bus_id": bus.id,

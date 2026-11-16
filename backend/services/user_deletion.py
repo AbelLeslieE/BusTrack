@@ -21,7 +21,7 @@ from backend.models import (
     UserSession,
 )
 from backend.models_documents import BusDocument
-from backend.models_route_studio import TraceSession, TracerAssignment
+from backend.models_route_studio import ProviderTraceSetting, TraceSession, TracerAssignment
 from backend.routes.models_tracking import (
     GPSProviderTranslationConfig,
     LiveTrip,
@@ -106,6 +106,10 @@ def delete_user_graph(db: Session, user: User) -> dict[str, int]:
     # they cannot remain permanently RECORDING under a nonexistent account.
     counts["tracer_assignments_deleted"] = _deleted(
         db.query(TracerAssignment).filter(TracerAssignment.user_id == user_id)
+    )
+    counts["provider_trace_settings_detached"] = _changed(
+        db.query(ProviderTraceSetting).filter(ProviderTraceSetting.updated_by == user_id),
+        {ProviderTraceSetting.updated_by: None},
     )
     counts["active_traces_closed"] = _changed(
         db.query(TraceSession).filter(

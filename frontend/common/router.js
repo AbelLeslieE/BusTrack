@@ -22,7 +22,7 @@ import {
     createTechnicianSidebar,
     createTracerSidebar,
     setTechnicianSidebarActive
-} from "../modules/js/technicianSidebar.js?v=20261105tracerportal3";
+} from "../modules/js/technicianSidebar.js?v=20261116providertrace1";
 
 
 import {
@@ -210,9 +210,10 @@ const studentModules = {
 
 const technicianModules = {
     traceAssignment: {
-        title: "Assign tracer bus",
-        load: () => import("../modules/js/traceAssignment.js?v=20261105assign1")
+        title: "Route capture",
+        load: () => import("../modules/js/traceAssignment.js?v=20261116providertrace1")
     },
+    routeStudio: { title: "Traced paths", load: () => import("../modules/js/routeStudio.js?v=20261106background1") },
     technicianDashboard: {
         title: "GPS Integration",
         load: () => import("../modules/js/technicianDashboard.js?v=20261105pagination1")
@@ -345,7 +346,7 @@ function applyModuleStyles(moduleName) {
 
     const styles = [loadStylesheet(
         "active-module-styles",
-        `/static/modules/css/${styleModuleName}.css?v=${styleModuleName === "routeStudio" ? "20261106roadeditor1" : styleModuleName === "traceAssignment" ? "20261105assign1" : styleModuleName === "live_tracking" ? "20261105cardreset1" : styleModuleName === "technicianDashboard" ? "20261105pagination1" : styleModuleName === "providerHealth" ? "20261105portals1" : "20261103providerdelay1"}`
+        `/static/modules/css/${styleModuleName}.css?v=${styleModuleName === "routeStudio" ? "20261106roadeditor1" : styleModuleName === "traceAssignment" ? "20261116providertrace1" : styleModuleName === "live_tracking" ? "20261105cardreset1" : styleModuleName === "technicianDashboard" ? "20261105pagination1" : styleModuleName === "providerHealth" ? "20261105portals1" : "20261103providerdelay1"}`
     )];
 
     // Driver shared styles

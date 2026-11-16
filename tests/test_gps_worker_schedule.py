@@ -78,9 +78,10 @@ class GPSWorkerScheduleTest(unittest.TestCase):
         self.assertEqual(refresh.call_count, 2)
         self.assertTrue(all(call.args == (database_session,) for call in refresh.call_args_list))
 
+    @patch("backend.gps_worker.finish_provider_route_captures")
     @patch("backend.gps_worker.refresh_providers_once")
     @patch("backend.gps_worker.run_direction_recovery")
-    def test_peak_worker_stops_at_window_end(self, direction, refresh) -> None:
+    def test_peak_worker_stops_at_window_end(self, direction, refresh, finish) -> None:
         current = [ist(6, 9, 14, 50)]
 
         def clock() -> datetime:
@@ -98,26 +99,30 @@ class GPSWorkerScheduleTest(unittest.TestCase):
         direction.assert_called_once_with()
         refresh.assert_called_once_with("peak")
         self.assertEqual(current[0], ist(6, 9, 15))
+        finish.assert_called_once_with(current[0])
 
+    @patch("backend.gps_worker.finish_provider_route_captures")
     @patch("backend.gps_worker.refresh_providers_once")
     @patch("backend.gps_worker.run_document_expiry_reminders")
     @patch("backend.gps_worker.run_retention")
     @patch("backend.gps_worker.run_direction_recovery")
     def test_daytime_standby_runs_one_poll_and_maintenance(
-        self, direction, retention, documents, refresh
+        self, direction, retention, documents, refresh, finish
     ) -> None:
         self.assertEqual(run_standby_worker(now=ist(6, 10, 0)), 0)
         direction.assert_called_once_with()
         retention.assert_called_once_with()
         documents.assert_not_called()
         refresh.assert_called_once_with("standby")
+        finish.assert_called_once_with(ist(6, 10, 0))
 
+    @patch("backend.gps_worker.finish_provider_route_captures")
     @patch("backend.gps_worker.refresh_providers_once")
     @patch("backend.gps_worker.run_document_expiry_reminders")
     @patch("backend.gps_worker.run_retention")
     @patch("backend.gps_worker.run_direction_recovery")
     def test_midnight_trigger_preserves_direction_and_document_jobs(
-        self, direction, retention, documents, refresh
+        self, direction, retention, documents, refresh, finish
     ) -> None:
         current = ist(6, 0, 1)
         self.assertTrue(midnight_maintenance_due(current))
@@ -126,6 +131,7 @@ class GPSWorkerScheduleTest(unittest.TestCase):
         retention.assert_called_once_with()
         documents.assert_called_once_with()
         refresh.assert_not_called()
+        finish.assert_called_once_with(current)
 
     @patch("backend.gps_worker.refresh_providers_once")
     @patch("backend.gps_worker.run_document_expiry_reminders")

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import argparse
 from contextlib import contextmanager
-from datetime import datetime, time as wall_time, timedelta, timezone
+from datetime import datetime, timezone
 import logging
 import os
 import time
@@ -30,6 +30,18 @@ from backend.services.gps_providers import (
     provider_polling_configured,
     refresh_gps_providers,
 )
+from backend.services.gps_schedule import (
+    IST,
+    MIDNIGHT_MAINTENANCE_END,
+    PEAK_WINDOWS,
+    STANDBY_LAST_START,
+    STANDBY_START,
+    active_peak_window,
+    as_ist,
+    midnight_maintenance_due,
+    standby_refresh_allowed,
+)
+from backend.services.provider_trace import finalize_provider_traces
 from backend.services.restore_state import restore_in_progress
 from backend.services.telemetry_retention import (
     run_telemetry_retention,
@@ -37,16 +49,6 @@ from backend.services.telemetry_retention import (
 )
 
 
-IST = timezone(timedelta(hours=5, minutes=30), name="IST")
-PEAK_WINDOWS = (
-    (wall_time(7, 0), wall_time(9, 15)),
-    (wall_time(16, 15), wall_time(19, 15)),
-)
-STANDBY_START = wall_time(9, 0)
-# A short grace period lets the 20:00 Scheduler trigger survive normal Cloud
-# Run startup delay without allowing the 20:30 slot to perform a refresh.
-STANDBY_LAST_START = wall_time(20, 15)
-MIDNIGHT_MAINTENANCE_END = wall_time(0, 15)
 PROVIDER_REFRESH_LOCK_ID = 4_278_775_220
 
 configured_log_level = os.getenv("LOG_LEVEL", "INFO").strip().upper()
@@ -55,44 +57,6 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 logger = logging.getLogger("bustrack.gps_worker")
-
-
-def as_ist(now: datetime | None = None) -> datetime:
-    """Return an aware timestamp in Indian Standard Time."""
-
-    selected = now or datetime.now(timezone.utc)
-    if selected.tzinfo is None:
-        selected = selected.replace(tzinfo=timezone.utc)
-    return selected.astimezone(IST)
-
-
-def active_peak_window(now: datetime | None = None) -> tuple[datetime, datetime] | None:
-    """Return the active IST peak window, with an exclusive end boundary."""
-
-    local = as_ist(now)
-    for start_time, end_time in PEAK_WINDOWS:
-        start = datetime.combine(local.date(), start_time, tzinfo=IST)
-        end = datetime.combine(local.date(), end_time, tzinfo=IST)
-        if start <= local < end:
-            return start, end
-    return None
-
-
-def standby_refresh_allowed(now: datetime | None = None) -> bool:
-    """Allow a standby poll from 09:00 through the delayed 20:00 trigger."""
-
-    local = as_ist(now)
-    return (
-        STANDBY_START <= local.time() < STANDBY_LAST_START
-        and active_peak_window(local) is None
-    )
-
-
-def midnight_maintenance_due(now: datetime | None = None) -> bool:
-    """Identify the 00:01 IST maintenance trigger without depending on UTC."""
-
-    local_time = as_ist(now).time()
-    return wall_time(0, 0) <= local_time < MIDNIGHT_MAINTENANCE_END
 
 
 def peak_poll_interval_seconds() -> int:
@@ -206,6 +170,16 @@ def run_document_expiry_reminders() -> bool:
     return _run_transaction("Document expiry reminders", run_document_reminders)
 
 
+def finish_provider_route_captures(now: datetime | None = None) -> bool:
+    return _run_transaction(
+        "Provider route capture finalization",
+        lambda database_session: finalize_provider_traces(
+            database_session,
+            now=now or datetime.now(timezone.utc),
+        ),
+    )
+
+
 def run_peak_worker(
     *,
     now_fn: Callable[[], datetime] | None = None,
@@ -237,6 +211,7 @@ def run_peak_worker(
             break
         sleep_fn(min(remaining, max(0.0, interval - (time.monotonic() - started))))
 
+    finish_provider_route_captures(clock())
     logger.info("Peak GPS window ended; the worker is shutting down.")
     return 0
 
@@ -254,6 +229,7 @@ def run_standby_worker(*, now: datetime | None = None) -> int:
 
     run_direction_recovery()
     run_retention()
+    finish_provider_route_captures(current)
     if is_midnight_run:
         run_document_expiry_reminders()
     if standby_refresh_allowed(current):

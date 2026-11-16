@@ -310,6 +310,29 @@ def _add_bus_gps_provider_column(database_engine=engine) -> None:
             ))
 
 
+def _add_provider_trace_session_columns(database_engine=engine) -> None:
+    """Distinguish phone recordings from opt-in hardware GPS captures."""
+
+    inspector = inspect(database_engine)
+    if "route_studio_sessions" not in inspector.get_table_names():
+        return
+    columns = {
+        column["name"]
+        for column in inspector.get_columns("route_studio_sessions")
+    }
+    with database_engine.begin() as connection:
+        if "source" not in columns:
+            connection.execute(text(
+                "ALTER TABLE route_studio_sessions ADD COLUMN source "
+                "VARCHAR(24) NOT NULL DEFAULT 'phone'"
+            ))
+        if "capture_window" not in columns:
+            connection.execute(text(
+                "ALTER TABLE route_studio_sessions ADD COLUMN capture_window "
+                "VARCHAR(32) NULL"
+            ))
+
+
 def initialize_database() -> None:
     """
     Create the database schema.
@@ -363,6 +386,7 @@ def initialize_database() -> None:
     _add_provider_position_quarantine_column()
     _add_provider_effective_time_columns()
     _add_bus_gps_provider_column()
+    _add_provider_trace_session_columns()
 
     # This project currently has no migration framework. Keep existing local
     # deployments compatible with the student route assignment introduced by

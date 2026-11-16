@@ -3,7 +3,8 @@ import { logoutSession } from "/static/common/auth.js?v=20261015d";
 const technicianItems = [
     ["technicianDashboard", "GPS Integration", "⌘"],
     ["providerHealth", "Provider Health", "⌁"],
-    ["traceAssignment", "Assign tracer bus", "⇄"],
+    ["traceAssignment", "Route capture", "⇄"],
+    ["routeStudio", "Traced paths", "⌁"],
 ];
 
 function navItem([route, label, icon], activeRoute) {
