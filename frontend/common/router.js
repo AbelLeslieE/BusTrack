@@ -78,7 +78,7 @@ const adminModules = {
 
     stops: {
         title: "Stops",
-        load: () => import("../modules/js/stops.js")
+        load: () => import("../modules/js/stops.js?v=20261117busstops1")
     },
 
     drivers: {
@@ -346,7 +346,7 @@ function applyModuleStyles(moduleName) {
 
     const styles = [loadStylesheet(
         "active-module-styles",
-        `/static/modules/css/${styleModuleName}.css?v=${styleModuleName === "routeStudio" ? "20261117geofence1" : styleModuleName === "traceAssignment" ? "20261116providertrace1" : styleModuleName === "live_tracking" ? "20261105cardreset1" : styleModuleName === "technicianDashboard" ? "20261105pagination1" : styleModuleName === "providerHealth" ? "20261105portals1" : "20261103providerdelay1"}`
+        `/static/modules/css/${styleModuleName}.css?v=${styleModuleName === "routeStudio" ? "20261117geofence1" : styleModuleName === "stops" ? "20261117busstops1" : styleModuleName === "traceAssignment" ? "20261116providertrace1" : styleModuleName === "live_tracking" ? "20261105cardreset1" : styleModuleName === "technicianDashboard" ? "20261105pagination1" : styleModuleName === "providerHealth" ? "20261105portals1" : "20261103providerdelay1"}`
     )];
 
     // Driver shared styles

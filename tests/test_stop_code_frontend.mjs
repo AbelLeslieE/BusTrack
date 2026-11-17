@@ -37,6 +37,36 @@ test('stop-code preview bypasses cache and create supports a server-assigned cod
     assert.deepEqual(JSON.parse(requests[1].options.body), {stop_name: 'Koparkala'});
 });
 
+test('bus stop workspace loads ordered routes and removes only the route entry', async () => {
+    const requests = [];
+    const context = loadApi(async (path, options = {}) => {
+        requests.push({path, options});
+        return {ok: true, json: async () => ({buses: [], unassigned_routes: [], statistics: {}})};
+    });
+
+    await context.getBusRouteStops();
+    await context.removeRouteStop(42);
+
+    assert.equal(requests[0].path, '/api/stops/bus-routes');
+    assert.equal(requests[0].options.cache, 'no-store');
+    assert.equal(requests[1].path, '/api/route-stops/42');
+    assert.equal(requests[1].options.method, 'DELETE');
+});
+
+test('Stops UI is bus-first with ordered View, Edit and Delete controls', () => {
+    const source = fs.readFileSync(new URL('../frontend/modules/js/stops.js', import.meta.url), 'utf8');
+    const styles = fs.readFileSync(new URL('../frontend/modules/css/stops.css', import.meta.url), 'utf8');
+    assert.match(source, /Stops by bus/);
+    assert.match(source, /ordered-stop-list/);
+    assert.match(source, /data-action="view"/);
+    assert.match(source, /data-action="edit"/);
+    assert.match(source, /data-action="remove"/);
+    assert.match(source, /Delete from route/);
+    assert.match(source, /PAGE_SIZE = 6/);
+    assert.match(styles, /\.bus-stop-card/);
+    assert.match(styles, /\.ordered-stop__rail/);
+});
+
 
 test('stops overview bypasses cache and returns synchronized KPI data', async () => {
     const requests = [];

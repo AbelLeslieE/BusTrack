@@ -79,6 +79,38 @@ export async function getStopsOverview() {
 }
 
 /* ==========================================================================
+   GET BUS-FIRST ORDERED STOP WORKSPACE
+========================================================================== */
+
+export async function getBusRouteStops() {
+
+    const response = await fetch(`${BASE_URL}/bus-routes`, {
+        cache: "no-store"
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        throw new Error(result.detail || "Failed to load bus stops.");
+    }
+    return result;
+}
+
+/* ==========================================================================
+   REMOVE ONE ORDERED STOP FROM ITS ROUTE
+========================================================================== */
+
+export async function removeRouteStop(routeStopId) {
+
+    const response = await fetch(`/api/route-stops/${routeStopId}`, {
+        method: "DELETE"
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        throw new Error(result.detail || "Failed to remove the stop from this route.");
+    }
+    return result;
+}
+
+/* ==========================================================================
    PREVIEW NEXT AUTOMATIC STOP CODE
 ========================================================================== */
 

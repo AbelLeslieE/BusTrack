@@ -30,6 +30,7 @@ from openpyxl import load_workbook
 from io import BytesIO
 from backend.database import get_db
 from backend.models import (
+    Bus,
     Stop,
     Route,
     RouteStop,
@@ -161,6 +162,103 @@ def get_stops_overview(
             ) if total_routes else 0,
             "mapped_stops": mapped_stops,
             "route_stop_assignments": route_stop_assignments,
+        },
+    }
+
+
+def _route_stop_workspace_item(route: Route, usage_counts: dict[int, int]) -> dict:
+    """Serialize one route and its stops in the authoritative travel order."""
+
+    ordered_stops = sorted(route.route_stops, key=lambda item: (item.sequence, item.id))
+    return {
+        "id": route.id,
+        "route_code": route.route_code,
+        "route_name": route.route_name,
+        "status": route.status,
+        "total_stops": len(ordered_stops),
+        "stops": [
+            {
+                "route_stop_id": route_stop.id,
+                "id": route_stop.stop.id,
+                "stop_code": route_stop.stop.stop_code,
+                "stop_name": route_stop.stop.stop_name,
+                "latitude": route_stop.stop.latitude,
+                "longitude": route_stop.stop.longitude,
+                "radius": route_stop.stop.radius,
+                "status": route_stop.stop.status,
+                "route_usage_count": usage_counts.get(route_stop.stop_id, 0),
+                "sequence": route_stop.sequence,
+                "scheduled_time": route_stop.scheduled_time,
+            }
+            for route_stop in ordered_stops
+            if route_stop.stop is not None
+        ],
+    }
+
+
+@router.get("/bus-routes")
+def get_bus_route_stops(
+    db: Session = Depends(get_db),
+    _current_user = Depends(require_management),
+):
+    """Return every bus with its assigned route and ordered stops.
+
+    The Stops workspace is intentionally bus-first. Routes without a bus are
+    returned separately so their stops remain visible while an assignment is
+    being prepared.
+    """
+
+    buses = db.query(Bus).order_by(Bus.bus_number.asc()).all()
+    routes = (
+        db.query(Route)
+        .options(selectinload(Route.route_stops).selectinload(RouteStop.stop))
+        .order_by(Route.route_name.asc())
+        .all()
+    )
+    usage_counts = {
+        stop_id: count
+        for stop_id, count in (
+            db.query(RouteStop.stop_id, func.count(RouteStop.id))
+            .group_by(RouteStop.stop_id)
+            .all()
+        )
+    }
+    routes_by_bus: dict[int, list[Route]] = {}
+    unassigned_routes: list[Route] = []
+    for route in routes:
+        if route.bus_id is None:
+            unassigned_routes.append(route)
+        else:
+            routes_by_bus.setdefault(route.bus_id, []).append(route)
+
+    bus_items = []
+    assigned_bus_count = 0
+    for bus in buses:
+        assigned_routes = routes_by_bus.get(bus.id, [])
+        if assigned_routes:
+            assigned_bus_count += 1
+        bus_items.append({
+            "id": bus.id,
+            "bus_number": bus.bus_number,
+            "registration_number": bus.registration_number,
+            "status": bus.status,
+            "routes": [
+                _route_stop_workspace_item(route, usage_counts)
+                for route in assigned_routes
+            ],
+        })
+
+    return {
+        "buses": bus_items,
+        "unassigned_routes": [
+            _route_stop_workspace_item(route, usage_counts)
+            for route in unassigned_routes
+        ],
+        "statistics": {
+            "total_buses": len(buses),
+            "assigned_buses": assigned_bus_count,
+            "routes_with_stops": sum(1 for route in routes if route.route_stops),
+            "ordered_stop_entries": sum(len(route.route_stops) for route in routes),
         },
     }
 # ==========================================================
