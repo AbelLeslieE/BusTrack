@@ -86,6 +86,24 @@ class StopCodeGenerationTest(unittest.TestCase):
         self.assertEqual(result["stop"]["stop_code"], "ST029")
         self.assertEqual(result["stop"]["stop_name"], "Renamed")
 
+    def test_duplicate_display_names_receive_distinct_codes(self) -> None:
+        with self.session_factory() as db:
+            first = create_stop(
+                {"stop_name": "Main Gate", "latitude": 10.0, "longitude": 76.0},
+                db,
+                object(),
+            )
+            second = create_stop(
+                {"stop_name": "Main Gate", "latitude": 10.1, "longitude": 76.1},
+                db,
+                object(),
+            )
+
+        self.assertEqual(first["stop"]["stop_name"], second["stop"]["stop_name"])
+        self.assertNotEqual(first["stop"]["stop_code"], second["stop"]["stop_code"])
+        with self.session_factory() as db:
+            self.assertEqual(db.query(Stop).filter(Stop.stop_name == "Main Gate").count(), 2)
+
     def test_concurrent_creates_receive_distinct_sequential_codes(self) -> None:
         self._seed("ST029", "Existing")
 

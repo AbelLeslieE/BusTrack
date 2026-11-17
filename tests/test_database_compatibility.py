@@ -12,11 +12,50 @@ from sqlalchemy import create_engine, inspect
 from backend.database import (
     _add_bus_gps_provider_column,
     _add_provider_effective_time_columns,
+    _allow_duplicate_stop_names,
     _make_live_trip_driver_optional,
 )
 
 
 class DatabaseCompatibilityTest(unittest.TestCase):
+    def test_existing_stop_names_become_repeatable_without_losing_rows(self) -> None:
+        database_path = Path(tempfile.gettempdir()) / f"stop_name_upgrade_{uuid4().hex}.db"
+        database_engine = create_engine(f"sqlite:///{database_path.as_posix()}")
+        try:
+            with database_engine.begin() as connection:
+                connection.exec_driver_sql(
+                    "CREATE TABLE stops ("
+                    "id INTEGER NOT NULL PRIMARY KEY, "
+                    "stop_code VARCHAR(20) NOT NULL UNIQUE, "
+                    "stop_name VARCHAR(150) NOT NULL, "
+                    "latitude FLOAT, longitude FLOAT, "
+                    "radius INTEGER NOT NULL DEFAULT 50, "
+                    "status VARCHAR(20) NOT NULL DEFAULT 'Active')"
+                )
+                connection.exec_driver_sql(
+                    "CREATE UNIQUE INDEX ix_stops_stop_name ON stops (stop_name)"
+                )
+                connection.exec_driver_sql(
+                    "INSERT INTO stops (id, stop_code, stop_name) VALUES (1, 'ST001', 'Main Gate')"
+                )
+
+            _allow_duplicate_stop_names(database_engine)
+            _allow_duplicate_stop_names(database_engine)
+
+            with database_engine.begin() as connection:
+                connection.exec_driver_sql(
+                    "INSERT INTO stops (id, stop_code, stop_name) VALUES (2, 'ST002', 'Main Gate')"
+                )
+                self.assertEqual(
+                    connection.exec_driver_sql(
+                        "SELECT COUNT(*) FROM stops WHERE stop_name = 'Main Gate'"
+                    ).scalar_one(),
+                    2,
+                )
+        finally:
+            database_engine.dispose()
+            database_path.unlink(missing_ok=True)
+
     def test_provider_clock_columns_upgrade_existing_tables(self) -> None:
         database_path = Path(tempfile.gettempdir()) / f"provider_clock_upgrade_{uuid4().hex}.db"
         database_engine = create_engine(f"sqlite:///{database_path.as_posix()}")

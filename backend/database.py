@@ -215,6 +215,127 @@ def _make_live_trip_driver_optional(database_engine=engine) -> None:
             connection.commit()
 
 
+def _allow_duplicate_stop_names(database_engine=engine) -> None:
+    """Remove the legacy stop-name uniqueness rule without deleting stops.
+
+    Stop codes remain the stable unique identifier. Duplicate display names
+    are required for distinct locations that share a familiar place name.
+    """
+
+    database_inspector = inspect(database_engine)
+    if "stops" not in database_inspector.get_table_names():
+        return
+
+    unique_constraints = [
+        constraint
+        for constraint in database_inspector.get_unique_constraints("stops")
+        if constraint.get("column_names") == ["stop_name"]
+    ]
+    unique_indexes = [
+        index
+        for index in database_inspector.get_indexes("stops")
+        if index.get("unique") and index.get("column_names") == ["stop_name"]
+    ]
+    if not unique_constraints and not unique_indexes:
+        return
+
+    quote = database_engine.dialect.identifier_preparer.quote
+    if database_engine.dialect.name == "postgresql":
+        with database_engine.begin() as connection:
+            for constraint in unique_constraints:
+                name = constraint.get("name")
+                if name:
+                    connection.execute(text(
+                        f"ALTER TABLE {quote('stops')} DROP CONSTRAINT IF EXISTS {quote(name)}"
+                    ))
+            for index in unique_indexes:
+                name = index.get("name")
+                if name:
+                    connection.execute(text(f"DROP INDEX IF EXISTS {quote(name)}"))
+        return
+
+    if database_engine.dialect.name != "sqlite":
+        raise RuntimeError(
+            "The duplicate stop-name compatibility migration supports SQLite and PostgreSQL."
+        )
+
+    # SQLAlchemy normally represented the old rule as a named unique index.
+    # Drop that directly when possible; an inline/auto-index rule requires a
+    # one-time table rebuild because SQLite cannot alter the constraint.
+    with database_engine.begin() as connection:
+        for index in unique_indexes:
+            name = index.get("name")
+            if name and not name.startswith("sqlite_autoindex"):
+                connection.exec_driver_sql(f"DROP INDEX IF EXISTS {quote(name)}")
+
+    refreshed = inspect(database_engine)
+    remaining_constraints = [
+        constraint
+        for constraint in refreshed.get_unique_constraints("stops")
+        if constraint.get("column_names") == ["stop_name"]
+    ]
+    remaining_indexes = [
+        index
+        for index in refreshed.get_indexes("stops")
+        if index.get("unique") and index.get("column_names") == ["stop_name"]
+    ]
+    if not remaining_constraints and not remaining_indexes:
+        return
+
+    temporary_table = "stops__duplicate_names"
+    with database_engine.connect() as connection:
+        create_sql = connection.exec_driver_sql(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='stops'"
+        ).scalar_one()
+        compatible_sql = re.sub(
+            r"(\bstop_name\b\s+[^,\n]+?)\s+UNIQUE\b",
+            r"\1",
+            create_sql,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+        compatible_sql = re.sub(
+            r",\s*(?:CONSTRAINT\s+\S+\s+)?UNIQUE\s*\(\s*stop_name\s*\)",
+            "",
+            compatible_sql,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+        if compatible_sql == create_sql:
+            raise RuntimeError("Unable to allow duplicate stop names safely.")
+        compatible_sql = re.sub(
+            r"^CREATE\s+TABLE\s+(?:\"stops\"|stops)",
+            f"CREATE TABLE {temporary_table}",
+            compatible_sql,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+
+        column_names = [
+            row[1]
+            for row in connection.exec_driver_sql("PRAGMA table_info(stops)").all()
+        ]
+        quoted_columns = ", ".join(quote(name) for name in column_names)
+        connection.commit()
+        connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+        connection.commit()
+        try:
+            with connection.begin():
+                connection.exec_driver_sql(f"DROP TABLE IF EXISTS {temporary_table}")
+                connection.exec_driver_sql(compatible_sql)
+                connection.exec_driver_sql(
+                    f"INSERT INTO {temporary_table} ({quoted_columns}) "
+                    f"SELECT {quoted_columns} FROM stops"
+                )
+                connection.exec_driver_sql("DROP TABLE stops")
+                connection.exec_driver_sql(
+                    f"ALTER TABLE {temporary_table} RENAME TO stops"
+                )
+        finally:
+            connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+            connection.commit()
+
+
 def get_db() -> Generator[Session, None, None]:
     """Yield one database session per request and always close it afterward."""
 
@@ -381,6 +502,7 @@ def initialize_database() -> None:
     )
 
     _make_live_trip_driver_optional()
+    _allow_duplicate_stop_names()
     _add_trip_reset_columns()
     _add_pass_credential_columns()
     _add_provider_position_quarantine_column()

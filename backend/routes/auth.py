@@ -166,7 +166,7 @@ def _start_google_oauth(request: Request, intent: str) -> RedirectResponse:
         },
         expires_in_minutes=10,
     )
-    authorization_url = f"{GOOGLE_AUTHORIZE_URL}?{urlencode({
+    authorization_parameters = {
         'client_id': client_id,
         'redirect_uri': redirect_uri,
         'response_type': 'code',
@@ -176,7 +176,8 @@ def _start_google_oauth(request: Request, intent: str) -> RedirectResponse:
         'code_challenge_method': 'S256',
         'hd': allowed_domain,
         'prompt': 'select_account',
-    })}"
+    }
+    authorization_url = f"{GOOGLE_AUTHORIZE_URL}?{urlencode(authorization_parameters)}"
     response = RedirectResponse(url=authorization_url, status_code=status.HTTP_302_FOUND)
     response.set_cookie(
         GOOGLE_OAUTH_COOKIE,

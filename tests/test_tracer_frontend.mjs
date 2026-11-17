@@ -68,6 +68,14 @@ test('admin road editor keeps OSRM server-side and exposes precise map controls'
     assert.match(mapSource,/onMoveGuide/);
     assert.doesNotMatch(source,/router\.project-osrm\.org/);
 });
+test('admin publishes to master data before using the separate assignment workspace',()=>{
+    assert.match(source,/data-action="publish">Save to Routes/);
+    assert.match(source,/\/recordings\/\$\{selected\.id\}\/publish/);
+    assert.match(source,/window\.location\.hash='routes'/);
+    assert.match(source,/window\.location\.hash='assignments'/);
+    assert.doesNotMatch(source,/\/recordings\/\$\{selected\.id\}\/select/);
+    assert.match(source,/unique stop codes/);
+});
 test('opening and closing Tracer never starts GPS or upload timers',async()=>{
     const f=fixture();await f.init();assert.equal(f.watched,0);assert.equal(f.intervals.size,0);f.root.cleanup();assert.equal(f.cleared,0);
 });

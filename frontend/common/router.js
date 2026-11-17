@@ -44,7 +44,7 @@ import {
 // ==========================================================
 
 const adminModules = {
-    maintainRoute: { title: "Maintain route", load: () => import("../modules/js/routeStudio.js?v=20261106background1") },
+    maintainRoute: { title: "Maintain route", load: () => import("../modules/js/routeStudio.js?v=20261117routepublish1") },
 
     dashboard: {
         title: "Overview",
@@ -213,7 +213,7 @@ const technicianModules = {
         title: "Route capture",
         load: () => import("../modules/js/traceAssignment.js?v=20261116providertrace1")
     },
-    routeStudio: { title: "Traced paths", load: () => import("../modules/js/routeStudio.js?v=20261106background1") },
+    routeStudio: { title: "Traced paths", load: () => import("../modules/js/routeStudio.js?v=20261117routepublish1") },
     technicianDashboard: {
         title: "GPS Integration",
         load: () => import("../modules/js/technicianDashboard.js?v=20261105pagination1")
@@ -224,7 +224,7 @@ const technicianModules = {
     }
 };
 const tracerModules = {
-    routeStudio: { title: "Trace assigned bus", load: () => import("../modules/js/routeStudio.js?v=20261106background1") },
+    routeStudio: { title: "Trace assigned bus", load: () => import("../modules/js/routeStudio.js?v=20261117routepublish1") },
 };
 
 let shell;

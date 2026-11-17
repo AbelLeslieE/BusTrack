@@ -82,17 +82,47 @@ class RouteStudioTest(unittest.TestCase):
         other=User(id=999,role='Tracer')
         with self.assertRaises(HTTPException): api.detail(s['id'],self.db,other)
 
-    def test_explicit_switch_preserves_manual_and_geometry(self):
+    def test_publish_creates_unassigned_route_and_stops_without_changing_assignment(self):
         s=self.start(); api.upload(s['id'],api.Batch(points=self.points()),self.db,self.tracer)
         s=api.action(s['id'],api.Action(action='finish',final_sequence=2),self.db,self.tracer)
-        stops=[api.DraftStop(name=f'Stop {i}',latitude=10+i*.001,longitude=76) for i in range(2)]
-        s=api.edit(s['id'],api.Draft(revision=1,name=s['name'],stops=stops,geometry=s['geometry']),self.db,self.admin)
-        s=api.select_route(s['id'],api.Select(mode='traced',revision=s['revision']),self.db,self.admin)
-        self.assertIsNotNone(published_geometry(self.db,s['route_id'],self.bus.id))
-        self.assertIsNotNone(self.db.get(Route,self.route.id))
-        api.select_route(s['id'],api.Select(mode='manual',revision=s['revision']),self.db,self.admin)
+        stops=[
+            api.DraftStop(name='Shared name',latitude=10,longitude=76),
+            api.DraftStop(name='Shared name',latitude=10.001,longitude=76),
+        ]
+        s=api.edit(s['id'],api.Draft(revision=1,name='Manual',stops=stops,geometry=s['geometry']),self.db,self.admin)
+        s=api.publish_route(s['id'],api.Publish(revision=s['revision']),self.db,self.admin)
+
+        published=self.db.get(Route,s['route_id'])
+        self.assertEqual(published.route_name,'Manual (2)')
+        self.assertIsNone(published.bus_id)
+        self.assertIsNone(published.driver_id)
         self.assertEqual(self.db.get(Route,self.route.id).bus_id,self.bus.id)
-        self.assertIsNone(published_geometry(self.db,s['route_id'],self.bus.id))
+        published_stops=(self.db.query(Stop).join(RouteStop).filter(RouteStop.route_id==published.id)
+                         .order_by(RouteStop.sequence).all())
+        self.assertEqual([stop.stop_name for stop in published_stops],['Shared name','Shared name'])
+        self.assertEqual(len({stop.stop_code for stop in published_stops}),2)
+        self.assertIsNone(published_geometry(self.db,published.id,self.bus.id))
+
+        counts=(self.db.query(Route).count(),self.db.query(Stop).count(),self.db.query(RouteStop).count())
+        retried=api.publish_route(s['id'],api.Publish(revision=s['revision']),self.db,self.admin)
+        self.assertEqual(retried['route_id'],published.id)
+        self.assertEqual((self.db.query(Route).count(),self.db.query(Stop).count(),self.db.query(RouteStop).count()),counts)
+
+        with self.assertRaises(HTTPException) as error:
+            api.select_route(s['id'],api.Select(mode='traced',revision=s['revision']),self.db,self.admin)
+        self.assertEqual(error.exception.status_code,410)
+
+        from backend.routes.assignments import save_route_assignment
+        from backend.schemas import RouteAssignmentUpdate
+        save_route_assignment(
+            published.id,
+            RouteAssignmentUpdate(bus_id=self.bus.id,driver_id=None),
+            self.db,
+            self.admin,
+        )
+        self.assertEqual(self.db.get(Route,published.id).bus_id,self.bus.id)
+        self.assertIsNone(self.db.get(Route,self.route.id).bus_id)
+        self.assertIsNotNone(published_geometry(self.db,published.id,self.bus.id))
 
     def test_osrm_road_plan_connects_stops_and_guides_in_order(self):
         s=self.start(); api.upload(s['id'],api.Batch(points=self.points()),self.db,self.tracer)
@@ -166,13 +196,15 @@ class RouteStudioTest(unittest.TestCase):
             self.assertEqual(api.action(first['id'],api.Action(action='pause'),self.db,self.tracer)['status'],'PAUSED')
         self.assertEqual(self.db.query(TraceSession).count(),1)
 
-    def test_running_trip_blocks_selection_without_changing_assignment(self):
+    def test_publish_does_not_depend_on_a_running_trip_or_current_assignment(self):
         s=self.start();api.upload(s['id'],api.Batch(points=self.points()),self.db,self.tracer)
         s=api.action(s['id'],api.Action(action='finish',final_sequence=2),self.db,self.tracer)
         self.db.add(LiveTrip(bus_id=self.bus.id,route_id=self.route.id,status='Running',route_direction='reverse'))
         self.db.commit()
-        with self.assertRaises(HTTPException): api.select_route(s['id'],api.Select(mode='traced',revision=1),self.db,self.admin)
-        self.db.rollback()
+        stops=[api.DraftStop(name=f'Stop {i}',latitude=10+i*.001,longitude=76) for i in range(2)]
+        s=api.edit(s['id'],api.Draft(revision=1,name=s['name'],stops=stops,geometry=s['geometry']),self.db,self.admin)
+        published=api.publish_route(s['id'],api.Publish(revision=s['revision']),self.db,self.admin)
+        self.assertIsNotNone(published['route_id'])
         self.assertEqual(self.db.get(Route,self.route.id).bus_id,self.bus.id)
         self.assertEqual(self.db.query(LiveTrip).one().route_direction,'reverse')
 
@@ -201,6 +233,7 @@ class RouteStudioTest(unittest.TestCase):
         with patch.dict('os.environ',{'ENABLE_ROUTE_STUDIO':'true'}):
             self.assertEqual(asyncio.run(call('PUT','/api/route-studio/assignment',{'user_id':self.tracer.id,'bus_id':self.bus.id})),403)
             self.assertEqual(asyncio.run(call('POST','/api/route-studio/recordings/unknown/select',{'mode':'traced','revision':1})),403)
+            self.assertEqual(asyncio.run(call('POST','/api/route-studio/recordings/unknown/publish',{'revision':1})),403)
         with patch.dict('os.environ',{'ENABLE_ROUTE_STUDIO':'false'}):
             self.assertEqual(asyncio.run(call('POST','/api/route-studio/recordings',{'request_id':str(uuid.uuid4()),'name':'Off'})),404)
 

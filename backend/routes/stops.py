@@ -376,35 +376,10 @@ def create_stop(
     if len(stop_name) > 150:
         raise HTTPException(status_code=400, detail="Stop name is too long.")
 
-    # Acquire the write lock before reading the maximum or checking the name.
+    # Acquire the write lock before reading the maximum. Stop display names
+    # may repeat; the generated stop code is the unique identity.
     # This keeps two workers from both assigning (for example) ST030.
     lock_stop_code_writes(db)
-
-    # ======================================================
-    # VALIDATE STOP NAME
-    # ======================================================
-
-    existing_name = (
-
-        db.query(Stop)
-
-        .filter(
-            func.lower(Stop.stop_name) == stop_name.casefold()
-        )
-
-        .first()
-
-    )
-
-    if existing_name:
-
-        raise HTTPException(
-
-            status_code=400,
-
-            detail="Stop name already exists."
-
-        )
 
     # ======================================================
     # CREATE STOP
@@ -502,33 +477,6 @@ def update_stop(
             status_code=404,
 
             detail="Stop not found."
-
-        )
-
-    # ======================================================
-    # CHECK DUPLICATE STOP NAME
-    # ======================================================
-
-    existing_name = (
-
-        db.query(Stop)
-
-        .filter(
-            func.lower(Stop.stop_name) == stop_name.casefold(),
-            Stop.id != stop_id
-        )
-
-        .first()
-
-    )
-
-    if existing_name:
-
-        raise HTTPException(
-
-            status_code=400,
-
-            detail="Stop name already exists."
 
         )
 

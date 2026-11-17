@@ -8,20 +8,17 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, AwareDatetime
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_
 
 from backend.database import get_db
-from backend.models import Bus, User, Route, Stop, RouteStop, Student
+from backend.models import Bus, User, Route, Stop, RouteStop
 from backend.models_route_studio import (
     ProviderTraceSetting,
     TracerAssignment,
     TraceSession,
     TracePoint,
-    TraceChoice,
 )
 from backend.security import require_authenticated, require_gps_technician, require_admin
 from backend.services.trip_reset import lock_tracking_bus, as_utc
-from backend.routes.models_tracking import LiveTrip
 from backend.services.generated_codes import lock_generated_code_writes, next_route_code
 from backend.services.stop_codes import lock_stop_code_writes, next_stop_code
 from backend.services.road_matching import planned_route, road_geometry
@@ -115,6 +112,10 @@ class Select(Strict):
     mode: Literal["manual", "traced"]
     revision: int
 
+
+class Publish(Strict):
+    revision: int
+
 def _route_plan(s):
     """Decode legacy stop lists and the richer, backward-compatible plan."""
     stored = json.loads(s.stops_json)
@@ -165,6 +166,44 @@ def payload(s):
             "guide_points": plan["guide_points"], "geometry_source": plan["geometry_source"],
             "source_geometry": plan["source_geometry"], "route_id": s.route_id,
             "source": s.source, "capture_window": s.capture_window}
+
+
+def _available_route_name(db: Session, requested_name: str) -> str:
+    """Return a readable route name that satisfies the master-table constraint."""
+
+    base = (requested_name.strip() or "Recorded route")[:100]
+    existing = {
+        value.casefold()
+        for (value,) in db.query(Route.route_name).all()
+    }
+    if base.casefold() not in existing:
+        return base
+    number = 2
+    while True:
+        suffix = f" ({number})"
+        candidate = f"{base[:100 - len(suffix)]}{suffix}"
+        if candidate.casefold() not in existing:
+            return candidate
+        number += 1
+
+
+def _publication_payload(
+    s,
+    route: Route,
+    *,
+    created_stops: int = 0,
+    reused_stops: int = 0,
+):
+    result = payload(s)
+    result["publication"] = {
+        "route_id": route.id,
+        "route_code": route.route_code,
+        "route_name": route.route_name,
+        "created_stops": created_stops,
+        "reused_stops": reused_stops,
+        "assigned": bool(route.bus_id or route.driver_id),
+    }
+    return result
 
 def owned(db, sid, actor, write=False):
     s = db.get(TraceSession, sid)
@@ -376,67 +415,116 @@ def action(sid: str, data: Action, db: Session = Depends(get_db), actor=Depends(
     return payload(s)
 
 
-@router.post("/recordings/{sid}/select")
-def select_route(sid: str, data: Select, db: Session = Depends(get_db), actor=Depends(require_admin), _=Depends(access)):
-    from backend.routes.assignments import apply_route_assignment
-    from backend.schemas import RouteAssignmentUpdate
+@router.post("/recordings/{sid}/publish")
+def publish_route(
+    sid: str,
+    data: Publish,
+    db: Session = Depends(get_db),
+    actor=Depends(require_admin),
+    _=Depends(access),
+):
+    """Save a finished draft into Routes and Stops without assigning it.
+
+    Assignment remains exclusively owned by the Assignment workspace. This
+    makes publishing safe even when a bus has no route yet or currently has a
+    running trip.
+    """
+
     s = owned(db, sid, actor, True)
-    if s.revision != data.revision or s.status not in {"DRAFT", "PUBLISHED"}:
-        raise HTTPException(409, "Reload the current finished path before selecting it.")
-    if db.query(LiveTrip).filter(LiveTrip.bus_id == s.bus_id, LiveTrip.status == "Running", LiveTrip.ended_at.is_(None)).first():
-        raise HTTPException(409, "Route selection requires no running trip. Finish the current operation through the existing administrator controls first.")
-    current = db.query(Route).filter(Route.bus_id == s.bus_id).all()
-    if len(current) != 1:
-        raise HTTPException(409, "Assign exactly one manual route to this bus first.")
-    current = current[0]
-    choice = db.get(TraceChoice, s.bus_id)
-    if choice is None:
-        choice = TraceChoice(bus_id=s.bus_id, manual_route_id=current.id)
-        db.add(choice)
-    if data.mode == "manual":
-        target = db.get(Route, choice.manual_route_id)
-        if not target:
-            raise HTTPException(409, "Original manual route is unavailable.")
-    else:
-        stops = _route_plan(s)["stops"]
-        if len(stops) < 2:
-            raise HTTPException(422, "Add at least two confirmed stops before selecting this route.")
-        target = db.get(Route, s.route_id) if s.route_id else None
-        if target is None:
-            lock_generated_code_writes(db, "route")
-            target = Route(route_code=next_route_code(db), route_name=f"{s.name[:60]} · {s.id[:8]}", status="Active", total_stops=len(stops))
-            db.add(target)
-            db.flush()
-            lock_stop_code_writes(db)
-            for sequence, item in enumerate(stops, 1):
-                # Exact master-stop reuse preserves assigned passenger stop IDs.
-                stop = db.query(Stop).filter(Stop.stop_name == item["name"], Stop.latitude == item["latitude"], Stop.longitude == item["longitude"]).first()
-                if stop is None:
-                    if db.query(Stop).filter(Stop.stop_name == item["name"]).first():
-                        raise HTTPException(409, "A master stop with this name has different coordinates. Use a new name or preserve its existing coordinates.")
-                    stop = Stop(stop_code=next_stop_code(db), stop_name=item["name"], latitude=item["latitude"], longitude=item["longitude"], radius=item["radius"], status="Active")
-                    db.add(stop)
-                    db.flush()
-                db.add(RouteStop(route_id=target.id, stop_id=stop.id, sequence=sequence))
-            db.flush()
-            s.route_id = target.id
-    if target.bus_id and target.bus_id != s.bus_id:
-        raise HTTPException(409, "Target route is now assigned to another bus.")
-    passengers = db.query(Student).filter(or_(Student.route_id == current.id,
-        and_(Student.route_id.is_(None), Student.bus_id == s.bus_id))).all()
-    target_stops = {row.stop_id for row in db.query(RouteStop).filter(RouteStop.route_id == target.id)}
-    if any(p.stop_id and p.stop_id not in target_stops for p in passengers):
-        raise HTTPException(409, "The selected route omits an assigned passenger stop. Preserve the exact stop name and location or resolve passenger assignments first.")
-    for passenger in passengers:
-        passenger.route_id = target.id
+    if s.revision != data.revision:
+        raise HTTPException(409, "Reload the current route draft before publishing it.")
+
+    if s.status == "PUBLISHED" and s.route_id:
+        existing_route = db.get(Route, s.route_id)
+        if existing_route is None:
+            raise HTTPException(409, "The published route no longer exists. Create an editable copy and publish it again.")
+        return _publication_payload(s, existing_route)
+
+    if s.status != "DRAFT":
+        raise HTTPException(409, "Only a finished route draft can be published.")
+
+    stops = _route_plan(s)["stops"]
+    if len(stops) < 2:
+        raise HTTPException(422, "Add at least two confirmed stops before saving this route.")
+
+    lock_generated_code_writes(db, "route")
+    route = Route(
+        route_code=next_route_code(db),
+        route_name=_available_route_name(db, s.name),
+        status="Active",
+        total_stops=len(stops),
+    )
+    db.add(route)
     db.flush()
-    apply_route_assignment(target.id, RouteAssignmentUpdate(bus_id=s.bus_id, driver_id=current.driver_id), db, actor)
-    choice.trace_id = s.id if data.mode == "traced" else None
-    if data.mode == "traced":
-        s.status = "PUBLISHED"
-    record_audit_event(db, category="route_studio", action="route_selected", actor=actor, details={"mode": data.mode, "trace_id": sid, "route_id": target.id, "previous_route_id": current.id})
+
+    created_stops = 0
+    reused_stops = 0
+    lock_stop_code_writes(db)
+    for sequence, item in enumerate(stops, 1):
+        stop_name = item["name"].strip()
+        # Reuse only the exact same physical master stop. The same display
+        # name at a different location is valid and receives a new stop code.
+        stop = db.query(Stop).filter(
+            Stop.stop_name == stop_name,
+            Stop.latitude == item["latitude"],
+            Stop.longitude == item["longitude"],
+        ).first()
+        if stop is None:
+            stop = Stop(
+                stop_code=next_stop_code(db),
+                stop_name=stop_name,
+                latitude=item["latitude"],
+                longitude=item["longitude"],
+                radius=item["radius"],
+                status="Active",
+            )
+            db.add(stop)
+            db.flush()
+            created_stops += 1
+        else:
+            reused_stops += 1
+        db.add(RouteStop(route_id=route.id, stop_id=stop.id, sequence=sequence))
+
+    s.route_id = route.id
+    s.status = "PUBLISHED"
+    record_audit_event(
+        db,
+        category="route_studio",
+        action="route_published",
+        actor=actor,
+        subject_label=route.route_code,
+        details={
+            "trace_id": sid,
+            "route_id": route.id,
+            "created_stops": created_stops,
+            "reused_stops": reused_stops,
+            "assigned": False,
+        },
+    )
     db.commit()
-    return payload(s)
+    return _publication_payload(
+        s,
+        route,
+        created_stops=created_stops,
+        reused_stops=reused_stops,
+    )
+
+
+@router.post("/recordings/{sid}/select", deprecated=True)
+def select_route(
+    sid: str,
+    data: Select,
+    db: Session = Depends(get_db),
+    actor=Depends(require_admin),
+    _=Depends(access),
+):
+    """Prevent the retired Route Studio endpoint from changing assignments."""
+
+    owned(db, sid, actor)
+    raise HTTPException(
+        410,
+        "Route Studio now saves routes without assigning them. Publish the route, then assign it from Assignments.",
+    )
 
 @router.post("/recordings/{sid}/road-route")
 def build_road_route(sid: str, data: RoadPlan, db: Session = Depends(get_db),
@@ -466,8 +554,6 @@ def edit(sid: str, data: Draft, db: Session = Depends(get_db), actor=Depends(req
         raise HTTPException(422, "Invalid longitude/latitude path.")
     if data.source_geometry and any(len(p) != 2 or not -180 <= p[0] <= 180 or not -90 <= p[1] <= 90 for p in data.source_geometry):
         raise HTTPException(422, "Invalid original tracer geometry.")
-    if len({p.name.strip().casefold() for p in data.stops}) != len(data.stops):
-        raise HTTPException(422, "Stop names must be unique within a route.")
     if any(guide.segment >= max(0, len(data.stops) - 1) for guide in data.guide_points):
         raise HTTPException(422, "A route guide refers to a stop segment that no longer exists.")
     existing = _route_plan(s)

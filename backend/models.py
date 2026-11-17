@@ -798,7 +798,6 @@ class Stop(Base):
 
     stop_name: Mapped[str] = mapped_column(
         String(150),
-        unique=True,
         nullable=False,
         index=True,
     )

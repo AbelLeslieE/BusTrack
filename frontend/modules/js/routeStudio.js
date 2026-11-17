@@ -218,8 +218,9 @@ export function render() {
             ensurePlan();
             const editable=selected.status === 'DRAFT';
             const sourceLabel=selected.geometry_source==='road' ? 'OSRM road route' : 'Original tracer trail';
-            el.innerHTML = `<div class="studio-admin-editor-heading"><div><p class="studio-eyebrow">ROUTE WORKSHOP</p><h2>${esc(selected.name)}</h2><span>${selected.stops.length} stop${selected.stops.length===1?'':'s'} · ${selected.guide_points.length} edit point${selected.guide_points.length===1?'':'s'} · ${sourceLabel}</span></div><div class="studio-controls">${editable ? '<button data-action="save">Save route</button><button data-action="traced">Save and use this route</button>' : '<button data-action="copy">Edit route</button>'}<button data-action="manual">Use manual route</button></div></div>
-              <p class="studio-admin-help">${editable ? '<b>1.</b> Add and order the stops. <b>2.</b> Connect stops by road. <b>3.</b> Use Fine-tune line, then click or drag guide points to correct small sections. Undo, clear guide points, or restore the original tracer trail at any time before saving.' : 'This route is published. Choose Edit route to create a safe editable version.'}</p>
+            const publishedRoute=selected.publication?.route_name || selected.name;
+            el.innerHTML = `<div class="studio-admin-editor-heading"><div><p class="studio-eyebrow">ROUTE WORKSHOP</p><h2>${esc(selected.name)}</h2><span>${selected.stops.length} stop${selected.stops.length===1?'':'s'} · ${selected.guide_points.length} edit point${selected.guide_points.length===1?'':'s'} · ${sourceLabel}</span></div><div class="studio-controls">${editable ? '<button data-action="save">Save draft</button><button data-action="publish">Save to Routes</button>' : '<button data-action="copy">Edit a new version</button><button data-action="open-routes">Open Routes</button><button data-action="open-assignments">Assign route</button>'}</div></div>
+              <p class="studio-admin-help">${editable ? '<b>1.</b> Add and order the stops. <b>2.</b> Connect stops by road. <b>3.</b> Fine-tune the line. <b>4.</b> Save to Routes. Publishing adds these stops to the Stops module with unique stop codes; assignment is done separately in Assignments.' : `Saved as <b>${esc(publishedRoute)}</b>. Rename it in Routes, edit its master stops in Stops, or connect it to a bus and driver from Assignments.`}</p>
               <section class="studio-route-summary"><div><span>Displayed line</span><strong>${sourceLabel}</strong></div><div><span>Stop order</span><strong>${selected.stops.length ? `1 → ${selected.stops.length}` : 'No stops'}</strong></div><div><span>Road edits</span><strong>${selected.guide_points.length}</strong></div></section>
               <h3>Ordered stops</h3><ol class="studio-stops studio-admin-stops">${selected.stops.length ? selected.stops.map((s,i) => `<li><b>${i+1}</b><input data-stop="${i}" value="${esc(s.name)}" aria-label="Stop ${i+1} name"><span>${Number(s.latitude).toFixed(5)}, ${Number(s.longitude).toFixed(5)}</span><button data-up="${i}" aria-label="Move stop ${i+1} earlier">↑</button><button data-down="${i}" aria-label="Move stop ${i+1} later">↓</button><button data-remove="${i}">Remove</button></li>`).join('') : '<li class="studio-empty-stops">No stops added yet. Add the first stop from the map.</li>'}</ol>
               ${editable && selected.guide_points.length ? `<h3>Fine-tuning points</h3><ol class="studio-stops studio-guide-list">${selected.guide_points.map((g,i)=>`<li><b>G${i+1}</b><span>Between stops ${g.segment+1} and ${g.segment+2} · ${Number(g.latitude).toFixed(5)}, ${Number(g.longitude).toFixed(5)}</span><button data-guide-up="${i}">↑</button><button data-guide-down="${i}">↓</button><button data-guide-remove="${i}">Remove</button></li>`).join('')}</ol>`:''}`;
@@ -401,6 +402,8 @@ export function render() {
             root.querySelector('.studio-map-status').textContent='Original tracer trail restored. Connect stops by road again whenever you are ready.';return;
         }
         if (action === 'refresh') return refresh();
+        if (action === 'open-routes') { window.location.hash='routes'; return; }
+        if (action === 'open-assignments') { window.location.hash='assignments'; return; }
         if (action === 'assign') { await api('/assignment', {user_id:Number(root.querySelector('.studio-tracer').value), bus_id:Number(root.querySelector('.studio-bus').value)}, 'PUT'); return refresh(); }
         if (action === 'start') {
             if (local && !local.finished) throw new Error('Recover or finish your existing recording first.');
@@ -448,11 +451,15 @@ export function render() {
         if (action === 'redo' && redo.length) { undo.push(JSON.stringify(selected)); selected = JSON.parse(redo.pop());roadRouteDirty=false; }
         if (action === 'geometry') { const value = JSON.parse(root.querySelector('.studio-geometry').value); if (!Array.isArray(value) || value.length < 2 || value.some(p => !Array.isArray(p) || p.length !== 2 || !p.every(Number.isFinite) || Math.abs(p[0]) > 180 || Math.abs(p[1]) > 90)) throw new Error('Enter valid longitude/latitude pairs.'); remember(); selected.geometry = value;selected.geometry_source='trace';selected.source_geometry=structuredClone(value);selected.guide_points=[]; }
         if (action === 'save') await saveDraft();
-        if (['manual','traced'].includes(action)) {
-            if (!confirm(`Select the ${action} route for this bus? This changes its route assignment and affected passenger route assignments.`)) return;
-            if(action==='traced' && selected.status==='DRAFT') await saveDraft();
-            selected = await api(`/recordings/${selected.id}/select`, {mode:action,revision:selected.revision});
+        if (action === 'publish') {
+            if (!confirm('Save this route and its stops to the master Routes and Stops lists? You can assign it afterward from Assignments.')) return;
+            if (selected.status === 'DRAFT') await saveDraft();
+            selected = await api(`/recordings/${selected.id}/publish`, {revision:selected.revision});
             routeEditMode=false;
+            draw();editor();
+            const route=selected.publication;
+            status(`${route.route_code} · ${route.route_name} saved to Routes. ${route.created_stops} new stop${route.created_stops===1?'':'s'} saved to Stops. Open Assignments when you are ready to assign it.`);
+            return;
         }
         draw(); editor(); status('Saved path: ' + selected.status);
     }
