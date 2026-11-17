@@ -5,8 +5,8 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 const login = read("frontend/login.html");
 const splash = read("frontend/common/loginSplash.js");
 
-assert.match(login, /loginSplash\.js\?v=20261116cleanlogin1/);
-assert.match(splash, /login\.css\?v=20261116cleanlogin1/);
+assert.match(login, /loginSplash\.js\?v=20261117loginpolish1/);
+assert.match(splash, /login\.css\?v=20261117loginpolish1/);
 assert.match(splash, /window\.addEventListener\("load", resolve/);
 assert.match(splash, /document\.fonts\?\.ready/);
 assert.match(splash, /Promise\.all\(\[stylesheetReady, backdropReady, pageReady, fontsReady\]\)/);

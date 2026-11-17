@@ -9,13 +9,14 @@ const authScript = read("frontend/common/auth.js");
 const loginStyles = read("frontend/common/login.css");
 
 assert.match(login, /href="\/api\/auth\/google\/signup"/);
-assert.match(login, /New to BusTrack\?[\s\S]*href="\/api\/auth\/google\/signup">Sign up/);
+assert.match(login, /New to BusTrack\?[\s\S]*href="\/api\/auth\/google\/signup">Create an account/);
 assert.doesNotMatch(login, /Sign up with Google/);
 assert.match(login, /href="\/api\/auth\/google\/login"/);
 assert.match(login, /Continue with Google/);
 assert.match(login, /class="google-login-link"/);
 assert.match(loginStyles, /\.google-login-link\{/);
-assert.match(loginStyles, /min-height:38px/);
+assert.match(loginStyles, /min-height:40px/);
+assert.match(login, /class="login-method-divider"/);
 assert.match(signup, /Complete your student account/);
 assert.match(signup, /Account role[\s\S]*Student/);
 assert.match(signup, /autocomplete="new-password"/);
