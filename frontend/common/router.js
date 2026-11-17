@@ -44,7 +44,7 @@ import {
 // ==========================================================
 
 const adminModules = {
-    maintainRoute: { title: "Maintain route", load: () => import("../modules/js/routeStudio.js?v=20261117routepublish1") },
+    maintainRoute: { title: "Maintain route", load: () => import("../modules/js/routeStudio.js?v=20261117geofence1") },
 
     dashboard: {
         title: "Overview",
@@ -213,7 +213,7 @@ const technicianModules = {
         title: "Route capture",
         load: () => import("../modules/js/traceAssignment.js?v=20261116providertrace1")
     },
-    routeStudio: { title: "Traced paths", load: () => import("../modules/js/routeStudio.js?v=20261117routepublish1") },
+    routeStudio: { title: "Traced paths", load: () => import("../modules/js/routeStudio.js?v=20261117geofence1") },
     technicianDashboard: {
         title: "GPS Integration",
         load: () => import("../modules/js/technicianDashboard.js?v=20261105pagination1")
@@ -224,7 +224,7 @@ const technicianModules = {
     }
 };
 const tracerModules = {
-    routeStudio: { title: "Trace assigned bus", load: () => import("../modules/js/routeStudio.js?v=20261117routepublish1") },
+    routeStudio: { title: "Trace assigned bus", load: () => import("../modules/js/routeStudio.js?v=20261117geofence1") },
 };
 
 let shell;
@@ -346,7 +346,7 @@ function applyModuleStyles(moduleName) {
 
     const styles = [loadStylesheet(
         "active-module-styles",
-        `/static/modules/css/${styleModuleName}.css?v=${styleModuleName === "routeStudio" ? "20261106roadeditor1" : styleModuleName === "traceAssignment" ? "20261116providertrace1" : styleModuleName === "live_tracking" ? "20261105cardreset1" : styleModuleName === "technicianDashboard" ? "20261105pagination1" : styleModuleName === "providerHealth" ? "20261105portals1" : "20261103providerdelay1"}`
+        `/static/modules/css/${styleModuleName}.css?v=${styleModuleName === "routeStudio" ? "20261117geofence1" : styleModuleName === "traceAssignment" ? "20261116providertrace1" : styleModuleName === "live_tracking" ? "20261105cardreset1" : styleModuleName === "technicianDashboard" ? "20261105pagination1" : styleModuleName === "providerHealth" ? "20261105portals1" : "20261103providerdelay1"}`
     )];
 
     // Driver shared styles

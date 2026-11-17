@@ -522,7 +522,7 @@ class StopCreate(BaseModel):
     radius: int = Field(
         default=50,
         ge=10,
-        le=500,
+        le=1000,
     )
 
     status: str = Field(default="Active", min_length=1, max_length=20)
@@ -543,7 +543,7 @@ class StopUpdate(BaseModel):
 
     longitude: float | None = Field(default=None, ge=-180, le=180)
 
-    radius: int = Field(default=50, ge=10, le=500)
+    radius: int = Field(default=50, ge=10, le=1000)
 
     status: str = Field(default="Active", min_length=1, max_length=20)
 

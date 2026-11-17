@@ -41,6 +41,19 @@ export async function createStudioMap(container, {onStop, onMoveStop, onMoveGuid
         map.getSource('studio-trace').setData(visiblePath.length>1 ? feature({type:'LineString',coordinates:visiblePath}) : empty());
         map.getSource('studio-accuracy').setData(position ? accuracyRing(position,accuracy) : empty());
     }
+    function drawStopGeofences() {
+        if (!ready) return;
+        map.getSource('studio-stop-geofences').setData({
+            type:'FeatureCollection',
+            features:stops.map((stop,index)=>{
+                const radius=Number(stop.radius);
+                const safeRadius=Number.isFinite(radius) && radius>=10 && radius<=1000 ? radius : 250;
+                const ring=accuracyRing([stop.longitude,stop.latitude],safeRadius);
+                ring.properties={index:index+1,name:stop.name,radius:safeRadius};
+                return ring;
+            })
+        });
+    }
     function ensureMarker(point) {
         if(marker) return;
         const el=document.createElement('div');el.className='studio-live-pin';el.setAttribute('aria-label','Latest phone GPS position');
@@ -80,10 +93,13 @@ export async function createStudioMap(container, {onStop, onMoveStop, onMoveGuid
         if(destroyed) return;
         map.addSource('studio-trace',{type:'geojson',data:empty()});
         map.addSource('studio-accuracy',{type:'geojson',data:empty()});
+        map.addSource('studio-stop-geofences',{type:'geojson',data:empty()});
+        map.addLayer({id:'studio-stop-geofence-fill',type:'fill',source:'studio-stop-geofences',paint:{'fill-color':'#22d3ee','fill-opacity':.11}});
+        map.addLayer({id:'studio-stop-geofence-line',type:'line',source:'studio-stop-geofences',paint:{'line-color':'#22d3ee','line-width':2,'line-opacity':.7}});
         map.addLayer({id:'studio-accuracy-fill',type:'fill',source:'studio-accuracy',paint:{'fill-color':'#0ea5e9','fill-opacity':.12}});
         map.addLayer({id:'studio-trace-outline',type:'line',source:'studio-trace',layout:{'line-join':'round','line-cap':'round'},paint:{'line-color':'#fff','line-width':8}});
         map.addLayer({id:'studio-trace-line',type:'line',source:'studio-trace',layout:{'line-join':'round','line-cap':'round'},paint:{'line-color':'#0284c7','line-width':4}});
-        ready=true;drawPath();
+        ready=true;drawPath();drawStopGeofences();
     });
     return {
         setPath(coords, {fit=false}={}) {
@@ -97,9 +113,12 @@ export async function createStudioMap(container, {onStop, onMoveStop, onMoveGuid
             if(JSON.stringify(stops)===JSON.stringify(next) && editable===canEdit) return;
             stops=structuredClone(next);editable=canEdit;
             stopMarkers.forEach(m=>m.remove());stopMarkers=[];
+            drawStopGeofences();
             next.forEach((stop,index)=>{
                 const el=document.createElement('div');el.className='studio-stop-pin';el.textContent=String(index+1);el.title=stop.name;el.addEventListener('click',event=>event.stopPropagation());
-                const m=new gl.Marker({element:el,draggable:canEdit}).setLngLat([stop.longitude,stop.latitude]).setPopup(new gl.Popup().setText(stop.name)).addTo(map);
+                const parsedRadius=Number(stop.radius);
+                const radius=Number.isFinite(parsedRadius) && parsedRadius>=10 && parsedRadius<=1000 ? parsedRadius : 250;
+                const m=new gl.Marker({element:el,draggable:canEdit}).setLngLat([stop.longitude,stop.latitude]).setPopup(new gl.Popup().setText(`${stop.name} · ${radius} m geofence`)).addTo(map);
                 m.on('dragend',()=>{const p=m.getLngLat();onMoveStop(index,{lat:p.lat,lng:p.lng});});stopMarkers.push(m);
             });
         },

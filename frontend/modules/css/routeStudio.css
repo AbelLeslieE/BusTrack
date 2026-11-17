@@ -116,20 +116,25 @@
 .studio-admin-page button:hover{border-color:rgba(101,211,255,.55);background:rgba(101,211,255,.14)}
 .studio-admin-page button[data-action=add-stop],
 .studio-admin-page button[data-action=save],
-.studio-admin-page button[data-action=traced]{
+.studio-admin-page button[data-action=publish]{
   border-color:rgba(101,211,255,.5);
   background:linear-gradient(135deg,rgba(39,143,204,.68),rgba(100,85,220,.68));
   color:#fff;
 }
 .studio-admin-page button[data-action=add-stop]:hover,
 .studio-admin-page button[data-action=save]:hover,
-.studio-admin-page button[data-action=traced]:hover{background:linear-gradient(135deg,rgba(49,166,230,.78),rgba(117,99,235,.78))}
+.studio-admin-page button[data-action=publish]:hover{background:linear-gradient(135deg,rgba(49,166,230,.78),rgba(117,99,235,.78))}
 .studio-admin-page .studio-map-card{overflow:hidden;border-radius:24px}
 .studio-admin-page .studio-map-toolbar{padding:20px 24px}
 .studio-admin-page .studio-map-toolbar>span{color:#f5f8ff;font-size:20px}
 .studio-admin-page .studio-map-toolbar small{color:#9fb5d4}
 .studio-map-actions{display:flex;gap:9px;flex-wrap:wrap}
-.studio-map-actions input{min-width:210px}
+.studio-map-actions>.studio-new-stop-name{min-width:240px;flex:1 1 300px}
+.studio-new-stop-radius,.studio-stop-radius{display:flex;align-items:center;gap:7px;color:#b8d0e6;font-size:12px;font-weight:700}
+.studio-new-stop-radius{min-height:44px;padding:0 12px;border:1px solid rgba(101,211,255,.2);border-radius:11px;background:rgba(3,20,45,.38)}
+.studio-new-stop-radius input{width:84px;min-width:0;padding:8px;text-align:right}
+.studio-stop-radius{padding:4px 8px;border:1px solid rgba(101,211,255,.15);border-radius:9px;background:rgba(7,29,54,.58)}
+.studio-stop-radius input{width:76px;min-width:0;max-width:76px;padding:7px;text-align:right}
 .studio-route-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:0 24px 15px;border-bottom:1px solid rgba(101,211,255,.1)}
 .studio-route-tools button{display:none;min-height:38px;padding:8px 11px;font-size:12px}
 .studio-has-draft .studio-route-tools button{display:inline-flex;align-items:center}
@@ -152,7 +157,7 @@
 .studio-admin-stops{padding:0;list-style:none}
 .studio-admin-page .studio-admin-stops li{
   display:grid;
-  grid-template-columns:34px minmax(180px,1fr) minmax(145px,auto) auto auto auto;
+  grid-template-columns:34px minmax(180px,1fr) minmax(135px,auto) minmax(145px,auto) auto auto auto;
   border-color:rgba(101,211,255,.16);
   background:rgba(3,20,45,.38);
 }
@@ -170,5 +175,5 @@
   .studio-route-tools{padding:0 18px 14px}.studio-route-tools .studio-route-mode{flex-basis:100%;margin-left:0}
   .studio-admin-editor-heading{align-items:flex-start;flex-direction:column}
   .studio-route-summary{grid-template-columns:1fr}
-  .studio-admin-stops li{grid-template-columns:34px 1fr}.studio-admin-stops li span{grid-column:2}.studio-admin-stops li button{grid-column:auto}
+  .studio-admin-stops li{grid-template-columns:34px 1fr}.studio-admin-stops li>.studio-stop-radius,.studio-admin-stops li>span{grid-column:2}.studio-admin-stops li button{grid-column:auto}
 }

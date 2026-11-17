@@ -101,6 +101,7 @@ class RouteStudioTest(unittest.TestCase):
                          .order_by(RouteStop.sequence).all())
         self.assertEqual([stop.stop_name for stop in published_stops],['Shared name','Shared name'])
         self.assertEqual(len({stop.stop_code for stop in published_stops}),2)
+        self.assertEqual([stop.radius for stop in published_stops],[250,250])
         self.assertIsNone(published_geometry(self.db,published.id,self.bus.id))
 
         counts=(self.db.query(Route).count(),self.db.query(Stop).count(),self.db.query(RouteStop).count())
@@ -108,8 +109,11 @@ class RouteStudioTest(unittest.TestCase):
         self.assertEqual(retried['route_id'],published.id)
         self.assertEqual((self.db.query(Route).count(),self.db.query(Stop).count(),self.db.query(RouteStop).count()),counts)
 
+        cached_client=api.select_route(s['id'],api.Select(mode='traced',revision=s['revision']),self.db,self.admin)
+        self.assertEqual(cached_client['route_id'],published.id)
+        self.assertEqual((self.db.query(Route).count(),self.db.query(Stop).count(),self.db.query(RouteStop).count()),counts)
         with self.assertRaises(HTTPException) as error:
-            api.select_route(s['id'],api.Select(mode='traced',revision=s['revision']),self.db,self.admin)
+            api.select_route(s['id'],api.Select(mode='manual',revision=s['revision']),self.db,self.admin)
         self.assertEqual(error.exception.status_code,410)
 
         from backend.routes.assignments import save_route_assignment

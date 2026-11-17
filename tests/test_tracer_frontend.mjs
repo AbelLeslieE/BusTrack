@@ -64,8 +64,13 @@ test('admin road editor keeps OSRM server-side and exposes precise map controls'
     assert.match(source,/data-action="restore-trace"/);
     assert.match(source,/\/road-route/);
     assert.match(source,/guide_points/);
+    assert.match(source,/class="studio-new-stop-radius"/);
+    assert.match(source,/value="250" aria-label="New stop geofencing radius"/);
+    assert.match(source,/data-radius="\$\{i\}"/);
     assert.match(mapSource,/setGuides\(next, canEdit\)/);
     assert.match(mapSource,/onMoveGuide/);
+    assert.match(mapSource,/studio-stop-geofence-fill/);
+    assert.match(mapSource,/m geofence/);
     assert.doesNotMatch(source,/router\.project-osrm\.org/);
 });
 test('admin publishes to master data before using the separate assignment workspace',()=>{

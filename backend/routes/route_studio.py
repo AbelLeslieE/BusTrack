@@ -84,7 +84,7 @@ class DraftStop(Strict):
     name: str = Field(min_length=1, max_length=100)
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
-    radius: int = Field(default=50, ge=10, le=1000)
+    radius: int = Field(default=250, ge=10, le=1000)
 
 
 class RouteGuide(Strict):
@@ -121,16 +121,22 @@ def _route_plan(s):
     stored = json.loads(s.stops_json)
     geometry = json.loads(s.geometry_json)
     if isinstance(stored, list):
+        stops = stored
+        for stop in stops:
+            stop.setdefault("radius", 250)
         return {
-            "stops": stored,
+            "stops": stops,
             "guide_points": [],
             "geometry_source": "trace",
             "source_geometry": geometry,
         }
     if not isinstance(stored, dict) or not isinstance(stored.get("stops"), list):
         raise HTTPException(500, "This saved route plan is invalid.")
+    stops = stored["stops"]
+    for stop in stops:
+        stop.setdefault("radius", 250)
     return {
-        "stops": stored["stops"],
+        "stops": stops,
         "guide_points": stored.get("guide_points", []),
         "geometry_source": stored.get("geometry_source", "trace"),
         "source_geometry": stored.get("source_geometry") or geometry,
@@ -518,13 +524,19 @@ def select_route(
     actor=Depends(require_admin),
     _=Depends(access),
 ):
-    """Prevent the retired Route Studio endpoint from changing assignments."""
+    """Keep cached clients safe while preserving separate assignment.
 
-    owned(db, sid, actor)
-    raise HTTPException(
-        410,
-        "Route Studio now saves routes without assigning them. Publish the route, then assign it from Assignments.",
-    )
+    Older tabs called ``select`` after saving a traced draft. Treat that one
+    operation as publish-only; it never changes bus, driver, or passenger
+    assignments. The removed manual-switch operation stays unavailable.
+    """
+
+    if data.mode != "traced":
+        raise HTTPException(
+            410,
+            "Choose and assign a route from the Assignments workspace.",
+        )
+    return publish_route(sid, Publish(revision=data.revision), db, actor, _)
 
 @router.post("/recordings/{sid}/road-route")
 def build_road_route(sid: str, data: RoadPlan, db: Session = Depends(get_db),
