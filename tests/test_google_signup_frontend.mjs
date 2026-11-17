@@ -15,7 +15,7 @@ assert.match(login, /href="\/api\/auth\/google\/login"/);
 assert.match(login, /Continue with Google/);
 assert.match(login, /class="google-login-link"/);
 assert.match(loginStyles, /\.google-login-link\{/);
-assert.match(loginStyles, /min-height:40px/);
+assert.match(loginStyles, /min-height:44px/);
 assert.match(login, /class="login-method-divider"/);
 assert.match(signup, /Complete your student account/);
 assert.match(signup, /Account role[\s\S]*Student/);
