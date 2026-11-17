@@ -102,7 +102,7 @@ Invoke-Check -Path "/openapi.json" -ExpectedStatuses @(404)
 Invoke-Check -Path "/api/routes" -ExpectedStatuses @(401, 403)
 Assert-GoogleOAuthConfigured -Path "/api/auth/google/signup"
 Assert-GoogleOAuthConfigured -Path "/api/auth/google/login"
-Assert-AssetContains -Path "/" -ExpectedText "loginSplash.js?v=20261117lightglass2"
+Assert-AssetContains -Path "/" -ExpectedText "loginSplash.js?v=20261117blueglass1"
 Assert-AssetContains -Path "/" -ExpectedText "auth.js?v=20261116googlelogin1"
 Assert-AssetContains -Path "/" -ExpectedText "Continue with Google"
 Assert-AssetContains -Path "/" -ExpectedText 'href="/api/auth/google/login"'
@@ -113,9 +113,9 @@ Assert-AssetContains -Path "/service-worker.js" -ExpectedText '20261106-delete1'
 Assert-AssetContains -Path "/offline.html" -ExpectedText "You’re offline"
 Invoke-Check -Path "/static/assets/images/pwa-icon-192.png" -ExpectedStatuses @(200)
 Assert-AssetContains -Path "/static/common/auth.js?v=20261116googlelogin1" -ExpectedText "account_not_found"
-Assert-AssetContains -Path "/static/common/loginSplash.js?v=20261117lightglass2" -ExpectedText 'window.addEventListener("load"'
-Assert-AssetContains -Path "/static/common/loginSplash.js?v=20261117lightglass2" -ExpectedText "login.css?v=20261117lightglass2"
-Assert-AssetContains -Path "/static/common/login.css?v=20261117lightglass2" -ExpectedText ".google-login-link"
+Assert-AssetContains -Path "/static/common/loginSplash.js?v=20261117blueglass1" -ExpectedText 'window.addEventListener("load"'
+Assert-AssetContains -Path "/static/common/loginSplash.js?v=20261117blueglass1" -ExpectedText "login.css?v=20261117blueglass1"
+Assert-AssetContains -Path "/static/common/login.css?v=20261117blueglass1" -ExpectedText ".google-login-link"
 Assert-AssetContains -Path "/google-signup" -ExpectedText "googleSignup.js?v=20261103errors1"
 Assert-AssetContains -Path "/static/common/googleSignup.js?v=20261103errors1" -ExpectedText "Spaces are not allowed"
 Assert-AssetContains -Path "/dashboard" -ExpectedText "fleetGlass.css?v=20261103fleetglass7"

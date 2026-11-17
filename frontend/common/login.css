@@ -1576,22 +1576,22 @@ body::before{
     max-height:none;
     padding:28px 30px 24px;
     overflow:visible;
-    border:1px solid rgba(255,255,255,.58);
-    border-radius:26px;
+    border:1px solid rgba(174,222,255,.36);
+    border-radius:32px;
     background:
-        linear-gradient(145deg,rgba(255,255,255,.38),rgba(224,244,255,.17) 46%,rgba(245,250,255,.24));
-    backdrop-filter:blur(34px) saturate(180%) brightness(1.06);
-    -webkit-backdrop-filter:blur(34px) saturate(180%) brightness(1.06);
+        linear-gradient(155deg,rgba(48,113,167,.62),rgba(82,58,93,.6) 48%,rgba(16,36,67,.68));
+    backdrop-filter:blur(32px) saturate(165%);
+    -webkit-backdrop-filter:blur(32px) saturate(165%);
     box-shadow:
-        0 34px 80px rgba(15,43,74,.24),
-        inset 0 1px rgba(255,255,255,.82),
-        inset 0 -1px rgba(255,255,255,.26),
+        0 34px 80px rgba(3,12,28,.42),
+        inset 0 1px rgba(255,255,255,.24),
+        inset 0 -1px rgba(255,255,255,.08),
         0 0 0 1px rgba(92,183,255,.06);
 }
 
 .login-card:not(.signup-card)::before{
     background:
-        linear-gradient(145deg,rgba(255,255,255,.52),transparent 24%,transparent 66%,rgba(174,224,255,.14));
+        linear-gradient(145deg,rgba(255,255,255,.22),transparent 25%,transparent 67%,rgba(110,194,255,.08));
 }
 
 .login-card:not(.signup-card) .login-logo{
@@ -1610,13 +1610,13 @@ body::before{
     font-size:2rem;
     line-height:1.05;
     letter-spacing:-.04em;
-    color:#10233b;
-    text-shadow:0 2px 18px rgba(255,255,255,.45);
+    color:#f8fbff;
+    text-shadow:0 2px 18px rgba(0,0,0,.26);
 }
 
 .login-card:not(.signup-card) .login-logo p{
     margin-top:3px;
-    color:rgba(17,42,68,.76);
+    color:rgba(229,238,251,.72);
     font-size:.67rem;
     font-weight:700;
     letter-spacing:.12em;
@@ -1632,12 +1632,12 @@ body::before{
     margin-bottom:5px;
     font-size:1.55rem;
     letter-spacing:-.025em;
-    color:#10233b;
-    text-shadow:0 2px 18px rgba(255,255,255,.42);
+    color:#f8fbff;
+    text-shadow:0 2px 18px rgba(0,0,0,.28);
 }
 
 .login-card:not(.signup-card) .login-header p{
-    color:rgba(16,35,59,.76);
+    color:rgba(225,235,249,.76);
     font-size:.82rem;
 }
 
@@ -1651,7 +1651,7 @@ body::before{
 
 .login-card:not(.signup-card) .form-group label{
     margin-left:2px;
-    color:#17283f;
+    color:rgba(248,251,255,.94);
     font-size:.78rem;
     font-weight:700;
 }
@@ -1705,11 +1705,11 @@ body::before{
 }
 
 .login-card:not(.signup-card) .login-help{
-    color:rgba(13,38,61,.8);
+    color:rgba(228,237,249,.76);
     font-size:.71rem;
     font-weight:500;
     line-height:1.45;
-    text-shadow:0 1px 2px rgba(255,255,255,.62);
+    text-shadow:0 1px 2px rgba(0,0,0,.24);
 }
 
 .login-card:not(.signup-card) .login-message:not(:empty){
@@ -1764,7 +1764,7 @@ body::before{
     align-items:center;
     gap:10px;
     width:100%;
-    color:rgba(13,42,66,.68);
+    color:rgba(232,239,250,.58);
     font-size:.63rem;
     font-weight:700;
     letter-spacing:.1em;
@@ -1776,11 +1776,11 @@ body::before{
     content:"";
     flex:1;
     height:1px;
-    background:linear-gradient(90deg,transparent,rgba(19,43,68,.18));
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.2));
 }
 
 .login-method-divider::after{
-    background:linear-gradient(90deg,rgba(19,43,68,.18),transparent);
+    background:linear-gradient(90deg,rgba(255,255,255,.2),transparent);
 }
 
 .google-login-link{
@@ -1823,13 +1823,13 @@ body::before{
 
 .login-new-account{
     margin:0;
-    color:rgba(13,39,63,.78);
+    color:rgba(230,238,250,.7);
     font-size:.72rem;
-    text-shadow:0 1px 2px rgba(255,255,255,.6);
+    text-shadow:0 1px 2px rgba(0,0,0,.24);
 }
 
 .login-new-account a{
-    color:#006b9f;
+    color:#7ddcff;
     font-weight:700;
     text-decoration:none;
 }
@@ -1840,10 +1840,10 @@ body::before{
 
 .login-card:not(.signup-card)>.signup-cancel{
     margin-top:14px;
-    color:#006f9f;
+    color:#75dcff;
     font-size:.71rem;
     font-weight:600;
-    text-shadow:0 1px 2px rgba(255,255,255,.58);
+    text-shadow:0 1px 2px rgba(0,0,0,.24);
 }
 
 @media (max-width:768px){
@@ -1865,7 +1865,7 @@ body::before{
 @media (max-width:480px){
     .login-card:not(.signup-card){
         padding:22px 18px 18px;
-        border-radius:23px;
+        border-radius:28px;
     }
 
     .login-card:not(.signup-card) .login-logo img{
