@@ -1576,14 +1576,14 @@ body::before{
     max-height:none;
     padding:28px 30px 24px;
     overflow:visible;
-    border:1px solid rgba(174,222,255,.36);
+    border:1px solid rgba(194,230,255,.42);
     border-radius:32px;
     background:
-        linear-gradient(155deg,rgba(48,113,167,.62),rgba(82,58,93,.6) 48%,rgba(16,36,67,.68));
-    backdrop-filter:blur(32px) saturate(165%);
-    -webkit-backdrop-filter:blur(32px) saturate(165%);
+        linear-gradient(155deg,rgba(48,113,167,.34),rgba(82,58,93,.28) 48%,rgba(16,36,67,.42));
+    backdrop-filter:blur(28px) saturate(170%);
+    -webkit-backdrop-filter:blur(28px) saturate(170%);
     box-shadow:
-        0 34px 80px rgba(3,12,28,.42),
+        0 34px 80px rgba(3,12,28,.32),
         inset 0 1px rgba(255,255,255,.24),
         inset 0 -1px rgba(255,255,255,.08),
         0 0 0 1px rgba(92,183,255,.06);
