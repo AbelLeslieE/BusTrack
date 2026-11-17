@@ -1,5 +1,5 @@
 const splash = document.querySelector("#login-splash");
-const stylesheetUrl = "/static/common/login.css?v=20261117lightglass1";
+const stylesheetUrl = "/static/common/login.css?v=20261117lightglass2";
 const backdropUrl = "/static/assets/images/portal-background.png";
 
 const stylesheet = document.createElement("link");

@@ -1616,7 +1616,7 @@ body::before{
 
 .login-card:not(.signup-card) .login-logo p{
     margin-top:3px;
-    color:rgba(17,42,68,.64);
+    color:rgba(17,42,68,.76);
     font-size:.67rem;
     font-weight:700;
     letter-spacing:.12em;
@@ -1637,7 +1637,7 @@ body::before{
 }
 
 .login-card:not(.signup-card) .login-header p{
-    color:rgba(16,35,59,.68);
+    color:rgba(16,35,59,.76);
     font-size:.82rem;
 }
 
@@ -1705,9 +1705,11 @@ body::before{
 }
 
 .login-card:not(.signup-card) .login-help{
-    color:rgba(20,42,67,.66);
+    color:rgba(13,38,61,.8);
     font-size:.71rem;
+    font-weight:500;
     line-height:1.45;
+    text-shadow:0 1px 2px rgba(255,255,255,.62);
 }
 
 .login-card:not(.signup-card) .login-message:not(:empty){
@@ -1762,7 +1764,7 @@ body::before{
     align-items:center;
     gap:10px;
     width:100%;
-    color:rgba(19,43,68,.5);
+    color:rgba(13,42,66,.68);
     font-size:.63rem;
     font-weight:700;
     letter-spacing:.1em;
@@ -1821,12 +1823,13 @@ body::before{
 
 .login-new-account{
     margin:0;
-    color:rgba(18,42,67,.62);
+    color:rgba(13,39,63,.78);
     font-size:.72rem;
+    text-shadow:0 1px 2px rgba(255,255,255,.6);
 }
 
 .login-new-account a{
-    color:#086fa8;
+    color:#006b9f;
     font-weight:700;
     text-decoration:none;
 }
@@ -1837,8 +1840,10 @@ body::before{
 
 .login-card:not(.signup-card)>.signup-cancel{
     margin-top:14px;
-    color:#087caf;
+    color:#006f9f;
     font-size:.71rem;
+    font-weight:600;
+    text-shadow:0 1px 2px rgba(255,255,255,.58);
 }
 
 @media (max-width:768px){
