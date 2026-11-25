@@ -97,7 +97,10 @@ class GeneratedCodesTest(unittest.TestCase):
     def test_previews_follow_the_highest_matching_number(self) -> None:
         with self.session_factory() as db:
             db.add_all([
-                self._bus("BUS-005", "REG-005"),
+                *[
+                    self._bus(f"BUS-{number:03d}", f"REG-{number:03d}")
+                    for number in range(1, 6)
+                ],
                 self._bus("CAMPUS", "REG-CUSTOM"),
                 Route(route_code="RT009", route_name="Nine", status="Active"),
                 Route(route_code="CUSTOM", route_name="Custom", status="Active"),
@@ -115,7 +118,10 @@ class GeneratedCodesTest(unittest.TestCase):
     def test_create_ignores_stale_or_duplicate_client_codes(self) -> None:
         with self.session_factory() as db:
             db.add_all([
-                self._bus("BUS-005", "REG-005"),
+                *[
+                    self._bus(f"BUS-{number:03d}", f"REG-{number:03d}")
+                    for number in range(1, 6)
+                ],
                 Route(route_code="RT009", route_name="Nine", status="Active"),
             ])
             self._seed_profile_codes(db)
@@ -168,6 +174,33 @@ class GeneratedCodesTest(unittest.TestCase):
             self.assertEqual(route.route_code, "RT010")
             self.assertEqual(student["student_code"], "STU007")
             self.assertEqual(driver["driver_code"], "DRV005")
+
+    def test_deleted_bus_number_is_reused_before_allocating_a_higher_number(self) -> None:
+        with self.session_factory() as db:
+            db.add_all([
+                self._bus(f"BUS-{number:03d}", f"REG-{number:03d}")
+                for number in range(1, 21)
+                if number != 7
+            ])
+            db.commit()
+
+            self.assertEqual(get_next_bus_number(db, object()), {"bus_number": "BUS-007"})
+
+            replacement = create_bus(
+                BusCreate(
+                    bus_number="BUS-021",
+                    registration_number="REG-REPLACEMENT-007",
+                    capacity=40,
+                    manufacturer="Test",
+                    model="Coach",
+                    year=2026,
+                    fuel_type="Diesel",
+                ),
+                db,
+                object(),
+            )
+            self.assertEqual(replacement.bus_number, "BUS-007")
+            self.assertEqual(get_next_bus_number(db, object()), {"bus_number": "BUS-021"})
 
     def test_existing_codes_are_immutable_during_edits(self) -> None:
         with self.session_factory() as db:
@@ -255,7 +288,10 @@ class GeneratedCodesTest(unittest.TestCase):
 
     def test_concurrent_bus_creates_receive_distinct_codes(self) -> None:
         with self.session_factory() as db:
-            db.add(self._bus("BUS-005", "REG-005"))
+            db.add_all([
+                self._bus(f"BUS-{number:03d}", f"REG-{number:03d}")
+                for number in range(1, 6)
+            ])
             db.commit()
 
         def create_named_bus(index: int) -> str:

@@ -61,7 +61,25 @@ def next_generated_code(db: Session, namespace: str) -> str:
 
 
 def next_bus_number(db: Session) -> str:
-    return next_generated_code(db, "bus")
+    """Return the lowest unused generated bus number.
+
+    Bus numbers represent fleet slots, so a number becomes available again
+    after its bus is deleted. Other generated identifiers remain monotonic.
+    """
+
+    _model, column, pattern, prefix = _SPECS["bus"]
+    used_numbers: set[int] = set()
+    for (value,) in db.query(column).select_from(Bus).all():
+        match = pattern.fullmatch((value or "").strip())
+        if match:
+            number = int(match.group(1))
+            if number > 0:
+                used_numbers.add(number)
+
+    available = 1
+    while available in used_numbers:
+        available += 1
+    return f"{prefix}{available:03d}"
 
 
 def next_route_code(db: Session) -> str:
