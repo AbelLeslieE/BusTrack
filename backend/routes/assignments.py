@@ -41,8 +41,17 @@ def get_assignments(
     db: Session = Depends(get_db),
     _current_user = Depends(require_management),
 ):
-    """Return every route with its current assignment and available resources."""
-    routes = db.query(Route).order_by(Route.route_name).all()
+    """Return active routes with their assignments and available resources.
+
+    Inactive routes remain available in Routes for historical management, but
+    they are deliberately excluded from this operational assignment workspace.
+    """
+    routes = (
+        db.query(Route)
+        .filter(Route.status == "Active")
+        .order_by(Route.route_name)
+        .all()
+    )
     buses = db.query(Bus).order_by(Bus.bus_number).all()
     drivers = db.query(Driver).order_by(Driver.driver_code).all()
 
