@@ -198,6 +198,51 @@ const ADMIN_LIVE_JITTER_MS = 2_000;
 const ADMIN_BUS_CACHE_TTL_MS = 5 * 60 * 1000;
 let cachedFleetBuses = [];
 let cachedFleetBusesAt = 0;
+
+function normalizeFleetSearch(value) {
+    return String(value ?? "").trim().toLocaleLowerCase();
+}
+
+function fleetSearchText(...values) {
+    return normalizeFleetSearch(values.filter(value => value != null).join(" "));
+}
+
+export function filterFleetBusCards(query) {
+    const tripList = document.getElementById("tripList");
+    const searchInput = document.getElementById("fleetBusSearch");
+    const clearButton = document.getElementById("fleetBusSearchClear");
+    const summary = document.getElementById("fleetSearchSummary");
+    if (!tripList) return 0;
+
+    const searchQuery = normalizeFleetSearch(
+        query === undefined ? searchInput?.value : query,
+    );
+    const cards = [...tripList.querySelectorAll(".trip-card")];
+    let visibleCount = 0;
+
+    cards.forEach(card => {
+        const matches = !searchQuery || normalizeFleetSearch(card.dataset.fleetSearch).includes(searchQuery);
+        card.hidden = !matches;
+        if (matches) visibleCount += 1;
+    });
+
+    let emptyResult = tripList.querySelector(".fleet-search-empty");
+    if (!emptyResult && cards.length > 0) {
+        emptyResult = document.createElement("div");
+        emptyResult.className = "empty-state fleet-search-empty";
+        emptyResult.textContent = "No buses match your search.";
+        tripList.appendChild(emptyResult);
+    }
+    if (emptyResult) emptyResult.hidden = !searchQuery || visibleCount > 0;
+
+    if (summary) {
+        summary.textContent = searchQuery
+            ? `${visibleCount} of ${cards.length} buses shown`
+            : `${cards.length} ${cards.length === 1 ? "bus" : "buses"}`;
+    }
+    if (clearButton) clearButton.hidden = !searchQuery;
+    return visibleCount;
+}
 /* ==========================================================
    CLEAR ALL FLEET MARKERS
 ========================================================== */
@@ -1653,6 +1698,8 @@ function updateFleet(trips, buses = []) {
 
         appendWaitingBusCards(tripList, buses);
 
+        filterFleetBusCards();
+
         return;
 
     }
@@ -2087,6 +2134,15 @@ function updateFleet(trips, buses = []) {
 
         card.className =
             "trip-card";
+        card.dataset.fleetSearch = fleetSearchText(
+            trip.bus_number,
+            trip.registration_number,
+            busLabel,
+            trip.driver_code,
+            driverLabel,
+            trip.route_code,
+            routeLabel,
+        );
 
         if (
             selectedBusId !== null &&
@@ -2380,6 +2436,7 @@ function updateFleet(trips, buses = []) {
     });
 
     appendWaitingBusCards(tripList, buses, activeBusIds);
+    filterFleetBusCards();
 
     /* On first load, frame the map around only the GPS positions that were
        actually returned by the backend. A selected card keeps control of the
@@ -2423,6 +2480,15 @@ function appendWaitingBusCards(tripList, buses, activeBusIds = new Set()) {
 
         const card = document.createElement("div");
         card.className = "trip-card trip-card-unavailable";
+        card.dataset.fleetSearch = fleetSearchText(
+            bus.bus_number,
+            bus.registration_number,
+            bus.driver_name,
+            bus.driver_code,
+            bus.route_name,
+            bus.route_code,
+            bus.status,
+        );
         const gpsMessage = bus.device_id
             ? "Waiting for the first GPS report"
             : "GPS device not configured";

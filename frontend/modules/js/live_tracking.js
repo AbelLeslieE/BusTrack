@@ -7,9 +7,11 @@ import {
 
     resizeFleetMap,
 
+    filterFleetBusCards,
+
     cleanupFleetTracking
 
-} from "./adminTrackingService.js?v=20261105cardreset1";
+} from "./adminTrackingService.js?v=20261125bussearch1";
 export function render() {
 
     const page = document.createElement("div");
@@ -78,6 +80,21 @@ export function render() {
 
                 </p>
 
+                <div class="live-bus-search">
+                    <label for="fleetBusSearch">Find a bus</label>
+                    <div class="live-bus-search-control">
+                        <span aria-hidden="true">⌕</span>
+                        <input
+                            id="fleetBusSearch"
+                            type="search"
+                            autocomplete="off"
+                            placeholder="Bus, registration, driver or route"
+                            aria-describedby="fleetSearchSummary">
+                        <button id="fleetBusSearchClear" type="button" aria-label="Clear bus search" hidden>×</button>
+                    </div>
+                    <p id="fleetSearchSummary" class="live-bus-search-summary" aria-live="polite">Loading buses…</p>
+                </div>
+
                 <div
                     id="tripList"
                     class="trip-list"
@@ -120,6 +137,16 @@ export function render() {
     const toggle = page.querySelector("#trackingViewToggle");
     const mapView = page.querySelector("#fleetMapView");
     const trackView = page.querySelector("#fleetTrackUpdates");
+    const busSearch = page.querySelector("#fleetBusSearch");
+    const clearBusSearch = page.querySelector("#fleetBusSearchClear");
+    busSearch?.addEventListener("input", () => filterFleetBusCards(busSearch.value));
+    busSearch?.addEventListener("search", () => filterFleetBusCards(busSearch.value));
+    clearBusSearch?.addEventListener("click", () => {
+        if (!busSearch) return;
+        busSearch.value = "";
+        filterFleetBusCards("");
+        busSearch.focus();
+    });
     toggle.addEventListener("click", () => {
         const showTracks = trackView.hidden;
         trackView.hidden = !showTracks;
